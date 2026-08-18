@@ -65,6 +65,24 @@ export default function EventModal({
     }
     return [];
   });
+  // If the event's rule didn't match a preset AND didn't parse as a
+  // custom-weekly BYDAY rule (e.g. a Google-synced class schedule with
+  // UNTIL/WKST), the Custom UI has no way to represent it and would
+  // otherwise silently rebuild it as a bare "FREQ=WEEKLY" (or worse,
+  // "every day this button is checked") the moment the user saves ANY
+  // change to the event — including just retitling it. Preserve the
+  // original string verbatim unless the user actually touches the
+  // Repeat controls, so an unrelated edit can't destroy it. This
+  // corruption would also sync back to the real Google Calendar event.
+  const [initialUnrecognizedRule] = useState<string | null>(() => {
+    if (mode !== "edit" || !event?.recurrenceRule) return null;
+    if (RECURRENCE_PRESETS.some((p) => p.value === event.recurrenceRule)) {
+      return null;
+    }
+    if (parseCustomWeeklyDays(event.recurrenceRule)) return null;
+    return event.recurrenceRule;
+  });
+  const [repeatTouched, setRepeatTouched] = useState(false);
 
   const titleInputRef = useRef<HTMLInputElement>(null);
   const startDateRef = useRef<HTMLInputElement>(null);
@@ -101,10 +119,15 @@ export default function EventModal({
 
     // "Custom" is a UI-only sentinel — convert it to the actual RRULE
     // (or plain "FREQ=WEEKLY" when no days are selected) before it reaches
-    // the server action. Other selections pass through unchanged.
+    // the server action. Other selections pass through unchanged. If the
+    // series came in with a rule this UI can't fully represent and the
+    // user never touched Repeat, keep it exactly as-is rather than
+    // rebuilding (and destroying) it from the Custom day-toggle state.
     const ruleValue =
       recurrenceSelection === "CUSTOM"
-        ? buildCustomWeeklyRule(customDays)
+        ? !repeatTouched && initialUnrecognizedRule
+          ? initialUnrecognizedRule
+          : buildCustomWeeklyRule(customDays)
         : recurrenceSelection;
     formData.set("recurrenceRule", ruleValue);
 
@@ -141,6 +164,7 @@ export default function EventModal({
   };
 
   const toggleDay = (code: WeekdayCode) => {
+    setRepeatTouched(true);
     setCustomDays((prev) =>
       prev.includes(code) ? prev.filter((d) => d !== code) : [...prev, code],
     );
@@ -238,7 +262,10 @@ export default function EventModal({
               <span className="text-zinc-500">Repeat</span>
               <select
                 value={recurrenceSelection}
-                onChange={(e) => setRecurrenceSelection(e.target.value)}
+                onChange={(e) => {
+                  setRepeatTouched(true);
+                  setRecurrenceSelection(e.target.value);
+                }}
                 className={inputClass}
               >
                 {RECURRENCE_PRESETS.map((preset) => (
@@ -270,6 +297,13 @@ export default function EventModal({
                     );
                   })}
                 </div>
+              )}
+              {initialUnrecognizedRule && !repeatTouched && (
+                <span className="text-xs text-amber-600 dark:text-amber-400">
+                  This event has a recurrence pattern (e.g. an end date)
+                  this app can&apos;t fully show — it&apos;s kept as-is
+                  unless you change Repeat below.
+                </span>
               )}
               {isEditingRecurring && (
                 <span className="text-xs text-zinc-500">

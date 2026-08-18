@@ -1,5 +1,59 @@
 import { RRule } from "rrule";
 
+// rrule computes entirely in UTC calendar fields — it has no concept of
+// "local wall-clock time," so feeding it a real local Date means every
+// occurrence is a fixed UTC instant, not a fixed local time. That's wrong
+// for "every Monday at 9am local": across a DST transition, the UTC
+// offset changes but rrule doesn't know to compensate, so the local wall-
+// clock time of each occurrence drifts by exactly the DST delta (an hour
+// in the US). The standard workaround: relabel the local calendar fields
+// as if they were UTC before handing them to rrule, do all rrule math in
+// that fake-UTC space (pure calendar arithmetic, immune to DST since
+// there's no real timezone involved anymore), then relabel the result's
+// UTC fields back as local. Applied consistently to dtstart, until, and
+// the between()/after() range bounds, this keeps every rrule comparison
+// internally consistent and yields occurrences at the correct local wall-
+// clock time regardless of DST.
+export function toFakeUTC(d: Date): Date {
+  return new Date(
+    Date.UTC(
+      d.getFullYear(),
+      d.getMonth(),
+      d.getDate(),
+      d.getHours(),
+      d.getMinutes(),
+      d.getSeconds(),
+      d.getMilliseconds(),
+    ),
+  );
+}
+
+export function fromFakeUTC(d: Date): Date {
+  return new Date(
+    d.getUTCFullYear(),
+    d.getUTCMonth(),
+    d.getUTCDate(),
+    d.getUTCHours(),
+    d.getUTCMinutes(),
+    d.getUTCSeconds(),
+    d.getUTCMilliseconds(),
+  );
+}
+
+/**
+ * Builds an RRule anchored to a local `dtstart`, correct across DST (see
+ * toFakeUTC/fromFakeUTC above). Use this everywhere instead of
+ * `new RRule({...RRule.parseString(rule), dtstart})` directly.
+ */
+export function buildLocalRRule(recurrenceRule: string, dtstart: Date): RRule {
+  const options = RRule.parseString(recurrenceRule);
+  return new RRule({
+    ...options,
+    dtstart: toFakeUTC(dtstart),
+    until: options.until ? toFakeUTC(options.until) : null,
+  });
+}
+
 export type RecurringEventSource = {
   id: string;
   title: string;
@@ -47,15 +101,18 @@ export function expandEventOccurrences(
   }
 
   const durationMs = event.end.getTime() - event.start.getTime();
-  const rule = new RRule({
-    ...RRule.parseString(event.recurrenceRule),
-    dtstart: event.start,
-  });
-  const starts = rule.between(
-    new Date(rangeStart.getTime() - LOOKBACK_MS),
-    rangeEnd,
+  const rule = buildLocalRRule(event.recurrenceRule, event.start);
+  // The lookback must cover at least the occurrence's own duration —
+  // otherwise an occurrence longer than the fixed lookback window can
+  // start before it and still be missed, the same "vanishes mid-span" bug
+  // fixed for non-recurring events, one layer down for recurring ones.
+  const lookbackMs = Math.max(LOOKBACK_MS, durationMs);
+  const fakeStarts = rule.between(
+    toFakeUTC(new Date(rangeStart.getTime() - lookbackMs)),
+    toFakeUTC(rangeEnd),
     true,
   );
+  const starts = fakeStarts.map(fromFakeUTC);
 
   return starts
     .map((s) => ({

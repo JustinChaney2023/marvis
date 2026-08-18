@@ -31,6 +31,16 @@ import {
   assert.equal(start.getHours(), HOUR_START);
 }
 
+// Midnight-wrap: rounding up from 23:31-23:59 crosses into the next
+// day. The bug this guards against: naively `% 24`ing the rounded hour
+// back to 0 gave "today at 00:00" — in the PAST relative to `now` —
+// instead of tomorrow. Must land on tomorrow's HOUR_START, not today.
+{
+  const { start } = defaultNewEventTimes(new Date(2026, 7, 18, 23, 45));
+  assert.equal(start.getDate(), 19);
+  assert.equal(start.getHours(), HOUR_START);
+}
+
 // Right at the boundaries: HOUR_START itself is fine as-is, HOUR_END
 // itself must roll (grid's window is [HOUR_START, HOUR_END)).
 {

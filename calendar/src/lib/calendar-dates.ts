@@ -119,9 +119,17 @@ export function defaultNewEventTimes(now: Date = new Date()): { start: Date; end
   start.setSeconds(0, 0);
   const totalMin = start.getHours() * 60 + start.getMinutes();
   const rounded = Math.ceil(totalMin / 30) * 30;
-  const h = Math.floor(rounded / 60) % 24;
-  const m = rounded % 60;
-  start.setHours(h, m, 0, 0);
+  if (rounded >= 1440) {
+    // Rounding up crossed midnight (e.g. 23:45 -> 24:00) — advance the
+    // date first, then set 00:00, rather than `% 24`ing the hour back
+    // down to 0 on the SAME day, which silently created an event ~24h in
+    // the past (00:00 today instead of 00:00 tomorrow) for anything in
+    // the last 29 minutes before midnight.
+    start.setDate(start.getDate() + 1);
+    start.setHours(0, 0, 0, 0);
+  } else {
+    start.setHours(Math.floor(rounded / 60), rounded % 60, 0, 0);
+  }
 
   // Clamp into the grid's visible window — otherwise "+ New event" at,
   // say, 4am creates a real event that simply never renders anywhere on
