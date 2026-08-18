@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { findBestSlot, findEarliestSlot } from "./scheduler";
+import { dateKey, findBestSlot, findEarliestSlot } from "./scheduler";
 
 // Monday 2026-08-17 09:00 local
 const from = new Date(2026, 7, 17, 9, 0);
@@ -114,6 +114,36 @@ const horizon = new Date(2026, 7, 31, 0, 0);
   assert.ok(slot);
   assert.equal(slot.start.getDate(), 17);
   assert.ok(slot.start.getTime() <= dueAt.getTime());
+}
+
+// findBestSlot: project-day clustering. Same-day slots are open every day
+// this week (no busy conflicts), so without clustering the earliest slot
+// (today) always wins. With a sibling same-project event already on
+// Wednesday, the scheduler should skip two otherwise-equally-good days to
+// land on Wednesday instead — the specific complaint researched was tasks
+// from the same project getting scattered instead of batched together.
+{
+  const monday = new Date(2026, 7, 17, 9, 0);
+  const wednesday = new Date(2026, 7, 19, 9, 0);
+
+  const withoutClustering = findBestSlot(
+    { durationMin: 30, dueAt: null, energy: "MEDIUM" },
+    [],
+    horizon,
+    monday,
+  );
+  assert.ok(withoutClustering);
+  assert.equal(withoutClustering.start.getTime(), monday.getTime());
+
+  const withClustering = findBestSlot(
+    { durationMin: 30, dueAt: null, energy: "MEDIUM" },
+    [],
+    horizon,
+    monday,
+    new Set([dateKey(wednesday)]),
+  );
+  assert.ok(withClustering);
+  assert.equal(withClustering.start.getTime(), wednesday.getTime());
 }
 
 console.log("scheduler.test.ts: all checks passed");

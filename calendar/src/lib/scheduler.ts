@@ -104,13 +104,29 @@ function isEnergyMatch(energy: TaskEnergy, slotStart: Date): boolean {
   return hour >= prefStart && hour < prefEnd;
 }
 
+export function dateKey(d: Date): string {
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+
+// +5 for landing on a day that already has another scheduled event from
+// the same project — a same-subject/client/project day beats scattering
+// related work across the week in 1-hour interleaved blocks, which was
+// the single most specific complaint found researching what users wish
+// Motion did differently (it schedules "reading for course A, a quiz for
+// course B... all within a 1-hour block" instead of batching same-
+// project work). Below the +10 energy-match bonus so a genuinely bad-
+// energy slot still won't win just for being on the right day.
+const PROJECT_CLUSTER_BONUS = 5;
+
 function scoreSlot(
   energy: TaskEnergy,
   dueAt: Date | null,
   slot: { start: Date; end: Date },
+  projectScheduledDays: Set<string>,
 ): number {
   let score = 0;
   if (isEnergyMatch(energy, slot.start)) score += 10;
+  if (projectScheduledDays.has(dateKey(slot.start))) score += PROJECT_CLUSTER_BONUS;
   if (dueAt && slot.start > dueAt) score -= 100; // overshooting the due date is bad, but not disqualifying if it's the only option
   score -= slot.start.getTime() / 1e14; // tie-break toward the earlier candidate
   return score;
@@ -118,26 +134,33 @@ function scoreSlot(
 
 /**
  * Scans up to CANDIDATE_LIMIT earliest-fit slots and returns the
- * best-scored one (energy-window match, due-date urgency), instead of
- * always taking the very first. Stops early once a candidate is both
- * energy-matched and on-or-before the due date — nothing later could
- * score better, so there's no reason to keep scanning.
+ * best-scored one (energy-window match, due-date urgency, same-project
+ * day clustering), instead of always taking the very first. Stops early
+ * once a candidate clears every criterion that's actually in play for
+ * this task — nothing later could score better, so there's no reason to
+ * keep scanning. When the task belongs to a project that already has
+ * other scheduled days in this horizon, that criterion has to be met
+ * too before stopping early, so clustering gets a real chance to compete
+ * instead of always losing to whatever the very first energy-matched
+ * slot happens to be.
  */
 export function findBestSlot(
   task: { durationMin: number; dueAt: Date | null; energy: TaskEnergy },
   busy: { start: Date; end: Date }[],
   horizonEnd: Date,
   from: Date,
+  projectScheduledDays: Set<string> = new Set(),
 ) {
   let cursor = from;
   let best: { start: Date; end: Date } | null = null;
   let bestScore = -Infinity;
+  const wantsClustering = projectScheduledDays.size > 0;
 
   for (let i = 0; i < CANDIDATE_LIMIT; i++) {
     const slot = findEarliestSlot(cursor, task.durationMin, busy, horizonEnd);
     if (!slot) break;
 
-    const score = scoreSlot(task.energy, task.dueAt, slot);
+    const score = scoreSlot(task.energy, task.dueAt, slot, projectScheduledDays);
     if (score > bestScore) {
       bestScore = score;
       best = slot;
@@ -145,13 +168,39 @@ export function findBestSlot(
 
     const goodEnough =
       isEnergyMatch(task.energy, slot.start) &&
-      (!task.dueAt || slot.start <= task.dueAt);
+      (!task.dueAt || slot.start <= task.dueAt) &&
+      (!wantsClustering || projectScheduledDays.has(dateKey(slot.start)));
     if (goodEnough) break;
 
-    cursor = new Date(slot.start.getTime() + 60_000);
+    // Chasing a clustering match minute-by-minute would just crawl
+    // through the current day's remaining open slots (there could be
+    // hours of those) without ever reaching a different day within
+    // CANDIDATE_LIMIT tries. Jump a full day per candidate instead so the
+    // bounded scan actually samples multiple days for a project match —
+    // non-clustered tasks keep the original fine-grained minute advance.
+    cursor = wantsClustering
+      ? new Date(slot.start.getFullYear(), slot.start.getMonth(), slot.start.getDate() + 1)
+      : new Date(slot.start.getTime() + 60_000);
   }
 
   return best;
+}
+
+async function getProjectScheduledDays(
+  projectId: string | null,
+  excludeTaskId: string,
+  now: Date,
+  horizonEnd: Date,
+): Promise<Set<string>> {
+  if (!projectId) return new Set();
+  const siblingEvents = await prisma.event.findMany({
+    where: {
+      start: { gte: now, lt: horizonEnd },
+      task: { projectId, id: { not: excludeTaskId } },
+    },
+    select: { start: true },
+  });
+  return new Set(siblingEvents.map((e) => dateKey(e.start)));
 }
 
 async function fetchBusyIntervals(now: Date, horizonEnd: Date) {
@@ -178,8 +227,14 @@ export async function scheduleTask(taskId: string) {
     await fetchBusyIntervals(now, horizonEnd),
     settings.bufferMin,
   );
+  const projectScheduledDays = await getProjectScheduledDays(
+    task.projectId,
+    task.id,
+    now,
+    horizonEnd,
+  );
 
-  const slot = findBestSlot(task, busy, horizonEnd, now);
+  const slot = findBestSlot(task, busy, horizonEnd, now, projectScheduledDays);
   if (!slot) return null;
 
   const event = await prisma.event.upsert({
