@@ -4,103 +4,99 @@ A personal Motion-style calendar/planner: auto-scheduling, task management,
 single daily-driver calendar. No team features (assigning to others, shared
 workspaces, meeting polls) — this is single-user by design.
 
-v0 (shipped, see `calendar/README.md`): task CRUD, greedy auto-scheduler,
-`/calendar` week view with manual events. This doc plans everything after
-that.
+All five phases below are built. The one open item is connecting a real
+Google Cloud OAuth client (Phase 5) — that needs your Google account, see
+"What's left" at the bottom.
 
 Reference: FluidCalendar (MIT, cloned locally for architecture reference
-only — not vendored) validates a few approaches adopted below: the
+only — not vendored) validated a few approaches adopted below: the
 `googleapis` package for OAuth + Calendar API instead of hand-rolled token
 refresh, and one connected-account row per external calendar rather than a
 model per provider.
 
-Google Calendar sync is pushed to the end of this roadmap by request
-(Phase 5) — everything else ships first.
-
 ## Phase 1 — Calendar views & editing (shipped)
 
-1. ~~Day and month views, not just week.~~ Done: `?view=day|week|month`.
-2. ~~Drag-and-drop on the week/day grid: move + resize.~~ Done (native
-   HTML5 DnD + mouse events, disabled on recurring occurrences — see #5).
-3. ~~Click-to-create on an empty grid slot / month cell.~~ Done.
-4. ~~Edit-in-place: click an event to edit or delete it.~~ Done.
-5. ~~Recurring events~~ (`rrule`, `src/lib/recurrence.ts`). Done, v1 scope:
-   occurrences are computed on the fly (never materialized as rows);
-   editing or deleting a recurring event acts on the **whole series**,
-   not a single occurrence — that's a real gap (no "just this one"
-   exception support, no series end date in the UI yet) worth a future
-   pass once it's actually annoying in daily use.
-6. Also shipped a visual pass (indigo accent, cards/shadows/transitions,
-   segmented view switcher) — not originally scoped here, but the app
-   needed to stop looking like unstyled Tailwind defaults.
+Day/week/month views, drag-and-drop move + resize + create on the hour
+grid, click-to-create, edit-in-place, recurring events (`rrule`).
 
-## Phase 2 — Smarter auto-scheduling
+Known v1 scope gap: editing/deleting a recurring event acts on the whole
+series, not a single occurrence (no "just this one" exceptions, no series
+end date in the UI). Drag/resize is disabled on recurring occurrences for
+the same reason. Worth a pass once that limitation is actually annoying in
+daily use.
 
-Upgrade the v0 greedy scheduler toward FluidCalendar's actual model:
+Also shipped a visual pass (indigo accent, cards/shadows/transitions,
+segmented view switcher) that wasn't originally scoped here.
 
-1. **Weighted scoring** instead of strict due-date-then-priority sort:
-   score candidate slots by due-date urgency, priority, and how close to
-   "now" they are, so a low-priority task due soon doesn't always lose to
-   a high-priority task due later, or vice versa — tunable weights, not
-   hardcoded.
-2. **Energy/preferred-time windows**: tag tasks (deep work vs. admin) and
-   prefer morning/afternoon slots per tag.
-3. **Buffer time** between events, and a **lock** flag on events to
-   exclude them from being auto-rescheduled.
-4. **Reschedule stale tasks**: a task whose slot got skipped (calendar
-   changed underneath it) needs to be noticed and re-placed, not just
-   silently stuck at a stale time.
+## Phase 2 — Smarter auto-scheduling (shipped)
 
-## Phase 3 — Daily-driver features
+`src/lib/scheduler.ts`: `findBestSlot` scores a bounded window of
+candidate slots (energy-window match, due-date urgency) instead of always
+taking the very first fit; a 10-minute buffer is padded onto every busy
+interval; `Task.energy` (LOW/MEDIUM/HIGH) drives morning/afternoon
+preference; `Event.locked` excludes an event from ever being
+auto-rescheduled; `rescheduleStaleTasks` (run automatically by "Schedule
+all") re-places a scheduled task whose slot has elapsed or now conflicts
+with something else.
 
-1. **Focus mode**: a distraction-free single-task view with a timer.
-2. **Quick capture**: a fast "add task" entry point (keyboard shortcut,
-   maybe natural-language due dates like "tomorrow 3pm").
-3. **Projects/labels**: group tasks, filter the task list and calendar by
-   project.
-4. **Notifications/reminders**: browser notifications before a scheduled
-   block starts.
+## Phase 3 — Daily-driver features (shipped)
 
-## Phase 4 — Polish
+- `/focus` — single-task view with a countdown timer.
+- Quick capture — press `c` anywhere, natural-language parsing
+  (today/tomorrow/next `<weekday>`/in N days, a clock time, `p0`-`p3`
+  priority shorthand) via `src/lib/quickCapture.ts`.
+- Projects/labels — create, filter (`?project=`), colored badges.
+- Browser notifications for events starting within 10 minutes (only while
+  a tab is open — no service worker/push).
 
-1. Keyboard shortcuts (new task, next/prev week, etc.).
-2. Mobile-responsive layout (the grid already scrolls horizontally on
-   narrow screens; needs real testing on a phone).
-3. Dark/light theme toggle (currently follows OS only).
+## Phase 4 — Polish (shipped)
 
-## Phase 5 — Google Calendar integration
+- Keyboard shortcuts on `/calendar`: `j`/`k` prev/next, `d`/`w`/`m` view,
+  `t` today.
+- Mobile-responsive pass (grid min-width now scales with column count
+  instead of a fixed 40rem forcing day view to scroll unnecessarily; nav
+  rows wrap). Code-level review only — no real device/browser testing was
+  possible this session.
+- Manual dark/light theme toggle (a `.dark`-class custom variant instead
+  of only `prefers-color-scheme`, persisted to localStorage).
 
-1. **Schema**: add a `GoogleAccount` model (single row for now — one
-   Google account, this is a single-user app): `accessToken`,
-   `refreshToken`, `expiresAt`, `email`. Add to `Event`: `source` enum
-   (`LOCAL` | `GOOGLE`), `googleEventId String? @unique`,
-   `googleCalendarId String?`, `updatedAtGoogle DateTime?` (etag/version
-   tracking for conflict detection).
-2. **OAuth connect flow**: `/api/google/connect` redirects to Google's
-   consent screen (`calendar` scope); `/api/google/callback` exchanges the
-   code for tokens via the `googleapis` package and stores them. A
-   "Connect Google Calendar" button on a new `/settings` page. Setup
-   instructions for the Google Cloud OAuth client are in
-   `docs/google-calendar-setup.md`.
-3. **Import (read)**: pull events from the primary Google calendar into
-   local `Event` rows tagged `source: GOOGLE`. Poll on a schedule (Google
-   Calendar push notifications/webhooks need a public HTTPS endpoint,
-   which a local personal deployment may not have — start with polling
-   every few minutes, revisit webhooks once this is deployed somewhere
-   reachable).
-4. **Export (write)**: local (`LOCAL`) events created here get pushed to
-   Google so they show up on your phone/other devices. Auto-scheduled
-   task-events count as local events, so scheduling a task also creates
-   it on your real Google Calendar.
-5. **Two-way sync + conflict handling**: on each poll, diff by
-   `updatedAtGoogle` vs local `updatedAt`; last-write-wins is fine for a
-   single-user tool — no need for FluidCalendar's multi-provider conflict
-   resolution machinery.
-6. **Free/busy correctness**: the auto-scheduler must treat imported
-   Google events as busy time, same as local events.
+## Phase 5 — Google Calendar integration (built, not yet connected)
+
+Schema, OAuth flow, `/settings` page, and two-way sync
+(`src/lib/google-sync.ts`) are all in place:
+
+- Import pulls from the connected calendar (past 7 / future 90 days),
+  translating Google's RRULE into this app's own recurrence format rather
+  than exploding recurring events into hundreds of rows.
+- Export pushes anything new or edited more recently locally than its
+  last known Google state (last-write-wins via timestamps — fine for a
+  single-user tool).
+- Deleting an event here deletes it on Google too.
+- The auto-scheduler needed zero changes — it already treats every
+  `Event` row as busy regardless of `source`.
+
+Known v1 gap: deletions made directly on Google aren't detected on
+import (no tombstone handling yet).
+
+### What's left
+
+Connect a real Google Cloud OAuth client — steps in
+`docs/google-calendar-setup.md`. Until `GOOGLE_CLIENT_ID` /
+`GOOGLE_CLIENT_SECRET` are set in `.env`, `/settings` shows "not
+connected" and the connect flow fails into a friendly error rather than
+actually connecting. None of the sync code has been exercised against a
+real Google account yet.
 
 ## Explicitly out of scope
 
 Team scheduling, shared workspaces, assigning tasks to others, meeting
 polls/booking links, multi-user accounts, admin roles — anything from
 Motion's team-oriented feature set.
+
+## Ideas noted, not yet planned
+
+You mentioned wanting AI worked into this heavily eventually (this is a
+Claude-managed project) — no concrete phase for that yet; worth its own
+discovery pass (what would AI actually do here — smarter scheduling
+suggestions, natural-language event editing beyond quick-capture, a
+chat-driven planning assistant?) rather than bolting it on ad hoc.
