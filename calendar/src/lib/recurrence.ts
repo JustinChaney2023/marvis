@@ -81,3 +81,37 @@ export const RECURRENCE_PRESETS = [
   { value: "FREQ=MONTHLY", label: "Monthly" },
   { value: "FREQ=YEARLY", label: "Yearly" },
 ] as const;
+
+export const WEEKDAY_CODES = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"] as const;
+export type WeekdayCode = (typeof WEEKDAY_CODES)[number];
+
+export function buildCustomWeeklyRule(days: WeekdayCode[]): string {
+  if (days.length === 0) return "FREQ=WEEKLY";
+  // Keep BYDAY in canonical Sun-Sat order regardless of selection order,
+  // so the same day set always produces the same string (matters for
+  // recognizing it as "custom" again when re-editing, and for the
+  // export-to-Google diff in google-sync.ts, which compares strings).
+  const ordered = WEEKDAY_CODES.filter((d) => days.includes(d));
+  return `FREQ=WEEKLY;BYDAY=${ordered.join(",")}`;
+}
+
+/**
+ * Recognizes a rule as "custom weekly with specific days" (what the
+ * Custom repeat UI produces) and returns the selected days, or null if
+ * the rule doesn't match that exact shape (a plain preset, or something
+ * else entirely — e.g. an imported Google rule with COUNT/UNTIL/INTERVAL,
+ * which this app's UI doesn't have controls for yet and just shows as an
+ * unrecognized custom rule rather than trying to reverse-engineer it).
+ */
+export function parseCustomWeeklyDays(
+  rule: string | null,
+): WeekdayCode[] | null {
+  if (!rule) return null;
+  const match = rule.match(/^FREQ=WEEKLY;BYDAY=([A-Z,]+)$/);
+  if (!match) return null;
+  const days = match[1].split(",");
+  if (!days.every((d): d is WeekdayCode => WEEKDAY_CODES.includes(d as WeekdayCode))) {
+    return null;
+  }
+  return days as WeekdayCode[];
+}

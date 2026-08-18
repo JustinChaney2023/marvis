@@ -1,5 +1,9 @@
 import assert from "node:assert/strict";
-import { expandEventOccurrences } from "./recurrence";
+import {
+  buildCustomWeeklyRule,
+  expandEventOccurrences,
+  parseCustomWeeklyDays,
+} from "./recurrence";
 
 // non-recurring event inside range -> one occurrence
 {
@@ -76,6 +80,26 @@ import { expandEventOccurrences } from "./recurrence";
     new Date(2026, 7, 19, 0, 0),
   );
   assert.ok(occ.some((o) => o.start.getDate() === 17 && o.end.getDate() === 18));
+}
+
+// buildCustomWeeklyRule: canonical Sun-Sat order regardless of input order
+{
+  assert.equal(buildCustomWeeklyRule(["FR", "MO", "WE"]), "FREQ=WEEKLY;BYDAY=MO,WE,FR");
+  assert.equal(buildCustomWeeklyRule([]), "FREQ=WEEKLY");
+}
+
+// parseCustomWeeklyDays round-trips with buildCustomWeeklyRule
+{
+  const rule = buildCustomWeeklyRule(["SA", "MO"]);
+  assert.deepEqual(parseCustomWeeklyDays(rule), ["MO", "SA"]);
+}
+
+// parseCustomWeeklyDays rejects plain presets and unrelated rules
+{
+  assert.equal(parseCustomWeeklyDays("FREQ=WEEKLY"), null);
+  assert.equal(parseCustomWeeklyDays("FREQ=DAILY"), null);
+  assert.equal(parseCustomWeeklyDays(null), null);
+  assert.equal(parseCustomWeeklyDays("FREQ=WEEKLY;INTERVAL=2;BYDAY=MO"), null);
 }
 
 console.log("recurrence.test.ts: all checks passed");
