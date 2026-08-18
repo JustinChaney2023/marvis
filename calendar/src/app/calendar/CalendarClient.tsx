@@ -133,6 +133,26 @@ function snapMinutesToStart(day: Date, minutesFromTop: number): Date | null {
   return start;
 }
 
+const TOTAL_MINUTES = (HOUR_END - HOUR_START) * 60;
+
+function clampMinutes(m: number): number {
+  return Math.min(Math.max(m, 0), TOTAL_MINUTES);
+}
+
+function snapTo30(m: number): number {
+  return Math.round(m / 30) * 30;
+}
+
+// Unlike snapMinutesToStart, this allows minutes === TOTAL_MINUTES (i.e. the
+// grid's bottom edge, HOUR_END) — needed for the END of a drag-created
+// range, which can legitimately land exactly at close-of-grid.
+function minutesToDate(day: Date, minutes: number): Date {
+  const d = new Date(day);
+  d.setHours(HOUR_START, 0, 0, 0);
+  d.setMinutes(d.getMinutes() + minutes);
+  return d;
+}
+
 type ModalState =
   | { mode: "create"; start: Date; end: Date }
   | { mode: "edit"; event: EventModalEvent };
@@ -344,15 +364,57 @@ function DayColumn({
   );
   const layout = useMemo(() => layoutOverlappingEvents(dayEvents), [dayEvents]);
 
-  const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
+  const [createPreview, setCreatePreview] = useState<
+    { lo: number; hi: number } | null
+  >(null);
+
+  // A plain click and a drag both start as mousedown on empty space; we
+  // only know which one it was once the mouse comes back up. A drag of at
+  // least half an hour opens the modal with that exact range; anything
+  // shorter (including a simple click, which never moves) falls back to
+  // the old fixed 30-minute default at the clicked time.
+  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return;
+    if (draggingEvent) return;
     if ((e.target as HTMLElement).closest("[data-event]")) return;
     const rect = e.currentTarget.getBoundingClientRect();
-    const minutesFromTop = yToMinutesFromColumnTop(e.clientY - rect.top);
-    const start = snapMinutesToStart(day, minutesFromTop);
-    if (!start) return;
-    const end = new Date(start);
-    end.setMinutes(end.getMinutes() + 30);
-    onEmptyClick(start, end);
+    const anchorMinutes = clampMinutes(
+      yToMinutesFromColumnTop(e.clientY - rect.top),
+    );
+    let moved = false;
+    setCreatePreview({ lo: anchorMinutes, hi: anchorMinutes });
+
+    const onMove = (ev: MouseEvent) => {
+      const minutes = clampMinutes(
+        yToMinutesFromColumnTop(ev.clientY - rect.top),
+      );
+      if (minutes !== anchorMinutes) moved = true;
+      setCreatePreview({
+        lo: Math.min(anchorMinutes, minutes),
+        hi: Math.max(anchorMinutes, minutes),
+      });
+    };
+
+    const onUp = (ev: MouseEvent) => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      setCreatePreview(null);
+
+      const releaseMinutes = clampMinutes(
+        yToMinutesFromColumnTop(ev.clientY - rect.top),
+      );
+      const loSnapped = snapTo30(Math.min(anchorMinutes, releaseMinutes));
+      const hiSnapped = snapTo30(Math.max(anchorMinutes, releaseMinutes));
+      const start = minutesToDate(day, loSnapped);
+      const draggedEnough = moved && hiSnapped - loSnapped >= 30;
+      const end = draggedEnough
+        ? minutesToDate(day, hiSnapped)
+        : new Date(start.getTime() + 30 * 60_000);
+      onEmptyClick(start, end);
+    };
+
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
   };
 
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
@@ -400,10 +462,22 @@ function DayColumn({
       ))}
       <div
         className="absolute inset-0"
-        onClick={handleClick}
+        onMouseDown={handleMouseDown}
         onDragOver={handleDragOver}
         onDrop={handleDrop}
       />
+      {createPreview && (
+        <div
+          className="pointer-events-none absolute left-0 right-0 rounded-lg border-2 border-dashed border-indigo-500 bg-indigo-500/10"
+          style={{
+            top: `${(createPreview.lo / 60) * HOUR_HEIGHT}px`,
+            height: `${Math.max(
+              ((createPreview.hi - createPreview.lo) / 60) * HOUR_HEIGHT,
+              4,
+            )}px`,
+          }}
+        />
+      )}
       {layout.map(({ event, col, cols }) => {
         const block = computeBlock(event.start, event.end);
         if (!block) return null;
