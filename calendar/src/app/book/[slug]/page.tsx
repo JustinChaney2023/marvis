@@ -38,7 +38,8 @@ export default async function PublicBookingPage(
           {settings.bookingTitle}
         </h1>
         <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-          Pick a time ({settings.bookingDurationMin} min)
+          Pick a time ({settings.bookingDurationMin} min) — shown in your
+          local time zone
         </p>
 
         <BookingClient
