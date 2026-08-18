@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
+import { RECURRENCE_PRESETS } from "@/lib/recurrence";
 import {
   createProject,
   createTask,
@@ -224,6 +225,18 @@ export default async function Home(props: PageProps<"/tasks">) {
           name="dueAt"
           className="rounded-lg border border-zinc-200 bg-white px-2 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900"
         />
+        <select
+          name="recurrenceRule"
+          defaultValue=""
+          title="Repeat — requires a due date to anchor to"
+          className="rounded-lg border border-zinc-200 bg-white px-2 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900"
+        >
+          {RECURRENCE_PRESETS.map((preset) => (
+            <option key={preset.value} value={preset.value}>
+              {preset.label}
+            </option>
+          ))}
+        </select>
         <button
           type="submit"
           className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-all hover:bg-indigo-700 active:scale-[0.98] dark:bg-indigo-500 dark:hover:bg-indigo-400"
@@ -263,6 +276,11 @@ export default async function Home(props: PageProps<"/tasks">) {
                 <span>{task.durationMin}m</span>
                 {task.dueAt && (
                   <span>· due {task.dueAt.toLocaleString()}</span>
+                )}
+                {task.recurrenceRule && (
+                  <span title="Repeats — completing it creates the next occurrence">
+                    ↻ repeats
+                  </span>
                 )}
                 {task.event && (
                   <span>· scheduled {task.event.start.toLocaleString()}</span>
