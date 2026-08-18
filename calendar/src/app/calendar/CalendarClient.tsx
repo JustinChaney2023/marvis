@@ -185,7 +185,7 @@ export default function CalendarClient({
             const { start, end } = defaultNewEventTimes();
             openCreate(start, end);
           }}
-          className="rounded bg-zinc-900 px-4 py-2 text-sm font-medium text-white dark:bg-zinc-100 dark:text-zinc-900"
+          className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-all hover:bg-indigo-700 active:scale-[0.98] dark:bg-indigo-500 dark:hover:bg-indigo-400"
         >
           + New event
         </button>
@@ -270,7 +270,7 @@ function HourGrid({
               return (
                 <div
                   key={day.toISOString()}
-                  className="border-b border-l border-zinc-200 px-2 py-1 text-center dark:border-zinc-800"
+                  className="border-b border-l border-zinc-200 px-2 py-1.5 text-center dark:border-zinc-800"
                 >
                   <div className="text-xs font-medium text-zinc-500">
                     {dayWeekdayLabel(day)}
@@ -278,7 +278,7 @@ function HourGrid({
                   <div
                     className={
                       isToday
-                        ? "text-lg font-bold text-zinc-900 dark:text-zinc-50"
+                        ? "mt-0.5 inline-flex h-7 w-7 items-center justify-center rounded-full bg-indigo-600 text-sm font-bold text-white shadow-sm"
                         : "text-lg font-semibold text-zinc-700 dark:text-zinc-300"
                     }
                   >
@@ -522,7 +522,7 @@ function EventBlock({
         onClick(event);
       }}
       type="button"
-      className={`group absolute overflow-hidden rounded border border-blue-300 bg-blue-100 p-1 text-left text-blue-900 dark:border-blue-700 dark:bg-blue-900/40 dark:text-blue-100 ${
+      className={`group absolute overflow-hidden rounded-lg border-y border-r border-zinc-200/40 border-l-2 border-l-indigo-500 bg-indigo-50 p-1.5 text-left text-indigo-900 shadow-sm transition-all hover:shadow-md hover:brightness-95 dark:border-zinc-700/60 dark:bg-indigo-950/30 dark:text-indigo-100 dark:hover:brightness-110 ${
         isDragging ? "opacity-40" : ""
       }`}
       style={{
@@ -543,7 +543,7 @@ function EventBlock({
           draggable={false}
           onMouseDown={handleResizeMouseDown}
           onClick={(e) => e.stopPropagation()}
-          className="absolute bottom-0 left-0 right-0 h-1.5 cursor-ns-resize bg-blue-400/60 opacity-0 group-hover:opacity-100 dark:bg-blue-600/60"
+          className="absolute bottom-0 left-0 right-0 h-1.5 cursor-ns-resize bg-indigo-400/80 opacity-0 transition-opacity group-hover:opacity-100 dark:bg-indigo-500/80"
           aria-label="Resize event"
         />
       )}
@@ -580,11 +580,11 @@ function MonthView({
   const currentMonth = viewStart.getMonth();
 
   return (
-    <div className="grid grid-cols-7 gap-px overflow-hidden rounded-lg border border-zinc-200 bg-zinc-200 dark:border-zinc-800 dark:bg-zinc-800">
+    <div className="grid grid-cols-7 gap-px overflow-hidden rounded-xl border border-zinc-200 bg-zinc-200 shadow-sm ring-1 ring-black/5 dark:border-zinc-800 dark:bg-zinc-800">
       {WEEKDAY_LABELS_MON_FIRST.map((label) => (
         <div
           key={label}
-          className="bg-white px-2 py-1 text-center text-xs font-medium text-zinc-500 dark:bg-zinc-900"
+          className="bg-white px-2 py-1.5 text-center text-xs font-medium text-zinc-500 dark:bg-zinc-900"
         >
           {label}
         </div>
@@ -635,15 +635,15 @@ function MonthCell({
   };
 
   const dayNumberClass = isToday
-    ? "inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white"
+    ? "inline-flex h-6 w-6 items-center justify-center rounded-full bg-indigo-600 text-xs font-bold text-white shadow-sm"
     : inCurrentMonth
-      ? "text-xs font-semibold text-zinc-900 dark:text-zinc-100"
-      : "text-xs font-semibold text-zinc-400";
+      ? "inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold text-zinc-900 transition-colors hover:bg-zinc-100 dark:text-zinc-100 dark:hover:bg-zinc-800"
+      : "inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold text-zinc-400";
 
   return (
     <div
       onClick={handleClick}
-      className="flex min-h-[7rem] cursor-pointer flex-col gap-1 bg-white p-1 dark:bg-zinc-900"
+      className="flex min-h-[7rem] cursor-pointer flex-col gap-1 bg-white p-1.5 transition-colors hover:bg-zinc-50 dark:bg-zinc-900 dark:hover:bg-zinc-800/50"
     >
       <Link
         data-day-link
@@ -662,7 +662,7 @@ function MonthCell({
               e.stopPropagation();
               onEventClick(ev);
             }}
-            className="truncate rounded bg-blue-100 px-1.5 py-0.5 text-left text-[11px] text-blue-900 hover:bg-blue-200 dark:bg-blue-900/40 dark:text-blue-100 dark:hover:bg-blue-900/60"
+            className="truncate rounded-md border-l-2 border-l-indigo-500 bg-indigo-50 px-1.5 py-0.5 text-left text-[11px] text-indigo-900 transition-colors hover:brightness-95 dark:bg-indigo-950/30 dark:text-indigo-100 dark:hover:brightness-110"
           >
             {ev.title}
           </button>
@@ -671,7 +671,7 @@ function MonthCell({
           <Link
             data-day-link
             href={`/calendar?view=day&start=${dateYMD}`}
-            className="px-1.5 text-[11px] text-zinc-500 hover:underline"
+            className="px-1.5 text-[11px] text-zinc-500 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100"
           >
             +{more} more
           </Link>

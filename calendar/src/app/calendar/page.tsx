@@ -61,8 +61,8 @@ function navTargets(view: CalendarView, start: Date): {
 
 function linkClass(active: boolean): string {
   return active
-    ? "rounded bg-zinc-900 px-3 py-1 text-sm font-medium text-white dark:bg-zinc-100 dark:text-zinc-900"
-    : "rounded px-3 py-1 text-sm text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100";
+    ? "rounded-full bg-white px-3 py-1.5 text-sm font-medium text-zinc-900 shadow-sm transition-colors dark:bg-zinc-800 dark:text-zinc-100"
+    : "rounded-full px-3 py-1.5 text-sm text-zinc-500 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100";
 }
 
 export default async function Page(props: PageProps<"/calendar">) {
@@ -105,42 +105,47 @@ export default async function Page(props: PageProps<"/calendar">) {
     <main className="mx-auto w-full max-w-6xl flex-1 px-6 py-12">
       <header className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
-          <Link href="/" className="text-sm text-zinc-500 hover:underline">
+          <Link
+            href="/"
+            className="text-sm text-zinc-500 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100"
+          >
             ← Tasks
           </Link>
-          <h1 className="text-2xl font-semibold">Calendar</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Calendar</h1>
           <div className="w-16" />
         </div>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <nav className="flex items-center gap-1">
-            <Link
-              href={`/calendar?view=day&start=${switchTargets.day}`}
-              className={linkClass(view === "day")}
-            >
-              Day
-            </Link>
-            <Link
-              href={`/calendar?view=week&start=${switchTargets.week}`}
-              className={linkClass(view === "week")}
-            >
-              Week
-            </Link>
-            <Link
-              href={`/calendar?view=month&start=${switchTargets.month}`}
-              className={linkClass(view === "month")}
-            >
-              Month
-            </Link>
-            <span className="mx-2 h-5 w-px bg-zinc-200 dark:bg-zinc-800" />
+            <div className="inline-flex items-center gap-1 rounded-full bg-zinc-100 p-1 dark:bg-zinc-900">
+              <Link
+                href={`/calendar?view=day&start=${switchTargets.day}`}
+                className={linkClass(view === "day")}
+              >
+                Day
+              </Link>
+              <Link
+                href={`/calendar?view=week&start=${switchTargets.week}`}
+                className={linkClass(view === "week")}
+              >
+                Week
+              </Link>
+              <Link
+                href={`/calendar?view=month&start=${switchTargets.month}`}
+                className={linkClass(view === "month")}
+              >
+                Month
+              </Link>
+            </div>
+            <span className="mx-1 h-5 w-px bg-zinc-200 dark:bg-zinc-800" />
             <Link
               href={`/calendar?view=${view}&start=${nav.prev}`}
-              className="rounded px-3 py-1 text-sm text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
+              className="rounded-full px-3 py-1.5 text-sm text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
             >
               ← Prev
             </Link>
             <Link
               href={`/calendar?view=${view}&start=${nav.next}`}
-              className="rounded px-3 py-1 text-sm text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
+              className="rounded-full px-3 py-1.5 text-sm text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
             >
               Next →
             </Link>

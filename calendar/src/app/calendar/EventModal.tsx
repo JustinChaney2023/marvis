@@ -94,21 +94,21 @@ export default function EventModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
       onClick={onBackdropClick}
       role="dialog"
       aria-modal="true"
     >
-      <div className="w-full max-w-md rounded-lg border border-zinc-200 bg-white p-6 shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
+      <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-6 shadow-2xl ring-1 ring-black/5 dark:border-zinc-800 dark:bg-zinc-900">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">
+          <h2 className="text-lg font-semibold tracking-tight">
             {mode === "create" ? "New event" : "Edit event"}
           </h2>
           <button
             type="button"
             onClick={onClose}
             aria-label="close"
-            className="flex h-7 w-7 items-center justify-center rounded text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+            className="flex h-7 w-7 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800"
           >
             ×
           </button>
@@ -122,7 +122,7 @@ export default function EventModal({
               name="title"
               required
               defaultValue={initialTitle}
-              className="rounded border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+              className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900"
             />
           </label>
           <label className="flex flex-col gap-1 text-sm">
@@ -132,7 +132,7 @@ export default function EventModal({
               name="start"
               required
               defaultValue={startValue}
-              className="rounded border border-zinc-300 bg-white px-2 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+              className="rounded-lg border border-zinc-200 bg-white px-2 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900"
             />
           </label>
           <label className="flex flex-col gap-1 text-sm">
@@ -142,7 +142,7 @@ export default function EventModal({
               name="end"
               required
               defaultValue={endValue}
-              className="rounded border border-zinc-300 bg-white px-2 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+              className="rounded-lg border border-zinc-200 bg-white px-2 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900"
             />
           </label>
           <label className="flex flex-col gap-1 text-sm">
@@ -150,7 +150,7 @@ export default function EventModal({
             <select
               name="recurrenceRule"
               defaultValue={initialRecurrenceRule}
-              className="rounded border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+              className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900"
             >
               {RECURRENCE_PRESETS.map((preset) => (
                 <option key={preset.value} value={preset.value}>
@@ -172,7 +172,7 @@ export default function EventModal({
                   type="button"
                   onClick={handleDelete}
                   disabled={isSubmitting}
-                  className="rounded border border-red-300 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50 dark:border-red-800 dark:text-red-300 dark:hover:bg-red-950/40"
+                  className="rounded-lg border border-red-200 px-3 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-red-50 disabled:opacity-50 dark:border-red-800 dark:text-red-300 dark:hover:bg-red-950/40"
                 >
                   Delete
                 </button>
@@ -190,14 +190,14 @@ export default function EventModal({
                 type="button"
                 onClick={onClose}
                 disabled={isSubmitting}
-                className="rounded border border-zinc-300 px-3 py-2 text-sm font-medium dark:border-zinc-700"
+                className="rounded-lg border border-zinc-200 px-3 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="rounded bg-zinc-900 px-4 py-2 text-sm font-medium text-white dark:bg-zinc-100 dark:text-zinc-900 disabled:opacity-50"
+                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-all hover:bg-indigo-700 active:scale-[0.98] disabled:opacity-50 dark:bg-indigo-500 dark:hover:bg-indigo-400"
               >
                 {isSubmitting ? "Saving…" : "Save"}
               </button>
