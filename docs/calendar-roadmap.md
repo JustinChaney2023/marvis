@@ -14,45 +14,10 @@ only — not vendored) validates a few approaches adopted below: the
 refresh, and one connected-account row per external calendar rather than a
 model per provider.
 
-## Phase 1 — Google Calendar integration
+Google Calendar sync is pushed to the end of this roadmap by request
+(Phase 5) — everything else ships first.
 
-The thing you actually asked for first; this is the priority.
-
-1. **Schema**: add a `GoogleAccount` model (single row for now — one
-   Google account, this is a single-user app): `accessToken`,
-   `refreshToken`, `expiresAt`, `email`. Add to `Event`: `source` enum
-   (`LOCAL` | `GOOGLE`), `googleEventId String? @unique`,
-   `googleCalendarId String?`, `updatedAtGoogle DateTime?` (etag/version
-   tracking for conflict detection).
-2. **OAuth connect flow**: `/api/google/connect` redirects to Google's
-   consent screen (`calendar` scope); `/api/google/callback` exchanges the
-   code for tokens via the `googleapis` package and stores them. A
-   "Connect Google Calendar" button on a new `/settings` page.
-3. **Import (read)**: pull events from the primary Google calendar into
-   local `Event` rows tagged `source: GOOGLE`. Poll on a schedule (Google
-   Calendar push notifications/webhooks need a public HTTPS endpoint,
-   which a local personal deployment may not have — start with polling
-   every few minutes, revisit webhooks once this is deployed somewhere
-   reachable).
-4. **Export (write)**: local (`LOCAL`) events created here get pushed to
-   Google so they show up on your phone/other devices. Auto-scheduled
-   task-events count as local events, so scheduling a task also creates
-   it on your real Google Calendar.
-5. **Two-way sync + conflict handling**: on each poll, diff by
-   `updatedAtGoogle` vs local `updatedAt`; last-write-wins is fine for a
-   single-user tool — no need for FluidCalendar's multi-provider conflict
-   resolution machinery.
-6. **Free/busy correctness**: the auto-scheduler (Phase 3) must treat
-   imported Google events as busy time, same as local events — this is
-   why sync lands before scheduler improvements.
-
-Blocking dependency: you'll need to create a Google Cloud project, enable
-the Calendar API, and create an OAuth 2.0 Client ID (redirect URI
-`http://localhost:3000/api/google/callback` for dev). I can't do that step
-for you — it needs your Google account. Once you have a client ID/secret,
-they go in `.env` and I take it from there.
-
-## Phase 2 — Calendar views & editing
+## Phase 1 — Calendar views & editing
 
 1. **Day and month views**, not just week — Motion's core views.
 2. **Drag-and-drop** on the week/day grid: drag an event to move it, drag
@@ -66,7 +31,7 @@ they go in `.env` and I take it from there.
    genuinely easy to get wrong — DST, month-end, leap years — worth the
    dependency) for both manual recurring events and recurring tasks.
 
-## Phase 3 — Smarter auto-scheduling
+## Phase 2 — Smarter auto-scheduling
 
 Upgrade the v0 greedy scheduler toward FluidCalendar's actual model:
 
@@ -83,7 +48,7 @@ Upgrade the v0 greedy scheduler toward FluidCalendar's actual model:
    changed underneath it) needs to be noticed and re-placed, not just
    silently stuck at a stale time.
 
-## Phase 4 — Daily-driver features
+## Phase 3 — Daily-driver features
 
 1. **Focus mode**: a distraction-free single-task view with a timer.
 2. **Quick capture**: a fast "add task" entry point (keyboard shortcut,
@@ -93,12 +58,43 @@ Upgrade the v0 greedy scheduler toward FluidCalendar's actual model:
 4. **Notifications/reminders**: browser notifications before a scheduled
    block starts.
 
-## Phase 5 — Polish
+## Phase 4 — Polish
 
 1. Keyboard shortcuts (new task, next/prev week, etc.).
 2. Mobile-responsive layout (the grid already scrolls horizontally on
    narrow screens; needs real testing on a phone).
 3. Dark/light theme toggle (currently follows OS only).
+
+## Phase 5 — Google Calendar integration
+
+1. **Schema**: add a `GoogleAccount` model (single row for now — one
+   Google account, this is a single-user app): `accessToken`,
+   `refreshToken`, `expiresAt`, `email`. Add to `Event`: `source` enum
+   (`LOCAL` | `GOOGLE`), `googleEventId String? @unique`,
+   `googleCalendarId String?`, `updatedAtGoogle DateTime?` (etag/version
+   tracking for conflict detection).
+2. **OAuth connect flow**: `/api/google/connect` redirects to Google's
+   consent screen (`calendar` scope); `/api/google/callback` exchanges the
+   code for tokens via the `googleapis` package and stores them. A
+   "Connect Google Calendar" button on a new `/settings` page. Setup
+   instructions for the Google Cloud OAuth client are in
+   `docs/google-calendar-setup.md`.
+3. **Import (read)**: pull events from the primary Google calendar into
+   local `Event` rows tagged `source: GOOGLE`. Poll on a schedule (Google
+   Calendar push notifications/webhooks need a public HTTPS endpoint,
+   which a local personal deployment may not have — start with polling
+   every few minutes, revisit webhooks once this is deployed somewhere
+   reachable).
+4. **Export (write)**: local (`LOCAL`) events created here get pushed to
+   Google so they show up on your phone/other devices. Auto-scheduled
+   task-events count as local events, so scheduling a task also creates
+   it on your real Google Calendar.
+5. **Two-way sync + conflict handling**: on each poll, diff by
+   `updatedAtGoogle` vs local `updatedAt`; last-write-wins is fine for a
+   single-user tool — no need for FluidCalendar's multi-provider conflict
+   resolution machinery.
+6. **Free/busy correctness**: the auto-scheduler must treat imported
+   Google events as busy time, same as local events.
 
 ## Explicitly out of scope
 
