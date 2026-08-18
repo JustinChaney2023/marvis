@@ -19,9 +19,12 @@ import { moveEvent } from "../actions";
 
 export type CalendarEvent = {
   id: string;
+  masterId: string;
   title: string;
   start: Date;
   end: Date;
+  isRecurring: boolean;
+  recurrenceRule: string | null;
 };
 
 type Props = {
@@ -42,7 +45,7 @@ const TOTAL_HEIGHT = (HOUR_END - HOUR_START) * HOUR_HEIGHT;
 
 type PlacedEvent = { event: CalendarEvent; col: number; cols: number };
 
-type DraggingEvent = { id: string; durationMs: number };
+type DraggingEvent = { id: string; masterId: string; durationMs: number };
 
 function layoutOverlappingEvents(events: CalendarEvent[]): PlacedEvent[] {
   const sorted = [...events].sort(
@@ -152,17 +155,22 @@ export default function CalendarClient({
     setModalState({
       mode: "edit",
       event: {
-        id: event.id,
+        id: event.masterId,
         title: event.title,
         start: event.start,
         end: event.end,
+        recurrenceRule: event.recurrenceRule,
       },
     });
   };
   const closeModal = () => setModalState(null);
 
-  const handleEventDragStart = (id: string, durationMs: number) => {
-    setDraggingEvent({ id, durationMs });
+  const handleEventDragStart = (
+    id: string,
+    masterId: string,
+    durationMs: number,
+  ) => {
+    setDraggingEvent({ id, masterId, durationMs });
   };
   const handleEventDragEnd = () => {
     setDraggingEvent(null);
@@ -245,7 +253,7 @@ function HourGrid({
   onEmptyClick: (start: Date, end: Date) => void;
   onEventClick: (event: CalendarEvent) => void;
   draggingEvent: DraggingEvent | null;
-  onEventDragStart: (id: string, durationMs: number) => void;
+  onEventDragStart: (id: string, masterId: string, durationMs: number) => void;
   onEventDragEnd: () => void;
 }) {
   const gridStyle = {
@@ -327,7 +335,7 @@ function DayColumn({
   onEmptyClick: (start: Date, end: Date) => void;
   onEventClick: (event: CalendarEvent) => void;
   draggingEvent: DraggingEvent | null;
-  onEventDragStart: (id: string, durationMs: number) => void;
+  onEventDragStart: (id: string, masterId: string, durationMs: number) => void;
   onEventDragEnd: () => void;
 }) {
   const dayEvents = useMemo(
@@ -366,7 +374,7 @@ function DayColumn({
     const end = new Date(start.getTime() + active.durationMs);
     try {
       await moveEvent(
-        active.id,
+        active.masterId,
         start.toISOString(),
         end.toISOString(),
       );
@@ -435,7 +443,7 @@ function EventBlock({
   left: string;
   width: string;
   isDragging: boolean;
-  onMoveStart: (id: string, durationMs: number) => void;
+  onMoveStart: (id: string, masterId: string, durationMs: number) => void;
   onMoveEnd: () => void;
   onClick: (event: CalendarEvent) => void;
 }) {
@@ -445,7 +453,11 @@ function EventBlock({
   const handleDragStart = (e: React.DragEvent<HTMLButtonElement>) => {
     e.dataTransfer.setData("text/plain", event.id);
     e.dataTransfer.effectAllowed = "move";
-    onMoveStart(event.id, event.end.getTime() - event.start.getTime());
+    onMoveStart(
+      event.id,
+      event.masterId,
+      event.end.getTime() - event.start.getTime(),
+    );
   };
 
   const handleDragEnd = () => {
@@ -480,7 +492,7 @@ function EventBlock({
       if (latestEndMs !== originalEnd) {
         try {
           await moveEvent(
-            event.id,
+            event.masterId,
             new Date(originalStart).toISOString(),
             new Date(latestEndMs).toISOString(),
           );
@@ -502,7 +514,7 @@ function EventBlock({
   return (
     <button
       data-event
-      draggable
+      draggable={!event.isRecurring}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
       onClick={(e) => {
@@ -526,13 +538,15 @@ function EventBlock({
           {formatTime(event.start)} – {formatTime(displayEnd)}
         </div>
       )}
-      <div
-        draggable={false}
-        onMouseDown={handleResizeMouseDown}
-        onClick={(e) => e.stopPropagation()}
-        className="absolute bottom-0 left-0 right-0 h-1.5 cursor-ns-resize bg-blue-400/60 opacity-0 group-hover:opacity-100 dark:bg-blue-600/60"
-        aria-label="Resize event"
-      />
+      {!event.isRecurring && (
+        <div
+          draggable={false}
+          onMouseDown={handleResizeMouseDown}
+          onClick={(e) => e.stopPropagation()}
+          className="absolute bottom-0 left-0 right-0 h-1.5 cursor-ns-resize bg-blue-400/60 opacity-0 group-hover:opacity-100 dark:bg-blue-600/60"
+          aria-label="Resize event"
+        />
+      )}
     </button>
   );
 }

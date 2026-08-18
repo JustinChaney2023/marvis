@@ -8,16 +8,21 @@ datasource db {
 }
 
 model Event {
-  id        String   @id @default(cuid())
-  title     String
-  start     DateTime
-  end       DateTime
-  allDay    Boolean  @default(false)
-  notes     String?
-  taskId    String?  @unique
-  task      Task?    @relation(fields: [taskId], references: [id])
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String   @id @default(cuid())
+  title          String
+  start          DateTime
+  end            DateTime
+  allDay         Boolean  @default(false)
+  notes          String?
+  // RRULE string (no DTSTART line — `start` above is the recurrence's
+  // DTSTART), e.g. "FREQ=WEEKLY;BYDAY=MO,WE,FR". Null = a one-off event.
+  // Occurrences are computed on the fly (src/lib/recurrence.ts), never
+  // materialized as rows — editing/deleting acts on the whole series.
+  recurrenceRule String?
+  taskId         String?  @unique
+  task           Task?    @relation(fields: [taskId], references: [id])
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 }
 
 enum TaskStatus {

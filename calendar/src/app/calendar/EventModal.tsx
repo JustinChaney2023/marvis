@@ -3,12 +3,14 @@
 import { useEffect, useRef, useState } from "react";
 import { createEvent, deleteEvent, updateEvent } from "../actions";
 import { toLocalInputValue } from "@/lib/calendar-dates";
+import { RECURRENCE_PRESETS } from "@/lib/recurrence";
 
 export type EventModalEvent = {
   id: string;
   title: string;
   start: Date;
   end: Date;
+  recurrenceRule: string | null;
 };
 
 type Props = {
@@ -84,6 +86,11 @@ export default function EventModal({
   const endValue = toLocalInputValue(
     mode === "edit" && event ? event.end : initialEnd,
   );
+  const initialRecurrenceRule =
+    mode === "edit" && event && event.recurrenceRule
+      ? event.recurrenceRule
+      : "";
+  const isEditingRecurring = mode === "edit" && !!event?.recurrenceRule;
 
   return (
     <div
@@ -138,17 +145,43 @@ export default function EventModal({
               className="rounded border border-zinc-300 bg-white px-2 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
             />
           </label>
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="text-zinc-500">Repeat</span>
+            <select
+              name="recurrenceRule"
+              defaultValue={initialRecurrenceRule}
+              className="rounded border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+            >
+              {RECURRENCE_PRESETS.map((preset) => (
+                <option key={preset.value} value={preset.value}>
+                  {preset.label}
+                </option>
+              ))}
+            </select>
+            {isEditingRecurring && (
+              <span className="text-xs text-zinc-500">
+                Editing the whole series.
+              </span>
+            )}
+          </label>
 
           <div className="mt-2 flex items-center justify-between gap-2">
             {mode === "edit" ? (
-              <button
-                type="button"
-                onClick={handleDelete}
-                disabled={isSubmitting}
-                className="rounded border border-red-300 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50 dark:border-red-800 dark:text-red-300 dark:hover:bg-red-950/40"
-              >
-                Delete
-              </button>
+              <div className="flex flex-col gap-1">
+                <button
+                  type="button"
+                  onClick={handleDelete}
+                  disabled={isSubmitting}
+                  className="rounded border border-red-300 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50 dark:border-red-800 dark:text-red-300 dark:hover:bg-red-950/40"
+                >
+                  Delete
+                </button>
+                {isEditingRecurring && (
+                  <span className="text-xs text-zinc-500">
+                    Deletes the whole series.
+                  </span>
+                )}
+              </div>
             ) : (
               <span />
             )}

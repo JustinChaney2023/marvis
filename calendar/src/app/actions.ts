@@ -51,6 +51,11 @@ export async function scheduleAllAction() {
   revalidatePath("/calendar");
 }
 
+function recurrenceRuleFromFormData(formData: FormData): string | null {
+  const value = String(formData.get("recurrenceRule") ?? "").trim();
+  return value || null;
+}
+
 export async function createEvent(formData: FormData) {
   const title = String(formData.get("title") ?? "").trim();
   const startRaw = String(formData.get("start") ?? "");
@@ -58,7 +63,12 @@ export async function createEvent(formData: FormData) {
   if (!title || !startRaw || !endRaw) return;
 
   await prisma.event.create({
-    data: { title, start: new Date(startRaw), end: new Date(endRaw) },
+    data: {
+      title,
+      start: new Date(startRaw),
+      end: new Date(endRaw),
+      recurrenceRule: recurrenceRuleFromFormData(formData),
+    },
   });
   revalidatePath("/calendar");
 }
@@ -71,7 +81,12 @@ export async function updateEvent(eventId: string, formData: FormData) {
 
   await prisma.event.update({
     where: { id: eventId },
-    data: { title, start: new Date(startRaw), end: new Date(endRaw) },
+    data: {
+      title,
+      start: new Date(startRaw),
+      end: new Date(endRaw),
+      recurrenceRule: recurrenceRuleFromFormData(formData),
+    },
   });
   revalidatePath("/calendar");
 }

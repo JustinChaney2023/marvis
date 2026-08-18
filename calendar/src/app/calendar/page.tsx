@@ -13,6 +13,7 @@ import {
   startOfWeekMonday,
   type CalendarView,
 } from "@/lib/calendar-dates";
+import { expandEvents } from "@/lib/recurrence";
 import CalendarClient, { type CalendarEvent } from "./CalendarClient";
 
 function viewSwitchTargets(
@@ -71,17 +72,28 @@ export default async function Page(props: PageProps<"/calendar">) {
 
   const { from, to } = computeRange(view, start);
 
-  const eventsRaw = await prisma.event.findMany({
-    where: { start: { gte: from, lt: to } },
+  const rows = await prisma.event.findMany({
+    where: {
+      OR: [
+        { start: { gte: from, lt: to } },
+        { recurrenceRule: { not: null } },
+      ],
+    },
     orderBy: { start: "asc" },
   });
 
-  const events: CalendarEvent[] = eventsRaw.map((e) => ({
-    id: e.id,
-    title: e.title,
-    start: e.start,
-    end: e.end,
-  }));
+  const ruleByMasterId = new Map(rows.map((r) => [r.id, r.recurrenceRule]));
+  const events: CalendarEvent[] = expandEvents(rows, from, to)
+    .map((o) => ({
+      id: o.id,
+      masterId: o.masterId,
+      title: o.title,
+      start: o.start,
+      end: o.end,
+      isRecurring: o.isRecurring,
+      recurrenceRule: ruleByMasterId.get(o.masterId) ?? null,
+    }))
+    .sort((a, b) => a.start.getTime() - b.start.getTime());
 
   const today = new Date();
   const todayISO = formatYMD(today);

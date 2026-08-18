@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { expandEvents } from "@/lib/recurrence";
 
 // MVP auto-scheduler: greedy earliest-fit within work hours, ordered by
 // due date then priority — same weighting order as FluidCalendar's scoring
@@ -75,11 +76,17 @@ export async function scheduleTask(taskId: string) {
 
   const now = new Date();
   const horizonEnd = new Date(now.getTime() + HORIZON_DAYS * 86_400_000);
+  // Recurring masters may have started long before `now` and still recur
+  // into the horizon, so they can't be filtered by `start` — fetch them
+  // unconditionally and expand into occurrences alongside one-off events.
   const existing = await prisma.event.findMany({
-    where: { start: { lt: horizonEnd } },
-    orderBy: { start: "asc" },
+    where: {
+      OR: [{ start: { lt: horizonEnd } }, { recurrenceRule: { not: null } }],
+    },
   });
-  const busy = existing.map((e) => ({ start: e.start, end: e.end }));
+  const busy = expandEvents(existing, now, horizonEnd)
+    .map((o) => ({ start: o.start, end: o.end }))
+    .sort((a, b) => a.start.getTime() - b.start.getTime());
 
   const slot = findEarliestSlot(now, task.durationMin, busy, horizonEnd);
   if (!slot) return null;
