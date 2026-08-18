@@ -146,4 +146,27 @@ const horizon = new Date(2026, 7, 31, 0, 0);
   assert.equal(withClustering.start.getTime(), wednesday.getTime());
 }
 
+// findBestSlot: clustering must not sacrifice a genuinely better same-day
+// slot for a worse cross-day one. LOW-energy task (prefers 13-18) whose
+// project cluster day is the same day as `from` (Tuesday) — the day's
+// earliest slot (9:00) isn't energy-matched, but 13:00 on that SAME day
+// is both energy-matched AND the cluster day, so it must win over jumping
+// to some other day that only offers an energy match. A prior version of
+// this jumped a full day per rejected candidate and would have skipped
+// the 13:00 slot entirely.
+{
+  const tuesday9am = new Date(2026, 7, 18, 9, 0);
+  const tuesday1pm = new Date(2026, 7, 18, 13, 0);
+
+  const slot = findBestSlot(
+    { durationMin: 30, dueAt: null, energy: "LOW" },
+    [],
+    horizon,
+    tuesday9am,
+    new Set([dateKey(tuesday9am)]),
+  );
+  assert.ok(slot);
+  assert.equal(slot.start.getTime(), tuesday1pm.getTime());
+}
+
 console.log("scheduler.test.ts: all checks passed");

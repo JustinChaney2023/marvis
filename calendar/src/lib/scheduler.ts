@@ -15,6 +15,10 @@ const WORK_END_HOUR = 18;
 const HORIZON_DAYS = 14;
 const SLOT_GRANULARITY_MIN = 15;
 const CANDIDATE_LIMIT = 12;
+// Clustering's search needs to compare across days, not just within one —
+// a wider budget than the default lets it actually sample multiple whole
+// workdays at half-hour granularity (see the day-jump note below).
+const CLUSTERING_CANDIDATE_LIMIT = 40;
 
 // Deep-work (HIGH) tasks are scored toward morning focus hours, admin-ish
 // (LOW) toward the afternoon; MEDIUM spans the whole work day (no real
@@ -155,8 +159,9 @@ export function findBestSlot(
   let best: { start: Date; end: Date } | null = null;
   let bestScore = -Infinity;
   const wantsClustering = projectScheduledDays.size > 0;
+  const limit = wantsClustering ? CLUSTERING_CANDIDATE_LIMIT : CANDIDATE_LIMIT;
 
-  for (let i = 0; i < CANDIDATE_LIMIT; i++) {
+  for (let i = 0; i < limit; i++) {
     const slot = findEarliestSlot(cursor, task.durationMin, busy, horizonEnd);
     if (!slot) break;
 
@@ -172,14 +177,17 @@ export function findBestSlot(
       (!wantsClustering || projectScheduledDays.has(dateKey(slot.start)));
     if (goodEnough) break;
 
-    // Chasing a clustering match minute-by-minute would just crawl
-    // through the current day's remaining open slots (there could be
-    // hours of those) without ever reaching a different day within
-    // CANDIDATE_LIMIT tries. Jump a full day per candidate instead so the
-    // bounded scan actually samples multiple days for a project match —
-    // non-clustered tasks keep the original fine-grained minute advance.
+    // A full-day jump per rejected candidate (an earlier version of this)
+    // could skip a later same-day slot that would have scored better than
+    // whatever the next day offers — e.g. a same-day energy-matched slot
+    // beating a cluster-matched-but-energy-mismatched one on a different
+    // day. A 30-minute step (matching ENERGY_PREFERRED_HOURS' hour-scale
+    // granularity) with a wider CLUSTERING_CANDIDATE_LIMIT still reaches
+    // multiple days within the bounded scan, without giving up on the
+    // current day after a single rejected candidate. Non-clustered tasks
+    // keep the original fine-grained minute advance.
     cursor = wantsClustering
-      ? new Date(slot.start.getFullYear(), slot.start.getMonth(), slot.start.getDate() + 1)
+      ? new Date(slot.start.getTime() + 30 * 60_000)
       : new Date(slot.start.getTime() + 60_000);
   }
 
