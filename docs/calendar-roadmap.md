@@ -17,19 +17,22 @@ model per provider.
 Google Calendar sync is pushed to the end of this roadmap by request
 (Phase 5) — everything else ships first.
 
-## Phase 1 — Calendar views & editing
+## Phase 1 — Calendar views & editing (shipped)
 
-1. **Day and month views**, not just week — Motion's core views.
-2. **Drag-and-drop** on the week/day grid: drag an event to move it, drag
-   its edge to resize. Native HTML5 DnD, no new dependency.
-3. **Click-to-create**: click/drag on an empty grid slot to open the
-   add-event form pre-filled with that time, instead of only the bottom
-   form.
-4. **Edit-in-place**: click an existing event to edit title/time/notes,
-   not just delete.
-5. **Recurring events**: add the `rrule` package (recurrence math is
-   genuinely easy to get wrong — DST, month-end, leap years — worth the
-   dependency) for both manual recurring events and recurring tasks.
+1. ~~Day and month views, not just week.~~ Done: `?view=day|week|month`.
+2. ~~Drag-and-drop on the week/day grid: move + resize.~~ Done (native
+   HTML5 DnD + mouse events, disabled on recurring occurrences — see #5).
+3. ~~Click-to-create on an empty grid slot / month cell.~~ Done.
+4. ~~Edit-in-place: click an event to edit or delete it.~~ Done.
+5. ~~Recurring events~~ (`rrule`, `src/lib/recurrence.ts`). Done, v1 scope:
+   occurrences are computed on the fly (never materialized as rows);
+   editing or deleting a recurring event acts on the **whole series**,
+   not a single occurrence — that's a real gap (no "just this one"
+   exception support, no series end date in the UI yet) worth a future
+   pass once it's actually annoying in daily use.
+6. Also shipped a visual pass (indigo accent, cards/shadows/transitions,
+   segmented view switcher) — not originally scoped here, but the app
+   needed to stop looking like unstyled Tailwind defaults.
 
 ## Phase 2 — Smarter auto-scheduling
 
