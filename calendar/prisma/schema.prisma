@@ -1,0 +1,42 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Event {
+  id        String   @id @default(cuid())
+  title     String
+  start     DateTime
+  end       DateTime
+  allDay    Boolean  @default(false)
+  notes     String?
+  taskId    String?  @unique
+  task      Task?    @relation(fields: [taskId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum TaskStatus {
+  TODO
+  SCHEDULED
+  DONE
+}
+
+// Auto-scheduling inputs, modeled after FluidCalendar's scoring approach
+// (due date / priority / duration) — see docs/fluidcalendar.md.
+model Task {
+  id          String     @id @default(cuid())
+  title       String
+  notes       String?
+  status      TaskStatus @default(TODO)
+  priority    Int        @default(0) // 0 = low .. 3 = urgent
+  durationMin Int        @default(30)
+  dueAt       DateTime?
+  event       Event?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
