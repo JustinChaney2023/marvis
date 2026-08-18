@@ -32,7 +32,7 @@ function workWindowFor(date: Date) {
  * `busy` (must be pre-sorted by start, ascending), scanning from `from`
  * up to `horizonEnd`. Returns null if nothing fits.
  */
-function findEarliestSlot(
+export function findEarliestSlot(
   from: Date,
   durationMin: number,
   busy: { start: Date; end: Date }[],
