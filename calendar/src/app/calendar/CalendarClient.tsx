@@ -25,6 +25,7 @@ export type CalendarEvent = {
   end: Date;
   isRecurring: boolean;
   recurrenceRule: string | null;
+  locked: boolean;
 };
 
 type Props = {
@@ -180,6 +181,7 @@ export default function CalendarClient({
         start: event.start,
         end: event.end,
         recurrenceRule: event.recurrenceRule,
+        locked: event.locked,
       },
     });
   };
@@ -588,7 +590,7 @@ function EventBlock({
   return (
     <button
       data-event
-      draggable={!event.isRecurring}
+      draggable={!event.isRecurring && !event.locked}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
       onClick={(e) => {
@@ -606,13 +608,22 @@ function EventBlock({
         width,
       }}
     >
-      <div className="truncate text-xs font-medium">{event.title}</div>
+      {event.locked && (
+        <span
+          aria-label="Locked"
+          title="Locked — won't be moved by auto-scheduling or drag"
+          className="absolute right-1 top-1 text-[10px] opacity-70"
+        >
+          🔒
+        </span>
+      )}
+      <div className="truncate pr-3 text-xs font-medium">{event.title}</div>
       {displayHeight >= 32 && (
         <div className="truncate text-[10px] opacity-80">
           {formatTime(event.start)} – {formatTime(displayEnd)}
         </div>
       )}
-      {!event.isRecurring && (
+      {!event.isRecurring && !event.locked && (
         <div
           draggable={false}
           onMouseDown={handleResizeMouseDown}
@@ -739,6 +750,15 @@ function MonthCell({
             className="truncate rounded-md border-l-2 border-l-indigo-500 bg-indigo-50 px-1.5 py-0.5 text-left text-[11px] text-indigo-900 transition-colors hover:brightness-95 dark:bg-indigo-950/30 dark:text-indigo-100 dark:hover:brightness-110"
           >
             {ev.title}
+            {ev.locked && (
+              <span
+                aria-label="Locked"
+                title="Locked"
+                className="ml-1 text-[10px] opacity-70"
+              >
+                🔒
+              </span>
+            )}
           </button>
         ))}
         {more > 0 && (

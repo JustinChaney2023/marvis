@@ -83,6 +83,7 @@ export default async function Page(props: PageProps<"/calendar">) {
   });
 
   const ruleByMasterId = new Map(rows.map((r) => [r.id, r.recurrenceRule]));
+  const lockedByMasterId = new Map(rows.map((r) => [r.id, r.locked]));
   const events: CalendarEvent[] = expandEvents(rows, from, to)
     .map((o) => ({
       id: o.id,
@@ -92,6 +93,7 @@ export default async function Page(props: PageProps<"/calendar">) {
       end: o.end,
       isRecurring: o.isRecurring,
       recurrenceRule: ruleByMasterId.get(o.masterId) ?? null,
+      locked: lockedByMasterId.get(o.masterId) ?? false,
     }))
     .sort((a, b) => a.start.getTime() - b.start.getTime());
 

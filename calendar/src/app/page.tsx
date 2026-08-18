@@ -9,6 +9,11 @@ import {
 } from "./actions";
 
 const PRIORITY_LABEL = ["Low", "Medium", "High", "Urgent"];
+const ENERGY_LABEL: Record<string, string> = {
+  LOW: "Low energy",
+  MEDIUM: "Any energy",
+  HIGH: "Deep work",
+};
 
 const PRIORITY_BADGE: Record<number, string> = {
   0: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
@@ -72,6 +77,17 @@ export default async function Home() {
             </option>
           ))}
         </select>
+        <select
+          name="energy"
+          defaultValue="MEDIUM"
+          className="rounded-lg border border-zinc-200 bg-white px-2 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900"
+        >
+          {Object.entries(ENERGY_LABEL).map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </select>
         <input
           type="number"
           name="durationMin"
@@ -114,6 +130,11 @@ export default async function Home() {
                 >
                   {PRIORITY_LABEL[task.priority]}
                 </span>
+                {task.energy !== "MEDIUM" && (
+                  <span className="inline-flex items-center rounded-full bg-violet-100 px-2 py-0.5 text-xs font-medium text-violet-700 dark:bg-violet-950/40 dark:text-violet-300">
+                    {ENERGY_LABEL[task.energy]}
+                  </span>
+                )}
                 <span>{task.durationMin}m</span>
                 {task.dueAt && (
                   <span>· due {task.dueAt.toLocaleString()}</span>

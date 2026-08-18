@@ -4,6 +4,11 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { scheduleAllPendingTasks, scheduleTask, unscheduleTask } from "@/lib/scheduler";
 
+function energyFromFormData(formData: FormData): "LOW" | "MEDIUM" | "HIGH" {
+  const value = String(formData.get("energy") ?? "MEDIUM");
+  return value === "LOW" || value === "HIGH" ? value : "MEDIUM";
+}
+
 export async function createTask(formData: FormData) {
   const title = String(formData.get("title") ?? "").trim();
   if (!title) return;
@@ -17,6 +22,7 @@ export async function createTask(formData: FormData) {
       title,
       priority,
       durationMin,
+      energy: energyFromFormData(formData),
       dueAt: dueAtRaw ? new Date(dueAtRaw) : null,
     },
   });
@@ -56,6 +62,10 @@ function recurrenceRuleFromFormData(formData: FormData): string | null {
   return value || null;
 }
 
+function lockedFromFormData(formData: FormData): boolean {
+  return formData.get("locked") === "on";
+}
+
 export async function createEvent(formData: FormData) {
   const title = String(formData.get("title") ?? "").trim();
   const startRaw = String(formData.get("start") ?? "");
@@ -68,6 +78,7 @@ export async function createEvent(formData: FormData) {
       start: new Date(startRaw),
       end: new Date(endRaw),
       recurrenceRule: recurrenceRuleFromFormData(formData),
+      locked: lockedFromFormData(formData),
     },
   });
   revalidatePath("/calendar");
@@ -86,6 +97,7 @@ export async function updateEvent(eventId: string, formData: FormData) {
       start: new Date(startRaw),
       end: new Date(endRaw),
       recurrenceRule: recurrenceRuleFromFormData(formData),
+      locked: lockedFromFormData(formData),
     },
   });
   revalidatePath("/calendar");

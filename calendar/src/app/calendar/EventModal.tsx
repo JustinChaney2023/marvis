@@ -11,6 +11,7 @@ export type EventModalEvent = {
   start: Date;
   end: Date;
   recurrenceRule: string | null;
+  locked: boolean;
 };
 
 type Props = {
@@ -163,6 +164,15 @@ export default function EventModal({
                 Editing the whole series.
               </span>
             )}
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              name="locked"
+              defaultChecked={mode === "edit" && !!event?.locked}
+              className="h-4 w-4 rounded border-zinc-300 text-indigo-600 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900"
+            />
+            <span>Locked (won&apos;t be moved by auto-scheduling or drag)</span>
           </label>
 
           <div className="mt-2 flex items-center justify-between gap-2">
