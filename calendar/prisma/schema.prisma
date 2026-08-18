@@ -53,7 +53,19 @@ model Task {
   energy      TaskEnergy @default(MEDIUM)
   durationMin Int        @default(30)
   dueAt       DateTime?
+  projectId   String?
+  project     Project?   @relation(fields: [projectId], references: [id], onDelete: SetNull)
   event       Event?
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
+}
+
+model Project {
+  id        String   @id @default(cuid())
+  name      String
+  // Tailwind color family name (e.g. "indigo", "amber") used to derive
+  // badge/pill classes — see PROJECT_COLORS in src/app/page.tsx.
+  color     String   @default("zinc")
+  tasks     Task[]
+  createdAt DateTime @default(now())
 }

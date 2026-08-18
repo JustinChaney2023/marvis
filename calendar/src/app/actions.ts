@@ -16,6 +16,7 @@ export async function createTask(formData: FormData) {
   const priority = Number(formData.get("priority") ?? 0);
   const durationMin = Number(formData.get("durationMin") ?? 30);
   const dueAtRaw = String(formData.get("dueAt") ?? "");
+  const projectId = String(formData.get("projectId") ?? "").trim() || null;
 
   await prisma.task.create({
     data: {
@@ -24,9 +25,24 @@ export async function createTask(formData: FormData) {
       durationMin,
       energy: energyFromFormData(formData),
       dueAt: dueAtRaw ? new Date(dueAtRaw) : null,
+      projectId,
     },
   });
 
+  revalidatePath("/");
+}
+
+export async function createProject(formData: FormData) {
+  const name = String(formData.get("name") ?? "").trim();
+  if (!name) return;
+  const color = String(formData.get("color") ?? "zinc").trim() || "zinc";
+
+  await prisma.project.create({ data: { name, color } });
+  revalidatePath("/");
+}
+
+export async function deleteProject(projectId: string) {
+  await prisma.project.delete({ where: { id: projectId } });
   revalidatePath("/");
 }
 

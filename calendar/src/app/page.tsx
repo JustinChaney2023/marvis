@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import {
+  createProject,
   createTask,
+  deleteProject,
   scheduleAllAction,
   scheduleTaskAction,
   toggleTaskDone,
@@ -22,11 +24,49 @@ const PRIORITY_BADGE: Record<number, string> = {
   3: "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300",
 };
 
-export default async function Home() {
+// Tailwind's JIT scanner needs full literal class strings in source, so
+// this can't be built as `bg-${color}-100` — every option users can pick
+// from PROJECT_COLOR_OPTIONS below needs its own entry here.
+const PROJECT_COLOR_BADGE: Record<string, string> = {
+  zinc: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
+  red: "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300",
+  amber: "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300",
+  green: "bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-300",
+  blue: "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300",
+  indigo: "bg-indigo-100 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300",
+  violet: "bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300",
+  pink: "bg-pink-100 text-pink-700 dark:bg-pink-950/40 dark:text-pink-300",
+};
+
+const PROJECT_COLOR_DOT: Record<string, string> = {
+  zinc: "bg-zinc-400",
+  red: "bg-red-500",
+  amber: "bg-amber-500",
+  green: "bg-green-500",
+  blue: "bg-blue-500",
+  indigo: "bg-indigo-500",
+  violet: "bg-violet-500",
+  pink: "bg-pink-500",
+};
+
+const PROJECT_COLOR_OPTIONS = Object.keys(PROJECT_COLOR_BADGE);
+
+export default async function Home(props: PageProps<"/">) {
+  const sp = await props.searchParams;
+  const rawProject = sp?.project;
+  const projectFilter = Array.isArray(rawProject) ? rawProject[0] : rawProject;
+
+  const projects = await prisma.project.findMany({
+    orderBy: { createdAt: "asc" },
+  });
+
   const tasks = await prisma.task.findMany({
-    where: { status: { not: "DONE" } },
+    where: {
+      status: { not: "DONE" },
+      ...(projectFilter ? { projectId: projectFilter } : {}),
+    },
     orderBy: [{ dueAt: "asc" }, { priority: "desc" }],
-    include: { event: true },
+    include: { event: true, project: true },
   });
   const done = await prisma.task.findMany({
     where: { status: "DONE" },
@@ -56,9 +96,71 @@ export default async function Home() {
         </nav>
       </div>
 
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        <Link
+          href="/"
+          className={
+            !projectFilter
+              ? "rounded-full bg-white px-3 py-1 text-xs font-medium text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-zinc-100"
+              : "rounded-full px-3 py-1 text-xs text-zinc-500 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100"
+          }
+        >
+          All
+        </Link>
+        {projects.map((project) => (
+          <Link
+            key={project.id}
+            href={`/?project=${project.id}`}
+            className={
+              projectFilter === project.id
+                ? "inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1 text-xs font-medium text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-zinc-100"
+                : "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs text-zinc-500 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100"
+            }
+          >
+            <span
+              className={`h-1.5 w-1.5 rounded-full ${PROJECT_COLOR_DOT[project.color] ?? PROJECT_COLOR_DOT.zinc}`}
+            />
+            {project.name}
+          </Link>
+        ))}
+        <details className="ml-auto">
+          <summary className="cursor-pointer list-none rounded-full px-3 py-1 text-xs text-zinc-500 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100">
+            + Project
+          </summary>
+          <form
+            action={createProject}
+            className="mt-2 flex items-center gap-2 rounded-lg border border-zinc-200 bg-white p-2 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
+          >
+            <input
+              name="name"
+              placeholder="Project name"
+              required
+              className="min-w-0 flex-1 rounded border border-zinc-200 bg-white px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-900"
+            />
+            <select
+              name="color"
+              defaultValue="indigo"
+              className="rounded border border-zinc-200 bg-white px-1 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-900"
+            >
+              {PROJECT_COLOR_OPTIONS.map((color) => (
+                <option key={color} value={color}>
+                  {color}
+                </option>
+              ))}
+            </select>
+            <button
+              type="submit"
+              className="rounded bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-700 dark:bg-indigo-500"
+            >
+              Add
+            </button>
+          </form>
+        </details>
+      </div>
+
       <form
         action={createTask}
-        className="mt-6 flex flex-wrap gap-3 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-zinc-800 dark:bg-zinc-900"
+        className="mt-4 flex flex-wrap gap-3 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-zinc-800 dark:bg-zinc-900"
       >
         <input
           name="title"
@@ -88,6 +190,20 @@ export default async function Home() {
             </option>
           ))}
         </select>
+        {projects.length > 0 && (
+          <select
+            name="projectId"
+            defaultValue=""
+            className="rounded-lg border border-zinc-200 bg-white px-2 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900"
+          >
+            <option value="">No project</option>
+            {projects.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name}
+              </option>
+            ))}
+          </select>
+        )}
         <input
           type="number"
           name="durationMin"
@@ -125,6 +241,13 @@ export default async function Home() {
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium">{task.title}</p>
               <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-zinc-500">
+                {task.project && (
+                  <span
+                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${PROJECT_COLOR_BADGE[task.project.color] ?? PROJECT_COLOR_BADGE.zinc}`}
+                  >
+                    {task.project.name}
+                  </span>
+                )}
                 <span
                   className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${PRIORITY_BADGE[task.priority]}`}
                 >
@@ -167,8 +290,34 @@ export default async function Home() {
         )}
       </ul>
 
+      {projects.length > 0 && (
+        <details className="mt-4 text-xs text-zinc-500">
+          <summary className="cursor-pointer transition-colors hover:text-zinc-900 dark:hover:text-zinc-100">
+            Manage projects
+          </summary>
+          <ul className="mt-2 space-y-1">
+            {projects.map((project) => (
+              <li key={project.id} className="flex items-center gap-2">
+                <span
+                  className={`h-1.5 w-1.5 rounded-full ${PROJECT_COLOR_DOT[project.color] ?? PROJECT_COLOR_DOT.zinc}`}
+                />
+                <span className="flex-1">{project.name}</span>
+                <form action={deleteProject.bind(null, project.id)}>
+                  <button
+                    type="submit"
+                    className="text-zinc-400 transition-colors hover:text-red-600 dark:hover:text-red-400"
+                  >
+                    Delete
+                  </button>
+                </form>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+
       {done.length > 0 && (
-        <details className="mt-8 text-sm text-zinc-500">
+        <details className="mt-4 text-sm text-zinc-500">
           <summary className="cursor-pointer transition-colors hover:text-zinc-900 dark:hover:text-zinc-100">
             Recently done ({done.length})
           </summary>
