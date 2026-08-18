@@ -1,341 +1,171 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import {
-  createProject,
-  createTask,
-  deleteProject,
-  scheduleAllAction,
-  scheduleTaskAction,
-  toggleTaskDone,
-  unscheduleTaskAction,
-} from "./actions";
+  addDays,
+  addMonths,
+  computeRange,
+  formatDayLabel,
+  formatMonthLabel,
+  formatWeekRangeLabel,
+  formatYMD,
+  parseStartParam,
+  parseViewParam,
+  startOfWeekMonday,
+  type CalendarView,
+} from "@/lib/calendar-dates";
+import { expandEvents } from "@/lib/recurrence";
+import CalendarClient, { type CalendarEvent } from "./calendar/CalendarClient";
 
-const PRIORITY_LABEL = ["Low", "Medium", "High", "Urgent"];
-const ENERGY_LABEL: Record<string, string> = {
-  LOW: "Low energy",
-  MEDIUM: "Any energy",
-  HIGH: "Deep work",
-};
+function viewSwitchTargets(
+  view: CalendarView,
+  start: Date,
+): Record<CalendarView, string> {
+  const dayStart = formatYMD(start);
+  const weekStart = formatYMD(startOfWeekMonday(start));
+  const monthStart = formatYMD(new Date(start.getFullYear(), start.getMonth(), 1));
+  return {
+    day: dayStart,
+    week: weekStart,
+    month: monthStart,
+  };
+}
 
-const PRIORITY_BADGE: Record<number, string> = {
-  0: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
-  1: "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300",
-  2: "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300",
-  3: "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300",
-};
+function navTargets(view: CalendarView, start: Date): {
+  prev: string;
+  next: string;
+  label: string;
+} {
+  if (view === "day") {
+    return {
+      prev: formatYMD(addDays(start, -1)),
+      next: formatYMD(addDays(start, 1)),
+      label: formatDayLabel(start),
+    };
+  }
+  if (view === "week") {
+    const ws = startOfWeekMonday(start);
+    const we = addDays(ws, 6);
+    return {
+      prev: formatYMD(addDays(ws, -7)),
+      next: formatYMD(addDays(ws, 7)),
+      label: formatWeekRangeLabel(ws, we),
+    };
+  }
+  const monthStart = new Date(start.getFullYear(), start.getMonth(), 1);
+  return {
+    prev: formatYMD(addMonths(monthStart, -1)),
+    next: formatYMD(addMonths(monthStart, 1)),
+    label: formatMonthLabel(monthStart),
+  };
+}
 
-// Tailwind's JIT scanner needs full literal class strings in source, so
-// this can't be built as `bg-${color}-100` — every option users can pick
-// from PROJECT_COLOR_OPTIONS below needs its own entry here.
-const PROJECT_COLOR_BADGE: Record<string, string> = {
-  zinc: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
-  red: "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300",
-  amber: "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300",
-  green: "bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-300",
-  blue: "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300",
-  indigo: "bg-indigo-100 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300",
-  violet: "bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300",
-  pink: "bg-pink-100 text-pink-700 dark:bg-pink-950/40 dark:text-pink-300",
-};
+function linkClass(active: boolean): string {
+  return active
+    ? "rounded-full bg-white px-3 py-1.5 text-sm font-medium text-zinc-900 shadow-sm transition-colors dark:bg-zinc-800 dark:text-zinc-100"
+    : "rounded-full px-3 py-1.5 text-sm text-zinc-500 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100";
+}
 
-const PROJECT_COLOR_DOT: Record<string, string> = {
-  zinc: "bg-zinc-400",
-  red: "bg-red-500",
-  amber: "bg-amber-500",
-  green: "bg-green-500",
-  blue: "bg-blue-500",
-  indigo: "bg-indigo-500",
-  violet: "bg-violet-500",
-  pink: "bg-pink-500",
-};
-
-const PROJECT_COLOR_OPTIONS = Object.keys(PROJECT_COLOR_BADGE);
-
-export default async function Home(props: PageProps<"/">) {
+export default async function Page(props: PageProps<"/">) {
   const sp = await props.searchParams;
-  const rawProject = sp?.project;
-  const projectFilter = Array.isArray(rawProject) ? rawProject[0] : rawProject;
+  const view = parseViewParam(sp?.view);
+  const start = parseStartParam(sp?.start);
 
-  const projects = await prisma.project.findMany({
-    orderBy: { createdAt: "asc" },
-  });
+  const { from, to } = computeRange(view, start);
 
-  const tasks = await prisma.task.findMany({
+  const rows = await prisma.event.findMany({
     where: {
-      status: { not: "DONE" },
-      ...(projectFilter ? { projectId: projectFilter } : {}),
+      OR: [
+        { start: { gte: from, lt: to } },
+        { recurrenceRule: { not: null } },
+      ],
     },
-    orderBy: [{ dueAt: "asc" }, { priority: "desc" }],
-    include: { event: true, project: true },
+    orderBy: { start: "asc" },
   });
-  const done = await prisma.task.findMany({
-    where: { status: "DONE" },
-    orderBy: { updatedAt: "desc" },
-    take: 10,
-  });
+
+  const ruleByMasterId = new Map(rows.map((r) => [r.id, r.recurrenceRule]));
+  const lockedByMasterId = new Map(rows.map((r) => [r.id, r.locked]));
+  const events: CalendarEvent[] = expandEvents(rows, from, to)
+    .map((o) => ({
+      id: o.id,
+      masterId: o.masterId,
+      title: o.title,
+      start: o.start,
+      end: o.end,
+      isRecurring: o.isRecurring,
+      recurrenceRule: ruleByMasterId.get(o.masterId) ?? null,
+      locked: lockedByMasterId.get(o.masterId) ?? false,
+    }))
+    .sort((a, b) => a.start.getTime() - b.start.getTime());
+
+  const today = new Date();
+  const todayISO = formatYMD(today);
+  const startYMD = formatYMD(start);
+  const nav = navTargets(view, start);
+  const switchTargets = viewSwitchTargets(view, start);
 
   return (
-    <main className="mx-auto w-full max-w-2xl flex-1 px-6 py-12">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-2xl font-bold tracking-tight">Tasks</h1>
-        <nav className="flex flex-wrap items-center gap-3 text-sm">
+    <main className="mx-auto w-full max-w-6xl flex-1 px-6 py-12">
+      <header className="flex flex-col gap-3">
+        <div className="flex items-center justify-between">
           <Link
-            href="/focus"
-            className="text-zinc-500 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100"
+            href="/tasks"
+            className="text-sm text-zinc-500 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100"
           >
-            Focus
+            ← Tasks
           </Link>
-          <Link
-            href="/calendar"
-            className="text-zinc-500 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100"
-          >
-            Calendar →
-          </Link>
-          <form action={scheduleAllAction}>
-            <button
-              type="submit"
-              className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 shadow-sm ring-1 ring-black/5 transition-all hover:bg-zinc-50 active:scale-[0.98] dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
-            >
-              Schedule all
-            </button>
-          </form>
-        </nav>
-      </div>
-
-      <div className="mt-4 flex flex-wrap items-center gap-2">
-        <Link
-          href="/"
-          className={
-            !projectFilter
-              ? "rounded-full bg-white px-3 py-1 text-xs font-medium text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-zinc-100"
-              : "rounded-full px-3 py-1 text-xs text-zinc-500 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100"
-          }
-        >
-          All
-        </Link>
-        {projects.map((project) => (
-          <Link
-            key={project.id}
-            href={`/?project=${project.id}`}
-            className={
-              projectFilter === project.id
-                ? "inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1 text-xs font-medium text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-zinc-100"
-                : "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs text-zinc-500 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100"
-            }
-          >
-            <span
-              className={`h-1.5 w-1.5 rounded-full ${PROJECT_COLOR_DOT[project.color] ?? PROJECT_COLOR_DOT.zinc}`}
-            />
-            {project.name}
-          </Link>
-        ))}
-        <details className="ml-auto">
-          <summary className="cursor-pointer list-none rounded-full px-3 py-1 text-xs text-zinc-500 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100">
-            + Project
-          </summary>
-          <form
-            action={createProject}
-            className="mt-2 flex items-center gap-2 rounded-lg border border-zinc-200 bg-white p-2 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
-          >
-            <input
-              name="name"
-              placeholder="Project name"
-              required
-              className="min-w-0 flex-1 rounded border border-zinc-200 bg-white px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-900"
-            />
-            <select
-              name="color"
-              defaultValue="indigo"
-              className="rounded border border-zinc-200 bg-white px-1 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-900"
-            >
-              {PROJECT_COLOR_OPTIONS.map((color) => (
-                <option key={color} value={color}>
-                  {color}
-                </option>
-              ))}
-            </select>
-            <button
-              type="submit"
-              className="rounded bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-700 dark:bg-indigo-500"
-            >
-              Add
-            </button>
-          </form>
-        </details>
-      </div>
-
-      <form
-        action={createTask}
-        className="mt-4 flex flex-wrap gap-3 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-zinc-800 dark:bg-zinc-900"
-      >
-        <input
-          name="title"
-          placeholder="What needs doing?"
-          required
-          className="min-w-[16rem] flex-1 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900"
-        />
-        <select
-          name="priority"
-          defaultValue="0"
-          className="rounded-lg border border-zinc-200 bg-white px-2 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900"
-        >
-          {PRIORITY_LABEL.map((label, value) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </select>
-        <select
-          name="energy"
-          defaultValue="MEDIUM"
-          className="rounded-lg border border-zinc-200 bg-white px-2 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900"
-        >
-          {Object.entries(ENERGY_LABEL).map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </select>
-        {projects.length > 0 && (
-          <select
-            name="projectId"
-            defaultValue=""
-            className="rounded-lg border border-zinc-200 bg-white px-2 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900"
-          >
-            <option value="">No project</option>
-            {projects.map((project) => (
-              <option key={project.id} value={project.id}>
-                {project.name}
-              </option>
-            ))}
-          </select>
-        )}
-        <input
-          type="number"
-          name="durationMin"
-          defaultValue={30}
-          min={5}
-          step={5}
-          className="w-24 rounded-lg border border-zinc-200 bg-white px-2 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900"
-        />
-        <input
-          type="datetime-local"
-          name="dueAt"
-          className="rounded-lg border border-zinc-200 bg-white px-2 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900"
-        />
-        <button
-          type="submit"
-          className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-all hover:bg-indigo-700 active:scale-[0.98] dark:bg-indigo-500 dark:hover:bg-indigo-400"
-        >
-          Add
-        </button>
-      </form>
-
-      <ul className="mt-6 space-y-2">
-        {tasks.map((task) => (
-          <li
-            key={task.id}
-            className="flex items-center gap-3 rounded-xl border border-zinc-200 bg-white p-3 shadow-sm ring-1 ring-black/5 transition-shadow hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900"
-          >
-            <form action={toggleTaskDone.bind(null, task.id, true)}>
-              <button
-                type="submit"
-                aria-label="mark done"
-                className="h-5 w-5 shrink-0 rounded-full border border-zinc-300 bg-white transition-all hover:scale-110 hover:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:border-zinc-700 dark:bg-zinc-900 dark:focus:ring-offset-zinc-900"
-              />
-            </form>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium">{task.title}</p>
-              <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-zinc-500">
-                {task.project && (
-                  <span
-                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${PROJECT_COLOR_BADGE[task.project.color] ?? PROJECT_COLOR_BADGE.zinc}`}
-                  >
-                    {task.project.name}
-                  </span>
-                )}
-                <span
-                  className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${PRIORITY_BADGE[task.priority]}`}
-                >
-                  {PRIORITY_LABEL[task.priority]}
-                </span>
-                {task.energy !== "MEDIUM" && (
-                  <span className="inline-flex items-center rounded-full bg-violet-100 px-2 py-0.5 text-xs font-medium text-violet-700 dark:bg-violet-950/40 dark:text-violet-300">
-                    {ENERGY_LABEL[task.energy]}
-                  </span>
-                )}
-                <span>{task.durationMin}m</span>
-                {task.dueAt && (
-                  <span>· due {task.dueAt.toLocaleString()}</span>
-                )}
-                {task.event && (
-                  <span>· scheduled {task.event.start.toLocaleString()}</span>
-                )}
-              </div>
-            </div>
-            <form
-              action={
-                task.event
-                  ? unscheduleTaskAction.bind(null, task.id)
-                  : scheduleTaskAction.bind(null, task.id)
-              }
-            >
-              <button
-                type="submit"
-                className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
+          <h1 className="text-2xl font-bold tracking-tight">Calendar</h1>
+          <div className="w-16" />
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <nav className="flex flex-wrap items-center gap-1">
+            <div className="inline-flex items-center gap-1 rounded-full bg-zinc-100 p-1 dark:bg-zinc-900">
+              <Link
+                href={`/?view=day&start=${switchTargets.day}`}
+                className={linkClass(view === "day")}
               >
-                {task.event ? "Unschedule" : "Schedule"}
-              </button>
-            </form>
-          </li>
-        ))}
-        {tasks.length === 0 && (
-          <li className="rounded-xl border border-dashed border-zinc-200 py-8 text-center text-sm text-zinc-500 dark:border-zinc-800">
-            No open tasks.
-          </li>
-        )}
-      </ul>
+                Day
+              </Link>
+              <Link
+                href={`/?view=week&start=${switchTargets.week}`}
+                className={linkClass(view === "week")}
+              >
+                Week
+              </Link>
+              <Link
+                href={`/?view=month&start=${switchTargets.month}`}
+                className={linkClass(view === "month")}
+              >
+                Month
+              </Link>
+            </div>
+            <span className="mx-1 h-5 w-px bg-zinc-200 dark:bg-zinc-800" />
+            <Link
+              href={`/?view=${view}&start=${nav.prev}`}
+              className="rounded-full px-3 py-1.5 text-sm text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+            >
+              ← Prev
+            </Link>
+            <Link
+              href={`/?view=${view}&start=${nav.next}`}
+              className="rounded-full px-3 py-1.5 text-sm text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+            >
+              Next →
+            </Link>
+          </nav>
+          <p className="text-sm text-zinc-500">{nav.label}</p>
+        </div>
+        <p className="text-xs text-zinc-400">
+          Shortcuts: <kbd>j</kbd>/<kbd>k</kbd> prev/next, <kbd>d</kbd>/
+          <kbd>w</kbd>/<kbd>m</kbd> view, <kbd>t</kbd> today
+        </p>
+      </header>
 
-      {projects.length > 0 && (
-        <details className="mt-4 text-xs text-zinc-500">
-          <summary className="cursor-pointer transition-colors hover:text-zinc-900 dark:hover:text-zinc-100">
-            Manage projects
-          </summary>
-          <ul className="mt-2 space-y-1">
-            {projects.map((project) => (
-              <li key={project.id} className="flex items-center gap-2">
-                <span
-                  className={`h-1.5 w-1.5 rounded-full ${PROJECT_COLOR_DOT[project.color] ?? PROJECT_COLOR_DOT.zinc}`}
-                />
-                <span className="flex-1">{project.name}</span>
-                <form action={deleteProject.bind(null, project.id)}>
-                  <button
-                    type="submit"
-                    className="text-zinc-400 transition-colors hover:text-red-600 dark:hover:text-red-400"
-                  >
-                    Delete
-                  </button>
-                </form>
-              </li>
-            ))}
-          </ul>
-        </details>
-      )}
-
-      {done.length > 0 && (
-        <details className="mt-4 text-sm text-zinc-500">
-          <summary className="cursor-pointer transition-colors hover:text-zinc-900 dark:hover:text-zinc-100">
-            Recently done ({done.length})
-          </summary>
-          <ul className="mt-2 space-y-1">
-            {done.map((task) => (
-              <li key={task.id} className="line-through">
-                {task.title}
-              </li>
-            ))}
-          </ul>
-        </details>
-      )}
+      <CalendarClient
+        view={view}
+        startYMD={startYMD}
+        todayISO={todayISO}
+        events={events}
+      />
     </main>
   );
 }

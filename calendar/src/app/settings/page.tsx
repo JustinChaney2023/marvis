@@ -17,7 +17,7 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
         <Link
-          href="/"
+          href="/tasks"
           className="text-sm text-zinc-500 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100"
         >
           ← Tasks

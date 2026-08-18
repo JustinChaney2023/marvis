@@ -203,7 +203,7 @@ export default function CalendarClient({
       if (modalState || isTypingTarget(e.target) || e.metaKey || e.ctrlKey) return;
 
       if (e.key === "t") {
-        router.push(`/calendar?view=${view}&start=${formatYMD(new Date())}`);
+        router.push(`/?view=${view}&start=${formatYMD(new Date())}`);
         return;
       }
       if (e.key === "d" || e.key === "w" || e.key === "m") {
@@ -215,7 +215,7 @@ export default function CalendarClient({
             : nextView === "week"
               ? formatYMD(startOfWeekMonday(start))
               : formatYMD(new Date(start.getFullYear(), start.getMonth(), 1));
-        router.push(`/calendar?view=${nextView}&start=${target}`);
+        router.push(`/?view=${nextView}&start=${target}`);
         return;
       }
       if (e.key === "j" || e.key === "ArrowLeft" || e.key === "k" || e.key === "ArrowRight") {
@@ -225,7 +225,7 @@ export default function CalendarClient({
           view === "month"
             ? formatYMD(addMonths(new Date(start.getFullYear(), start.getMonth(), 1), forward ? 1 : -1))
             : formatYMD(addDays(start, forward ? step : -step));
-        router.push(`/calendar?view=${view}&start=${target}`);
+        router.push(`/?view=${view}&start=${target}`);
       }
     };
 
@@ -783,7 +783,7 @@ function MonthCell({
     >
       <Link
         data-day-link
-        href={`/calendar?view=day&start=${dateYMD}`}
+        href={`/?view=day&start=${dateYMD}`}
         className={dayNumberClass}
       >
         {day.getDate()}
@@ -815,7 +815,7 @@ function MonthCell({
         {more > 0 && (
           <Link
             data-day-link
-            href={`/calendar?view=day&start=${dateYMD}`}
+            href={`/?view=day&start=${dateYMD}`}
             className="px-1.5 text-[11px] text-zinc-500 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100"
           >
             +{more} more

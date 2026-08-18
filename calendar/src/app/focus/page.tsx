@@ -41,7 +41,7 @@ export default async function FocusPage() {
     <main className="mx-auto flex w-full max-w-lg flex-1 flex-col px-6 py-12">
       <div className="flex items-center justify-between">
         <Link
-          href="/"
+          href="/tasks"
           className="text-sm text-zinc-500 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100"
         >
           ← Tasks

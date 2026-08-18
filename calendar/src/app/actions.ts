@@ -56,7 +56,7 @@ export async function createTask(formData: FormData) {
     },
   });
 
-  revalidatePath("/");
+  revalidatePath("/tasks");
 }
 
 export async function quickCaptureTask(text: string) {
@@ -70,7 +70,7 @@ export async function quickCaptureTask(text: string) {
       dueAt: parsed.dueAt,
     },
   });
-  revalidatePath("/");
+  revalidatePath("/tasks");
 }
 
 export async function createProject(formData: FormData) {
@@ -79,12 +79,12 @@ export async function createProject(formData: FormData) {
   const color = String(formData.get("color") ?? "zinc").trim() || "zinc";
 
   await prisma.project.create({ data: { name, color } });
-  revalidatePath("/");
+  revalidatePath("/tasks");
 }
 
 export async function deleteProject(projectId: string) {
   await prisma.project.delete({ where: { id: projectId } });
-  revalidatePath("/");
+  revalidatePath("/tasks");
 }
 
 export async function toggleTaskDone(taskId: string, done: boolean) {
@@ -92,26 +92,26 @@ export async function toggleTaskDone(taskId: string, done: boolean) {
     where: { id: taskId },
     data: { status: done ? "DONE" : "TODO" },
   });
+  revalidatePath("/tasks");
   revalidatePath("/");
-  revalidatePath("/calendar");
 }
 
 export async function scheduleTaskAction(taskId: string) {
   await scheduleTask(taskId);
+  revalidatePath("/tasks");
   revalidatePath("/");
-  revalidatePath("/calendar");
 }
 
 export async function unscheduleTaskAction(taskId: string) {
   await unscheduleTask(taskId);
+  revalidatePath("/tasks");
   revalidatePath("/");
-  revalidatePath("/calendar");
 }
 
 export async function scheduleAllAction() {
   await scheduleAllPendingTasks();
+  revalidatePath("/tasks");
   revalidatePath("/");
-  revalidatePath("/calendar");
 }
 
 function recurrenceRuleFromFormData(formData: FormData): string | null {
@@ -138,7 +138,7 @@ export async function createEvent(formData: FormData) {
       locked: lockedFromFormData(formData),
     },
   });
-  revalidatePath("/calendar");
+  revalidatePath("/");
 }
 
 export async function updateEvent(eventId: string, formData: FormData) {
@@ -157,7 +157,7 @@ export async function updateEvent(eventId: string, formData: FormData) {
       locked: lockedFromFormData(formData),
     },
   });
-  revalidatePath("/calendar");
+  revalidatePath("/");
 }
 
 export async function moveEvent(eventId: string, startIso: string, endIso: string) {
@@ -165,7 +165,7 @@ export async function moveEvent(eventId: string, startIso: string, endIso: strin
     where: { id: eventId },
     data: { start: new Date(startIso), end: new Date(endIso) },
   });
-  revalidatePath("/calendar");
+  revalidatePath("/");
 }
 
 export async function deleteEvent(eventId: string) {
@@ -180,13 +180,13 @@ export async function deleteEvent(eventId: string) {
       data: { status: "TODO" },
     });
   }
-  revalidatePath("/calendar");
   revalidatePath("/");
+  revalidatePath("/tasks");
 }
 
 export async function syncGoogleCalendarAction() {
   const result = await syncGoogleCalendar();
-  revalidatePath("/calendar");
+  revalidatePath("/");
   revalidatePath("/settings");
   return result;
 }
