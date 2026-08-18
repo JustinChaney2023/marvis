@@ -77,19 +77,27 @@ enum TaskEnergy {
 // Auto-scheduling inputs, modeled after FluidCalendar's scoring approach
 // (due date / priority / duration) — see docs/fluidcalendar.md.
 model Task {
-  id          String     @id @default(cuid())
-  title       String
-  notes       String?
-  status      TaskStatus @default(TODO)
-  priority    Int        @default(0) // 0 = low .. 3 = urgent
-  energy      TaskEnergy @default(MEDIUM)
-  durationMin Int        @default(30)
-  dueAt       DateTime?
-  projectId   String?
-  project     Project?   @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  event       Event?
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  id             String     @id @default(cuid())
+  title          String
+  notes          String?
+  status         TaskStatus @default(TODO)
+  priority       Int        @default(0) // 0 = low .. 3 = urgent
+  energy         TaskEnergy @default(MEDIUM)
+  durationMin    Int        @default(30)
+  dueAt          DateTime?
+  // RRULE string, same format as Event.recurrenceRule, anchored to
+  // `dueAt` (a recurring task must have a dueAt — it's the DTSTART for
+  // computing the next occurrence). Unlike Events, occurrences ARE
+  // materialized: marking a recurring task done creates the next Task
+  // row rather than expanding virtual instances, since a task carries
+  // per-instance mutable state (status, its own scheduled event) that
+  // doesn't fit the "compute on the fly" model Events use.
+  recurrenceRule String?
+  projectId      String?
+  project        Project?   @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  event          Event?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
 }
 
 // Single row: user-adjustable scheduler knobs. See src/lib/settings.ts for
