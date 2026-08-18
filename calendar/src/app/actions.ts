@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { scheduleAllPendingTasks, scheduleTask, unscheduleTask } from "@/lib/scheduler";
+import { parseQuickCapture } from "@/lib/quickCapture";
 
 function energyFromFormData(formData: FormData): "LOW" | "MEDIUM" | "HIGH" {
   const value = String(formData.get("energy") ?? "MEDIUM");
@@ -29,6 +30,20 @@ export async function createTask(formData: FormData) {
     },
   });
 
+  revalidatePath("/");
+}
+
+export async function quickCaptureTask(text: string) {
+  const parsed = parseQuickCapture(text);
+  if (!parsed.title) return;
+
+  await prisma.task.create({
+    data: {
+      title: parsed.title,
+      priority: parsed.priority,
+      dueAt: parsed.dueAt,
+    },
+  });
   revalidatePath("/");
 }
 

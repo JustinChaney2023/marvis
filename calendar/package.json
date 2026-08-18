@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "tsx src/lib/scheduler.test.ts && tsx src/lib/recurrence.test.ts"
+    "test": "tsx src/lib/scheduler.test.ts && tsx src/lib/recurrence.test.ts && tsx src/lib/quickCapture.test.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
