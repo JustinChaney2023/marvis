@@ -53,6 +53,8 @@ export default async function Home(props: PageProps<"/tasks">) {
   const sp = await props.searchParams;
   const rawProject = sp?.project;
   const projectFilter = Array.isArray(rawProject) ? rawProject[0] : rawProject;
+  const rawQuery = sp?.q;
+  const searchQuery = (Array.isArray(rawQuery) ? rawQuery[0] : rawQuery) ?? "";
 
   const projects = await prisma.project.findMany({
     orderBy: { createdAt: "asc" },
@@ -63,7 +65,11 @@ export default async function Home(props: PageProps<"/tasks">) {
     ? lastProjectId
     : "";
 
-  const tasks = await prisma.task.findMany({
+  // SQLite's Prisma provider doesn't support `mode: "insensitive"` (that's
+  // Postgres/MongoDB only) — filtering client-side in JS after fetch
+  // sidesteps the case-sensitivity gotcha entirely, and is plenty fast at
+  // personal-task-list scale.
+  const allOpenTasks = await prisma.task.findMany({
     where: {
       status: { not: "DONE" },
       ...(projectFilter ? { projectId: projectFilter } : {}),
@@ -71,6 +77,11 @@ export default async function Home(props: PageProps<"/tasks">) {
     orderBy: [{ dueAt: "asc" }, { priority: "desc" }],
     include: { event: true, project: true },
   });
+  const tasks = searchQuery
+    ? allOpenTasks.filter((t) =>
+        t.title.toLowerCase().includes(searchQuery.toLowerCase()),
+      )
+    : allOpenTasks;
   const done = await prisma.task.findMany({
     where: { status: "DONE" },
     orderBy: { updatedAt: "desc" },
@@ -132,7 +143,19 @@ export default async function Home(props: PageProps<"/tasks">) {
             {project.name}
           </Link>
         ))}
-        <details className="ml-auto">
+        <form action="/tasks" className="ml-auto flex items-center">
+          {projectFilter && (
+            <input type="hidden" name="project" value={projectFilter} />
+          )}
+          <input
+            type="search"
+            name="q"
+            defaultValue={searchQuery}
+            placeholder="Search tasks…"
+            className="w-36 rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs text-zinc-700 focus:w-48 focus:outline-none focus:ring-1 focus:ring-indigo-400 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300"
+          />
+        </form>
+        <details>
           <summary className="cursor-pointer list-none rounded-full px-3 py-1 text-xs text-zinc-500 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100">
             + Project
           </summary>
