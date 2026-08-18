@@ -6,6 +6,7 @@ import { scheduleAllPendingTasks, scheduleTask, unscheduleTask } from "@/lib/sch
 import { parseQuickCapture } from "@/lib/quickCapture";
 import { expandEvents } from "@/lib/recurrence";
 import { syncGoogleCalendar, deleteFromGoogle } from "@/lib/google-sync";
+import { updateAppSettings } from "@/lib/settings";
 
 const REMINDER_WINDOW_MIN = 15;
 
@@ -192,5 +193,12 @@ export async function syncGoogleCalendarAction() {
 
 export async function disconnectGoogleAction() {
   await prisma.googleAccount.deleteMany({});
+  revalidatePath("/settings");
+}
+
+export async function updateSchedulingSettingsAction(formData: FormData) {
+  const bufferMin = Number(formData.get("bufferMin") ?? 10);
+  if (!Number.isFinite(bufferMin) || bufferMin < 0 || bufferMin > 120) return;
+  await updateAppSettings({ bufferMin });
   revalidatePath("/settings");
 }

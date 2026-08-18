@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { disconnectGoogleAction } from "../actions";
+import { getAppSettings } from "@/lib/settings";
+import { disconnectGoogleAction, updateSchedulingSettingsAction } from "../actions";
 import SyncButton from "./SyncButton";
 
 export default async function SettingsPage(props: PageProps<"/settings">) {
@@ -9,6 +10,7 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
   const error = typeof sp?.google_error === "string" ? sp.google_error : null;
 
   const account = await prisma.googleAccount.findFirst();
+  const settings = await getAppSettings();
 
   return (
     <main className="mx-auto w-full max-w-2xl flex-1 px-6 py-12">
@@ -32,6 +34,40 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
           Couldn&apos;t connect: {error}
         </p>
       )}
+
+      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-zinc-800 dark:bg-zinc-900">
+        <h2 className="text-lg font-semibold">Scheduling</h2>
+        <form
+          action={updateSchedulingSettingsAction}
+          className="mt-3 flex items-end gap-3"
+        >
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="text-zinc-500">Buffer between events</span>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                name="bufferMin"
+                defaultValue={settings.bufferMin}
+                min={0}
+                max={120}
+                step={5}
+                className="w-24 rounded-lg border border-zinc-200 bg-white px-2 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900"
+              />
+              <span className="text-zinc-500">minutes</span>
+            </div>
+          </label>
+          <button
+            type="submit"
+            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-all hover:bg-indigo-700 active:scale-[0.98] dark:bg-indigo-500 dark:hover:bg-indigo-400"
+          >
+            Save
+          </button>
+        </form>
+        <p className="mt-2 text-xs text-zinc-400">
+          The auto-scheduler leaves at least this much gap around every
+          event when placing a task.
+        </p>
+      </section>
 
       <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-zinc-800 dark:bg-zinc-900">
         <h2 className="text-lg font-semibold">Google Calendar</h2>

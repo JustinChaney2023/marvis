@@ -88,6 +88,14 @@ model Task {
   updatedAt   DateTime   @updatedAt
 }
 
+// Single row: user-adjustable scheduler knobs. See src/lib/settings.ts for
+// the get-or-create-default accessor scheduler.ts reads from.
+model AppSettings {
+  id        String   @id @default(cuid())
+  bufferMin Int      @default(10)
+  updatedAt DateTime @updatedAt
+}
+
 model Project {
   id        String   @id @default(cuid())
   name      String

@@ -86,12 +86,6 @@ export default async function Home(props: PageProps<"/">) {
             Focus
           </Link>
           <Link
-            href="/settings"
-            className="text-zinc-500 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100"
-          >
-            Settings
-          </Link>
-          <Link
             href="/calendar"
             className="text-zinc-500 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100"
           >

@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { expandEvents } from "@/lib/recurrence";
+import { getAppSettings } from "@/lib/settings";
 import type { TaskEnergy } from "@prisma/client";
 
 // Auto-scheduler: work-hours earliest-fit as the primitive (findEarliestSlot,
@@ -13,7 +14,6 @@ const WORK_START_HOUR = 9;
 const WORK_END_HOUR = 18;
 const HORIZON_DAYS = 14;
 const SLOT_GRANULARITY_MIN = 15;
-const BUFFER_MIN = 10;
 const CANDIDATE_LIMIT = 12;
 
 // Deep-work (HIGH) tasks are scored toward morning focus hours, admin-ish
@@ -87,8 +87,11 @@ export function findEarliestSlot(
   return null;
 }
 
-function padForBuffer(busy: { start: Date; end: Date }[]) {
-  const ms = BUFFER_MIN * 60_000;
+export function padForBuffer(
+  busy: { start: Date; end: Date }[],
+  bufferMin: number,
+) {
+  const ms = bufferMin * 60_000;
   return busy.map((b) => ({
     start: new Date(b.start.getTime() - ms),
     end: new Date(b.end.getTime() + ms),
@@ -170,7 +173,11 @@ export async function scheduleTask(taskId: string) {
 
   const now = new Date();
   const horizonEnd = new Date(now.getTime() + HORIZON_DAYS * 86_400_000);
-  const busy = padForBuffer(await fetchBusyIntervals(now, horizonEnd));
+  const settings = await getAppSettings();
+  const busy = padForBuffer(
+    await fetchBusyIntervals(now, horizonEnd),
+    settings.bufferMin,
+  );
 
   const slot = findBestSlot(task, busy, horizonEnd, now);
   if (!slot) return null;

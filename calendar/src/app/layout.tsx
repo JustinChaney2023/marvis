@@ -4,6 +4,7 @@ import "./globals.css";
 import QuickCapture from "./QuickCapture";
 import NotificationWatcher from "./NotificationWatcher";
 import ThemeToggle from "./ThemeToggle";
+import SettingsButton from "./SettingsButton";
 
 // Runs before paint so there's no flash of the wrong theme. Kept as a
 // plain string (not a .ts file) since it needs to execute inline, before
@@ -49,6 +50,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <QuickCapture />
         <NotificationWatcher />
         <ThemeToggle />
+        <SettingsButton />
       </body>
     </html>
   );
