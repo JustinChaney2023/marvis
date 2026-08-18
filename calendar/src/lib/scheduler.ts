@@ -252,8 +252,9 @@ export async function scheduleTask(taskId: string) {
       start: slot.start,
       end: slot.end,
       taskId: task.id,
+      localDirty: true,
     },
-    update: { start: slot.start, end: slot.end, title: task.title },
+    update: { start: slot.start, end: slot.end, title: task.title, localDirty: true },
   });
   await prisma.task.update({
     where: { id: taskId },

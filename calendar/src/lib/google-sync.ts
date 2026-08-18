@@ -1,9 +1,14 @@
 import { google } from "googleapis";
 import { prisma } from "@/lib/prisma";
 import { getAuthorizedClient } from "@/lib/google-auth";
+import { parseYMD, formatYMD } from "@/lib/calendar-dates";
 
 const SYNC_PAST_DAYS = 7;
 const SYNC_FUTURE_DAYS = 90;
+// Google requires an explicit IANA zone on recurring events (it expands
+// the RRULE server-side in that zone) — the app has no per-user timezone
+// setting, so this assumes the machine's local zone is the user's.
+const LOCAL_TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
 function extractRRule(recurrence: string[] | null | undefined): string | null {
   if (!recurrence) return null;
@@ -46,35 +51,54 @@ export async function importFromGoogle() {
   const items = res.data.items ?? [];
   let imported = 0;
   for (const item of items) {
-    if (!item.id || item.status === "cancelled") continue;
-    if (!item.start || !item.end) continue;
-    const startRaw = item.start.dateTime ?? item.start.date;
-    const endRaw = item.end.dateTime ?? item.end.date;
-    if (!startRaw || !endRaw) continue;
-    const allDay = !item.start.dateTime;
+    try {
+      if (!item.id || item.status === "cancelled") continue;
+      // singleEvents: false returns recurring masters, but also leaks
+      // exception instances (a moved/edited single occurrence) as
+      // separate items carrying recurringEventId. Importing those as
+      // standalone events double-shows the occurrence (once from the
+      // master's RRULE expansion, once as this row) and — worse — would
+      // get exported back as a bogus edit to the master. Full EXDATE/
+      // per-instance override support is a bigger feature; skipping them
+      // is the safe subset for now.
+      if (item.recurringEventId) continue;
+      if (!item.start || !item.end) continue;
+      const startRaw = item.start.dateTime ?? item.start.date;
+      const endRaw = item.end.dateTime ?? item.end.date;
+      if (!startRaw || !endRaw) continue;
+      const allDay = !item.start.dateTime;
+      // Date-only fields ("2026-08-13") are a wall-clock date, not a UTC
+      // instant — `new Date(str)` parses them as UTC midnight, which
+      // renders a day early west of UTC. parseYMD parses as local midnight.
+      const start = allDay ? parseYMD(startRaw) : new Date(startRaw);
+      const end = allDay ? parseYMD(endRaw) : new Date(endRaw);
 
-    await prisma.event.upsert({
-      where: { googleEventId: item.id },
-      create: {
-        title: item.summary ?? "(untitled)",
-        start: new Date(startRaw),
-        end: new Date(endRaw),
-        allDay,
-        recurrenceRule: extractRRule(item.recurrence),
-        source: "GOOGLE",
-        googleEventId: item.id,
-        googleUpdatedAt: item.updated ? new Date(item.updated) : new Date(),
-      },
-      update: {
-        title: item.summary ?? "(untitled)",
-        start: new Date(startRaw),
-        end: new Date(endRaw),
-        allDay,
-        recurrenceRule: extractRRule(item.recurrence),
-        googleUpdatedAt: item.updated ? new Date(item.updated) : new Date(),
-      },
-    });
-    imported++;
+      await prisma.event.upsert({
+        where: { googleEventId: item.id },
+        create: {
+          title: item.summary ?? "(untitled)",
+          start,
+          end,
+          allDay,
+          recurrenceRule: extractRRule(item.recurrence),
+          source: "GOOGLE",
+          googleEventId: item.id,
+          googleUpdatedAt: item.updated ? new Date(item.updated) : new Date(),
+        },
+        update: {
+          title: item.summary ?? "(untitled)",
+          start,
+          end,
+          allDay,
+          recurrenceRule: extractRRule(item.recurrence),
+          googleUpdatedAt: item.updated ? new Date(item.updated) : new Date(),
+        },
+      });
+      imported++;
+    } catch (err) {
+      // One bad item shouldn't sink the rest of the batch.
+      console.error(`importFromGoogle: skipping item ${item.id}:`, err);
+    }
   }
 
   await prisma.googleAccount.update({
@@ -87,8 +111,11 @@ export async function importFromGoogle() {
 
 /**
  * Pushes local events that are new (no googleEventId yet) or have been
- * edited more recently than their last known Google state
- * (updatedAt > googleUpdatedAt) to the connected Google calendar.
+ * locally edited since the last push (localDirty) to the connected
+ * Google calendar. Deliberately NOT based on updatedAt > googleUpdatedAt
+ * — @updatedAt bumps on every write including this function's own
+ * bookkeeping and importFromGoogle's upserts, which made every row look
+ * permanently dirty regardless of any real local edit.
  */
 export async function exportToGoogle() {
   const auth = await getAuthorizedClient();
@@ -96,56 +123,67 @@ export async function exportToGoogle() {
   const calendar = google.calendar({ version: "v3", auth: auth.client });
 
   const all = await prisma.event.findMany();
-  const toPush = all.filter(
-    (e) =>
-      !e.googleEventId ||
-      !e.googleUpdatedAt ||
-      e.updatedAt.getTime() > e.googleUpdatedAt.getTime(),
-  );
+  const toPush = all.filter((e) => !e.googleEventId || e.localDirty);
 
   let exported = 0;
   for (const event of toPush) {
-    const body = {
-      summary: event.title,
-      start: event.allDay
-        ? { date: event.start.toISOString().slice(0, 10) }
-        : { dateTime: event.start.toISOString() },
-      end: event.allDay
-        ? { date: event.end.toISOString().slice(0, 10) }
-        : { dateTime: event.end.toISOString() },
-      recurrence: event.recurrenceRule ? [`RRULE:${event.recurrenceRule}`] : undefined,
-    };
+    try {
+      const body = {
+        summary: event.title,
+        start: event.allDay
+          ? { date: formatYMD(event.start) }
+          : { dateTime: event.start.toISOString(), timeZone: LOCAL_TIMEZONE },
+        end: event.allDay
+          ? { date: formatYMD(event.end) }
+          : { dateTime: event.end.toISOString(), timeZone: LOCAL_TIMEZONE },
+        recurrence: event.recurrenceRule ? [`RRULE:${event.recurrenceRule}`] : undefined,
+      };
 
-    if (event.googleEventId) {
-      const updated = await calendar.events.update({
-        calendarId: auth.account.calendarId,
-        eventId: event.googleEventId,
-        requestBody: body,
-      });
-      await prisma.event.update({
-        where: { id: event.id },
-        data: {
-          googleUpdatedAt: updated.data.updated
-            ? new Date(updated.data.updated)
-            : new Date(),
-        },
-      });
-    } else {
-      const created = await calendar.events.insert({
-        calendarId: auth.account.calendarId,
-        requestBody: body,
-      });
-      await prisma.event.update({
-        where: { id: event.id },
-        data: {
-          googleEventId: created.data.id ?? undefined,
-          googleUpdatedAt: created.data.updated
-            ? new Date(created.data.updated)
-            : new Date(),
-        },
-      });
+      if (event.googleEventId) {
+        const updated = await calendar.events.update({
+          calendarId: auth.account.calendarId,
+          eventId: event.googleEventId,
+          requestBody: body,
+        });
+        await prisma.event.update({
+          where: { id: event.id },
+          data: {
+            localDirty: false,
+            googleUpdatedAt: updated.data.updated
+              ? new Date(updated.data.updated)
+              : new Date(),
+          },
+        });
+      } else {
+        const created = await calendar.events.insert({
+          calendarId: auth.account.calendarId,
+          requestBody: body,
+        });
+        await prisma.event.update({
+          where: { id: event.id },
+          data: {
+            localDirty: false,
+            googleEventId: created.data.id ?? undefined,
+            googleUpdatedAt: created.data.updated
+              ? new Date(created.data.updated)
+              : new Date(),
+          },
+        });
+      }
+      exported++;
+    } catch (err) {
+      const status = (err as { code?: number; response?: { status?: number } })
+        ?.response?.status ?? (err as { code?: number })?.code;
+      if (status === 404 || status === 410) {
+        // Deleted on Google's side — without this the same event fails
+        // the same way on every future sync, permanently blocking every
+        // event after it in the batch.
+        await prisma.event.delete({ where: { id: event.id } });
+        console.error(`exportToGoogle: ${event.id} gone on Google, deleted locally`);
+      } else {
+        console.error(`exportToGoogle: skipping ${event.id}:`, err);
+      }
     }
-    exported++;
   }
 
   return { exported };

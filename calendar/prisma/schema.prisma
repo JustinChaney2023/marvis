@@ -26,12 +26,15 @@ model Event {
   task            Task?       @relation(fields: [taskId], references: [id])
   // Google Calendar sync (src/lib/google-sync.ts). source LOCAL means
   // this app owns it and pushes it to Google; GOOGLE means it was pulled
-  // from Google and edits here get pushed back (last-write-wins via
-  // updatedAt vs googleUpdatedAt — single-user, so no real conflict
-  // resolution needed beyond that).
+  // from Google and edits here get pushed back. Dirty tracking can't use
+  // updatedAt (Prisma's @updatedAt bumps it on every write, including
+  // google-sync's own bookkeeping, which would mark every row dirty on
+  // every sync) — localDirty is set only by actual user edits and cleared
+  // once exportToGoogle successfully pushes it.
   source          EventSource @default(LOCAL)
   googleEventId   String?     @unique
   googleUpdatedAt DateTime?
+  localDirty      Boolean     @default(false)
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 }

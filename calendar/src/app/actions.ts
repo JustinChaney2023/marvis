@@ -182,6 +182,7 @@ export async function createEvent(formData: FormData) {
       end: new Date(endRaw),
       recurrenceRule: recurrenceRuleFromFormData(formData),
       locked: lockedFromFormData(formData),
+      localDirty: true,
     },
   });
   revalidatePath("/");
@@ -201,6 +202,7 @@ export async function updateEvent(eventId: string, formData: FormData) {
       end: new Date(endRaw),
       recurrenceRule: recurrenceRuleFromFormData(formData),
       locked: lockedFromFormData(formData),
+      localDirty: true,
     },
   });
   revalidatePath("/");
@@ -209,7 +211,7 @@ export async function updateEvent(eventId: string, formData: FormData) {
 export async function moveEvent(eventId: string, startIso: string, endIso: string) {
   await prisma.event.update({
     where: { id: eventId },
-    data: { start: new Date(startIso), end: new Date(endIso) },
+    data: { start: new Date(startIso), end: new Date(endIso), localDirty: true },
   });
   revalidatePath("/");
 }
