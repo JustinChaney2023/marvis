@@ -24,6 +24,13 @@ export async function POST(request: NextRequest) {
   const tasks = await prisma.task.deleteMany({
     where: { title: { startsWith: prefix } },
   });
+  const projects = await prisma.project.deleteMany({
+    where: { name: { startsWith: prefix } },
+  });
 
-  return NextResponse.json({ events: events.count, tasks: tasks.count });
+  return NextResponse.json({
+    events: events.count,
+    tasks: tasks.count,
+    projects: projects.count,
+  });
 }

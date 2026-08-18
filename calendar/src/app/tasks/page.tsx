@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import {
   createProject,
@@ -55,6 +56,11 @@ export default async function Home(props: PageProps<"/tasks">) {
   const projects = await prisma.project.findMany({
     orderBy: { createdAt: "asc" },
   });
+  const cookieStore = await cookies();
+  const lastProjectId = cookieStore.get("lastProjectId")?.value ?? "";
+  const defaultProjectId = projects.some((p) => p.id === lastProjectId)
+    ? lastProjectId
+    : "";
 
   const tasks = await prisma.task.findMany({
     where: {
@@ -184,7 +190,7 @@ export default async function Home(props: PageProps<"/tasks">) {
         {projects.length > 0 && (
           <select
             name="projectId"
-            defaultValue=""
+            defaultValue={defaultProjectId}
             className="rounded-lg border border-zinc-200 bg-white px-2 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900"
           >
             <option value="">No project</option>

@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { scheduleAllPendingTasks, scheduleTask, unscheduleTask } from "@/lib/scheduler";
 import { parseQuickCapture } from "@/lib/quickCapture";
@@ -55,6 +56,17 @@ export async function createTask(formData: FormData) {
       projectId,
     },
   });
+
+  // Remembered so the add-task form defaults to your last-used project
+  // instead of "No project" every time — re-picking the same course/
+  // client/project on every single task was a specifically-named
+  // friction point in Motion user feedback.
+  const cookieStore = await cookies();
+  if (projectId) {
+    cookieStore.set("lastProjectId", projectId, { maxAge: 60 * 60 * 24 * 365 });
+  } else {
+    cookieStore.delete("lastProjectId");
+  }
 
   revalidatePath("/tasks");
 }
