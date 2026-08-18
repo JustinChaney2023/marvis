@@ -15,6 +15,7 @@ import {
   type CalendarView,
 } from "@/lib/calendar-dates";
 import EventModal, { type EventModalEvent } from "./EventModal";
+import { moveEvent } from "../actions";
 
 export type CalendarEvent = {
   id: string;
@@ -40,6 +41,8 @@ const HOURS = Array.from(
 const TOTAL_HEIGHT = (HOUR_END - HOUR_START) * HOUR_HEIGHT;
 
 type PlacedEvent = { event: CalendarEvent; col: number; cols: number };
+
+type DraggingEvent = { id: string; durationMs: number };
 
 function layoutOverlappingEvents(events: CalendarEvent[]): PlacedEvent[] {
   const sorted = [...events].sort(
@@ -113,6 +116,20 @@ function computeBlock(
   };
 }
 
+function yToMinutesFromColumnTop(y: number): number {
+  return (y / HOUR_HEIGHT) * 60;
+}
+
+function snapMinutesToStart(day: Date, minutesFromTop: number): Date | null {
+  const snapped = Math.round(minutesFromTop / 30) * 30;
+  const startHour = HOUR_START + Math.floor(snapped / 60);
+  const startMin = snapped % 60;
+  if (startHour >= HOUR_END) return null;
+  const start = new Date(day);
+  start.setHours(startHour, startMin, 0, 0);
+  return start;
+}
+
 type ModalState =
   | { mode: "create"; start: Date; end: Date }
   | { mode: "edit"; event: EventModalEvent };
@@ -124,6 +141,7 @@ export default function CalendarClient({
   events,
 }: Props) {
   const [modalState, setModalState] = useState<ModalState | null>(null);
+  const [draggingEvent, setDraggingEvent] = useState<DraggingEvent | null>(null);
   const start = useMemo(() => parseYMD(startYMD), [startYMD]);
   const today = useMemo(() => parseYMD(todayISO), [todayISO]);
   const range = useMemo(() => computeRange(view, start), [view, start]);
@@ -142,6 +160,13 @@ export default function CalendarClient({
     });
   };
   const closeModal = () => setModalState(null);
+
+  const handleEventDragStart = (id: string, durationMs: number) => {
+    setDraggingEvent({ id, durationMs });
+  };
+  const handleEventDragEnd = () => {
+    setDraggingEvent(null);
+  };
 
   return (
     <>
@@ -175,6 +200,9 @@ export default function CalendarClient({
             today={today}
             onEmptyClick={openCreate}
             onEventClick={openEdit}
+            draggingEvent={draggingEvent}
+            onEventDragStart={handleEventDragStart}
+            onEventDragEnd={handleEventDragEnd}
           />
         )}
       </div>
@@ -207,12 +235,18 @@ function HourGrid({
   today,
   onEmptyClick,
   onEventClick,
+  draggingEvent,
+  onEventDragStart,
+  onEventDragEnd,
 }: {
   days: Date[];
   events: CalendarEvent[];
   today: Date;
   onEmptyClick: (start: Date, end: Date) => void;
   onEventClick: (event: CalendarEvent) => void;
+  draggingEvent: DraggingEvent | null;
+  onEventDragStart: (id: string, durationMs: number) => void;
+  onEventDragEnd: () => void;
 }) {
   const gridStyle = {
     gridTemplateColumns: `repeat(${days.length}, minmax(0, 1fr))`,
@@ -267,6 +301,9 @@ function HourGrid({
                 events={events}
                 onEmptyClick={onEmptyClick}
                 onEventClick={onEventClick}
+                draggingEvent={draggingEvent}
+                onEventDragStart={onEventDragStart}
+                onEventDragEnd={onEventDragEnd}
               />
             ))}
           </div>
@@ -281,11 +318,17 @@ function DayColumn({
   events,
   onEmptyClick,
   onEventClick,
+  draggingEvent,
+  onEventDragStart,
+  onEventDragEnd,
 }: {
   day: Date;
   events: CalendarEvent[];
   onEmptyClick: (start: Date, end: Date) => void;
   onEventClick: (event: CalendarEvent) => void;
+  draggingEvent: DraggingEvent | null;
+  onEventDragStart: (id: string, durationMs: number) => void;
+  onEventDragEnd: () => void;
 }) {
   const dayEvents = useMemo(
     () => events.filter((e) => isSameDay(e.start, day)),
@@ -296,18 +339,40 @@ function DayColumn({
   const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if ((e.target as HTMLElement).closest("[data-event]")) return;
     const rect = e.currentTarget.getBoundingClientRect();
-    const y = e.clientY - rect.top;
-    const minutesFromTop = (y / HOUR_HEIGHT) * 60;
-    const snapped = Math.round(minutesFromTop / 30) * 30;
-    const startHour = HOUR_START + Math.floor(snapped / 60);
-    const startMin = snapped % 60;
-    if (startHour >= HOUR_END) return;
-
-    const start = new Date(day);
-    start.setHours(startHour, startMin, 0, 0);
+    const minutesFromTop = yToMinutesFromColumnTop(e.clientY - rect.top);
+    const start = snapMinutesToStart(day, minutesFromTop);
+    if (!start) return;
     const end = new Date(start);
     end.setMinutes(end.getMinutes() + 30);
     onEmptyClick(start, end);
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    if (draggingEvent) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+    }
+  };
+
+  const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const active = draggingEvent;
+    onEventDragEnd();
+    if (!active) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const minutesFromTop = yToMinutesFromColumnTop(e.clientY - rect.top);
+    const start = snapMinutesToStart(day, minutesFromTop);
+    if (!start) return;
+    const end = new Date(start.getTime() + active.durationMs);
+    try {
+      await moveEvent(
+        active.id,
+        start.toISOString(),
+        end.toISOString(),
+      );
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   return (
@@ -325,37 +390,150 @@ function DayColumn({
           }}
         />
       ))}
-      <div className="absolute inset-0" onClick={handleClick} />
+      <div
+        className="absolute inset-0"
+        onClick={handleClick}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+      />
       {layout.map(({ event, col, cols }) => {
         const block = computeBlock(event.start, event.end);
         if (!block) return null;
         return (
-          <button
-            data-event
+          <EventBlock
             key={event.id}
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onEventClick(event);
-            }}
-            className="absolute overflow-hidden rounded border border-blue-300 bg-blue-100 p-1 text-left text-blue-900 dark:border-blue-700 dark:bg-blue-900/40 dark:text-blue-100"
-            style={{
-              top: `${block.top}px`,
-              height: `${block.height}px`,
-              left: `${(col / cols) * 100}%`,
-              width: `${(1 / cols) * 100}%`,
-            }}
-          >
-            <div className="truncate text-xs font-medium">{event.title}</div>
-            {block.height >= 32 && (
-              <div className="truncate text-[10px] opacity-80">
-                {formatTime(event.start)} – {formatTime(event.end)}
-              </div>
-            )}
-          </button>
+            event={event}
+            top={block.top}
+            height={block.height}
+            left={`${(col / cols) * 100}%`}
+            width={`${(1 / cols) * 100}%`}
+            isDragging={draggingEvent?.id === event.id}
+            onMoveStart={onEventDragStart}
+            onMoveEnd={onEventDragEnd}
+            onClick={onEventClick}
+          />
         );
       })}
     </div>
+  );
+}
+
+function EventBlock({
+  event,
+  top,
+  height,
+  left,
+  width,
+  isDragging,
+  onMoveStart,
+  onMoveEnd,
+  onClick,
+}: {
+  event: CalendarEvent;
+  top: number;
+  height: number;
+  left: string;
+  width: string;
+  isDragging: boolean;
+  onMoveStart: (id: string, durationMs: number) => void;
+  onMoveEnd: () => void;
+  onClick: (event: CalendarEvent) => void;
+}) {
+  const [previewEnd, setPreviewEnd] = useState<Date | null>(null);
+  const [previewHeight, setPreviewHeight] = useState<number | null>(null);
+
+  const handleDragStart = (e: React.DragEvent<HTMLButtonElement>) => {
+    e.dataTransfer.setData("text/plain", event.id);
+    e.dataTransfer.effectAllowed = "move";
+    onMoveStart(event.id, event.end.getTime() - event.start.getTime());
+  };
+
+  const handleDragEnd = () => {
+    onMoveEnd();
+  };
+
+  const handleResizeMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const startY = e.clientY;
+    const originalEnd = event.end.getTime();
+    const originalStart = event.start.getTime();
+    const minEnd = originalStart + 15 * 60 * 1000;
+    let latestEndMs = originalEnd;
+
+    const onMove = (ev: MouseEvent) => {
+      const deltaY = ev.clientY - startY;
+      const deltaMinutes = yToMinutesFromColumnTop(deltaY);
+      let newEndMs = originalEnd + deltaMinutes * 60 * 1000;
+      newEndMs = Math.round(newEndMs / (15 * 60 * 1000)) * (15 * 60 * 1000);
+      if (newEndMs < minEnd) newEndMs = minEnd;
+      latestEndMs = newEndMs;
+      const newMinutes = (newEndMs - originalStart) / 60000;
+      const newHeight = (newMinutes / 60) * HOUR_HEIGHT;
+      setPreviewEnd(new Date(newEndMs));
+      setPreviewHeight(newHeight);
+    };
+
+    const onUp = async () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      if (latestEndMs !== originalEnd) {
+        try {
+          await moveEvent(
+            event.id,
+            new Date(originalStart).toISOString(),
+            new Date(latestEndMs).toISOString(),
+          );
+        } catch (err) {
+          console.error(err);
+        }
+      }
+      setPreviewEnd(null);
+      setPreviewHeight(null);
+    };
+
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  };
+
+  const displayHeight = previewHeight ?? height;
+  const displayEnd = previewEnd ?? event.end;
+
+  return (
+    <button
+      data-event
+      draggable
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick(event);
+      }}
+      type="button"
+      className={`group absolute overflow-hidden rounded border border-blue-300 bg-blue-100 p-1 text-left text-blue-900 dark:border-blue-700 dark:bg-blue-900/40 dark:text-blue-100 ${
+        isDragging ? "opacity-40" : ""
+      }`}
+      style={{
+        top: `${top}px`,
+        height: `${displayHeight}px`,
+        left,
+        width,
+      }}
+    >
+      <div className="truncate text-xs font-medium">{event.title}</div>
+      {displayHeight >= 32 && (
+        <div className="truncate text-[10px] opacity-80">
+          {formatTime(event.start)} – {formatTime(displayEnd)}
+        </div>
+      )}
+      <div
+        draggable={false}
+        onMouseDown={handleResizeMouseDown}
+        onClick={(e) => e.stopPropagation()}
+        className="absolute bottom-0 left-0 right-0 h-1.5 cursor-ns-resize bg-blue-400/60 opacity-0 group-hover:opacity-100 dark:bg-blue-600/60"
+        aria-label="Resize event"
+      />
+    </button>
   );
 }
 
