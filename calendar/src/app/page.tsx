@@ -80,6 +80,12 @@ export default async function Home(props: PageProps<"/">) {
         <h1 className="text-2xl font-bold tracking-tight">Tasks</h1>
         <nav className="flex items-center gap-3 text-sm">
           <Link
+            href="/focus"
+            className="text-zinc-500 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100"
+          >
+            Focus
+          </Link>
+          <Link
             href="/calendar"
             className="text-zinc-500 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100"
           >
