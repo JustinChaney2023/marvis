@@ -12,6 +12,8 @@ import {
   formatHourLabel,
   formatTime,
   formatYMD,
+  HOUR_END,
+  HOUR_START,
   isSameDay,
   parseYMD,
   startOfWeekMonday,
@@ -39,8 +41,6 @@ type Props = {
   events: CalendarEvent[];
 };
 
-const HOUR_START = 6;
-const HOUR_END = 22;
 const HOUR_HEIGHT = 48;
 const HOURS = Array.from(
   { length: HOUR_END - HOUR_START },

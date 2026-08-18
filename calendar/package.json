@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "tsx src/lib/scheduler.test.ts && tsx src/lib/recurrence.test.ts && tsx src/lib/quickCapture.test.ts"
+    "test": "tsx src/lib/scheduler.test.ts && tsx src/lib/recurrence.test.ts && tsx src/lib/quickCapture.test.ts && tsx src/lib/calendar-dates.test.ts",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
@@ -20,12 +21,14 @@
     "rrule": "^2.8.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.3.1",
+    "playwright": "^1.62.1",
     "tailwindcss": "^4",
     "tsx": "^4.23.12",
     "typescript": "^5"

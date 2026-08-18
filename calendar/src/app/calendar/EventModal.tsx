@@ -3,7 +3,13 @@
 import { useEffect, useRef, useState } from "react";
 import { createEvent, deleteEvent, updateEvent } from "../actions";
 import { toLocalInputValue } from "@/lib/calendar-dates";
-import { RECURRENCE_PRESETS } from "@/lib/recurrence";
+import {
+  RECURRENCE_PRESETS,
+  WEEKDAY_CODES,
+  buildCustomWeeklyRule,
+  parseCustomWeeklyDays,
+  type WeekdayCode,
+} from "@/lib/recurrence";
 
 export type EventModalEvent = {
   id: string;
@@ -22,6 +28,20 @@ type Props = {
   onClose: () => void;
 };
 
+const WEEKDAY_SHORT_LABELS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"] as const;
+const WEEKDAY_FULL_LABELS = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+] as const;
+
+const inputClass =
+  "rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900";
+
 export default function EventModal({
   mode,
   initialStart,
@@ -30,7 +50,27 @@ export default function EventModal({
   onClose,
 }: Props) {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [recurrenceSelection, setRecurrenceSelection] = useState<string>(() => {
+    const rule =
+      mode === "edit" && event?.recurrenceRule ? event.recurrenceRule : "";
+    if (RECURRENCE_PRESETS.some((p) => p.value === rule)) return rule;
+    // Unrecognized rule (e.g. an imported Google rule this UI doesn't have
+    // controls for) — surface as Custom so the user can see/edit it instead
+    // of silently dropping the recurrence.
+    return "CUSTOM";
+  });
+  const [customDays, setCustomDays] = useState<WeekdayCode[]>(() => {
+    if (mode === "edit" && event?.recurrenceRule) {
+      return parseCustomWeeklyDays(event.recurrenceRule) ?? [];
+    }
+    return [];
+  });
+
   const titleInputRef = useRef<HTMLInputElement>(null);
+  const startDateRef = useRef<HTMLInputElement>(null);
+  const startTimeRef = useRef<HTMLInputElement>(null);
+  const endDateRef = useRef<HTMLInputElement>(null);
+  const endTimeRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     titleInputRef.current?.focus();
@@ -48,6 +88,26 @@ export default function EventModal({
     e.preventDefault();
     if (isSubmitting) return;
     const formData = new FormData(e.currentTarget);
+
+    // The UI uses separate date + time inputs (better native pickers than
+    // datetime-local). Combine each pair back into the "YYYY-MM-DDTHH:mm"
+    // format the server action expects, in local time.
+    const sd = startDateRef.current?.value ?? "";
+    const st = startTimeRef.current?.value ?? "";
+    const ed = endDateRef.current?.value ?? "";
+    const et = endTimeRef.current?.value ?? "";
+    if (sd && st) formData.set("start", `${sd}T${st}`);
+    if (ed && et) formData.set("end", `${ed}T${et}`);
+
+    // "Custom" is a UI-only sentinel — convert it to the actual RRULE
+    // (or plain "FREQ=WEEKLY" when no days are selected) before it reaches
+    // the server action. Other selections pass through unchanged.
+    const ruleValue =
+      recurrenceSelection === "CUSTOM"
+        ? buildCustomWeeklyRule(customDays)
+        : recurrenceSelection;
+    formData.set("recurrenceRule", ruleValue);
+
     setIsSubmitting(true);
     try {
       if (mode === "create") {
@@ -80,6 +140,12 @@ export default function EventModal({
     if (e.target === e.currentTarget) onClose();
   };
 
+  const toggleDay = (code: WeekdayCode) => {
+    setCustomDays((prev) =>
+      prev.includes(code) ? prev.filter((d) => d !== code) : [...prev, code],
+    );
+  };
+
   const initialTitle = mode === "edit" && event ? event.title : "";
   const startValue = toLocalInputValue(
     mode === "edit" && event ? event.start : initialStart,
@@ -87,10 +153,10 @@ export default function EventModal({
   const endValue = toLocalInputValue(
     mode === "edit" && event ? event.end : initialEnd,
   );
-  const initialRecurrenceRule =
-    mode === "edit" && event && event.recurrenceRule
-      ? event.recurrenceRule
-      : "";
+  const startDateValue = startValue.slice(0, 10);
+  const startTimeValue = startValue.slice(11);
+  const endDateValue = endValue.slice(0, 10);
+  const endTimeValue = endValue.slice(11);
   const isEditingRecurring = mode === "edit" && !!event?.recurrenceRule;
 
   return (
@@ -115,7 +181,7 @@ export default function EventModal({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="mt-4 flex flex-col gap-3">
+        <form onSubmit={handleSubmit} className="mt-4 flex flex-col gap-4">
           <label className="flex flex-col gap-1 text-sm">
             <span className="text-zinc-500">Title</span>
             <input
@@ -123,56 +189,113 @@ export default function EventModal({
               name="title"
               required
               defaultValue={initialTitle}
-              className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900"
+              className={inputClass}
             />
           </label>
+
           <label className="flex flex-col gap-1 text-sm">
             <span className="text-zinc-500">Start</span>
-            <input
-              type="datetime-local"
-              name="start"
-              required
-              defaultValue={startValue}
-              className="rounded-lg border border-zinc-200 bg-white px-2 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900"
-            />
+            <div className="flex gap-2">
+              <input
+                ref={startDateRef}
+                type="date"
+                required
+                defaultValue={startDateValue}
+                className={`${inputClass} flex-[2]`}
+              />
+              <input
+                ref={startTimeRef}
+                type="time"
+                required
+                defaultValue={startTimeValue}
+                className={`${inputClass} flex-1`}
+              />
+            </div>
           </label>
+
           <label className="flex flex-col gap-1 text-sm">
             <span className="text-zinc-500">End</span>
-            <input
-              type="datetime-local"
-              name="end"
-              required
-              defaultValue={endValue}
-              className="rounded-lg border border-zinc-200 bg-white px-2 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900"
-            />
+            <div className="flex gap-2">
+              <input
+                ref={endDateRef}
+                type="date"
+                required
+                defaultValue={endDateValue}
+                className={`${inputClass} flex-[2]`}
+              />
+              <input
+                ref={endTimeRef}
+                type="time"
+                required
+                defaultValue={endTimeValue}
+                className={`${inputClass} flex-1`}
+              />
+            </div>
           </label>
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-zinc-500">Repeat</span>
-            <select
-              name="recurrenceRule"
-              defaultValue={initialRecurrenceRule}
-              className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900"
-            >
-              {RECURRENCE_PRESETS.map((preset) => (
-                <option key={preset.value} value={preset.value}>
-                  {preset.label}
-                </option>
-              ))}
-            </select>
-            {isEditingRecurring && (
-              <span className="text-xs text-zinc-500">
-                Editing the whole series.
+
+          <div className="border-t border-zinc-200 pt-4 dark:border-zinc-800">
+            <label className="flex flex-col gap-1 text-sm">
+              <span className="text-zinc-500">Repeat</span>
+              <select
+                value={recurrenceSelection}
+                onChange={(e) => setRecurrenceSelection(e.target.value)}
+                className={inputClass}
+              >
+                {RECURRENCE_PRESETS.map((preset) => (
+                  <option key={preset.value} value={preset.value}>
+                    {preset.label}
+                  </option>
+                ))}
+                <option value="CUSTOM">Custom</option>
+              </select>
+              {recurrenceSelection === "CUSTOM" && (
+                <div className="mt-1.5 flex gap-1.5">
+                  {WEEKDAY_CODES.map((code, idx) => {
+                    const selected = customDays.includes(code);
+                    return (
+                      <button
+                        key={code}
+                        type="button"
+                        aria-pressed={selected}
+                        aria-label={WEEKDAY_FULL_LABELS[idx]}
+                        onClick={() => toggleDay(code)}
+                        className={
+                          selected
+                            ? "flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-600 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400"
+                            : "flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-200 text-xs font-semibold text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                        }
+                      >
+                        {WEEKDAY_SHORT_LABELS[idx]}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              {isEditingRecurring && (
+                <span className="text-xs text-zinc-500">
+                  Editing the whole series.
+                </span>
+              )}
+            </label>
+          </div>
+
+          <label className="flex cursor-pointer items-center justify-between gap-3 border-t border-zinc-200 pt-4 text-sm dark:border-zinc-800">
+            <span className="text-zinc-700 dark:text-zinc-300">
+              Locked{" "}
+              <span className="text-zinc-500 dark:text-zinc-400">
+                (won&apos;t be moved by auto-scheduling or drag)
               </span>
-            )}
-          </label>
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              name="locked"
-              defaultChecked={mode === "edit" && !!event?.locked}
-              className="h-4 w-4 rounded border-zinc-300 text-indigo-600 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900"
-            />
-            <span>Locked (won&apos;t be moved by auto-scheduling or drag)</span>
+            </span>
+            <span className="relative inline-flex items-center">
+              <input
+                type="checkbox"
+                name="locked"
+                defaultChecked={mode === "edit" && !!event?.locked}
+                className="peer sr-only"
+              />
+              <span className="block h-6 w-11 rounded-full bg-zinc-200 transition-colors peer-checked:bg-indigo-600 peer-focus-visible:ring-2 peer-focus-visible:ring-indigo-500/40 dark:bg-zinc-700 dark:peer-checked:bg-indigo-500" />
+              <span className="absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform peer-checked:translate-x-5" />
+            </span>
           </label>
 
           <div className="mt-2 flex items-center justify-between gap-2">

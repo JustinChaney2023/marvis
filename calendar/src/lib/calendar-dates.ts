@@ -1,5 +1,13 @@
 export type CalendarView = "day" | "week" | "month";
 
+// The hour-grid's visible window (day/week views in CalendarClient.tsx)
+// and the default new-event time (below) share these bounds — an event
+// created outside this range would exist in the DB but render nowhere on
+// the grid, which is exactly the bug that motivated sharing them here
+// instead of each place hardcoding its own 6/22.
+export const HOUR_START = 6;
+export const HOUR_END = 22;
+
 export function startOfDay(d: Date): Date {
   const x = new Date(d);
   x.setHours(0, 0, 0, 0);
@@ -95,14 +103,26 @@ export function toLocalInputValue(d: Date): string {
   return `${y}-${m}-${day}T${h}:${min}`;
 }
 
-export function defaultNewEventTimes(): { start: Date; end: Date } {
-  const start = new Date();
+export function defaultNewEventTimes(now: Date = new Date()): { start: Date; end: Date } {
+  const start = new Date(now);
   start.setSeconds(0, 0);
   const totalMin = start.getHours() * 60 + start.getMinutes();
   const rounded = Math.ceil(totalMin / 30) * 30;
   const h = Math.floor(rounded / 60) % 24;
   const m = rounded % 60;
   start.setHours(h, m, 0, 0);
+
+  // Clamp into the grid's visible window — otherwise "+ New event" at,
+  // say, 4am creates a real event that simply never renders anywhere on
+  // the hour grid (outside HOUR_START-HOUR_END), which looked exactly
+  // like a broken create when caught by an end-to-end test run overnight.
+  if (start.getHours() < HOUR_START) {
+    start.setHours(HOUR_START, 0, 0, 0);
+  } else if (start.getHours() >= HOUR_END) {
+    start.setDate(start.getDate() + 1);
+    start.setHours(HOUR_START, 0, 0, 0);
+  }
+
   const end = new Date(start);
   end.setMinutes(end.getMinutes() + 30);
   return { start, end };
