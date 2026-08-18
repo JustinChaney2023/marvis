@@ -63,6 +63,27 @@ export async function createEvent(formData: FormData) {
   revalidatePath("/calendar");
 }
 
+export async function updateEvent(eventId: string, formData: FormData) {
+  const title = String(formData.get("title") ?? "").trim();
+  const startRaw = String(formData.get("start") ?? "");
+  const endRaw = String(formData.get("end") ?? "");
+  if (!title || !startRaw || !endRaw) return;
+
+  await prisma.event.update({
+    where: { id: eventId },
+    data: { title, start: new Date(startRaw), end: new Date(endRaw) },
+  });
+  revalidatePath("/calendar");
+}
+
+export async function moveEvent(eventId: string, startIso: string, endIso: string) {
+  await prisma.event.update({
+    where: { id: eventId },
+    data: { start: new Date(startIso), end: new Date(endIso) },
+  });
+  revalidatePath("/calendar");
+}
+
 export async function deleteEvent(eventId: string) {
   const event = await prisma.event.findUnique({ where: { id: eventId } });
   await prisma.event.delete({ where: { id: eventId } });
