@@ -117,7 +117,7 @@ export default async function Page(props: PageProps<"/calendar">) {
           <div className="w-16" />
         </div>
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <nav className="flex items-center gap-1">
+          <nav className="flex flex-wrap items-center gap-1">
             <div className="inline-flex items-center gap-1 rounded-full bg-zinc-100 p-1 dark:bg-zinc-900">
               <Link
                 href={`/calendar?view=day&start=${switchTargets.day}`}

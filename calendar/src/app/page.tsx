@@ -76,9 +76,9 @@ export default async function Home(props: PageProps<"/">) {
 
   return (
     <main className="mx-auto w-full max-w-2xl flex-1 px-6 py-12">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-2xl font-bold tracking-tight">Tasks</h1>
-        <nav className="flex items-center gap-3 text-sm">
+        <nav className="flex flex-wrap items-center gap-3 text-sm">
           <Link
             href="/focus"
             className="text-zinc-500 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100"

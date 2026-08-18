@@ -327,9 +327,14 @@ function HourGrid({
   const gridStyle = {
     gridTemplateColumns: `repeat(${days.length}, minmax(0, 1fr))`,
   };
+  // Day view (1 column) shouldn't force the same wide min-width week view
+  // (7 columns) needs — that would make single-day mobile use scroll for
+  // no reason. Scale with column count instead of a single fixed value.
+  const minWidthRem = Math.max(days.length * 5, 18);
+
   return (
     <div className="overflow-x-auto">
-      <div className="min-w-[40rem]">
+      <div style={{ minWidth: `${minWidthRem}rem` }}>
         <div className="flex">
           <div className="w-16 flex-shrink-0" />
           <div className="flex-1 grid" style={gridStyle}>
