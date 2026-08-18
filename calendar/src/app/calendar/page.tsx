@@ -154,6 +154,10 @@ export default async function Page(props: PageProps<"/calendar">) {
           </nav>
           <p className="text-sm text-zinc-500">{nav.label}</p>
         </div>
+        <p className="text-xs text-zinc-400">
+          Shortcuts: <kbd>j</kbd>/<kbd>k</kbd> prev/next, <kbd>d</kbd>/
+          <kbd>w</kbd>/<kbd>m</kbd> view, <kbd>t</kbd> today
+        </p>
       </header>
 
       <CalendarClient

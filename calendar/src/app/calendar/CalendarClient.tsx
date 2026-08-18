@@ -1,8 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import {
+  addDays,
+  addMonths,
   computeRange,
   dayWeekdayLabel,
   defaultNewEventTimes,
@@ -11,6 +14,7 @@ import {
   formatYMD,
   isSameDay,
   parseYMD,
+  startOfWeekMonday,
   WEEKDAY_LABELS_MON_FIRST,
   type CalendarView,
 } from "@/lib/calendar-dates";
@@ -186,6 +190,48 @@ export default function CalendarClient({
     });
   };
   const closeModal = () => setModalState(null);
+
+  const router = useRouter();
+  useEffect(() => {
+    const isTypingTarget = (el: EventTarget | null) => {
+      if (!(el instanceof HTMLElement)) return false;
+      const tag = el.tagName;
+      return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
+    };
+
+    const onKey = (e: KeyboardEvent) => {
+      if (modalState || isTypingTarget(e.target) || e.metaKey || e.ctrlKey) return;
+
+      if (e.key === "t") {
+        router.push(`/calendar?view=${view}&start=${formatYMD(new Date())}`);
+        return;
+      }
+      if (e.key === "d" || e.key === "w" || e.key === "m") {
+        const nextView: CalendarView =
+          e.key === "d" ? "day" : e.key === "w" ? "week" : "month";
+        const target =
+          nextView === "day"
+            ? formatYMD(start)
+            : nextView === "week"
+              ? formatYMD(startOfWeekMonday(start))
+              : formatYMD(new Date(start.getFullYear(), start.getMonth(), 1));
+        router.push(`/calendar?view=${nextView}&start=${target}`);
+        return;
+      }
+      if (e.key === "j" || e.key === "ArrowLeft" || e.key === "k" || e.key === "ArrowRight") {
+        const forward = e.key === "k" || e.key === "ArrowRight";
+        const step = view === "day" ? 1 : view === "week" ? 7 : 0;
+        const target =
+          view === "month"
+            ? formatYMD(addMonths(new Date(start.getFullYear(), start.getMonth(), 1), forward ? 1 : -1))
+            : formatYMD(addDays(start, forward ? step : -step));
+        router.push(`/calendar?view=${view}&start=${target}`);
+      }
+    };
+
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [view, start, modalState, router]);
 
   const handleEventDragStart = (
     id: string,
