@@ -19,6 +19,9 @@ model Event {
   // Occurrences are computed on the fly (src/lib/recurrence.ts), never
   // materialized as rows — editing/deleting acts on the whole series.
   recurrenceRule String?
+  // Excluded from auto-rescheduling (src/lib/scheduler.ts's stale-task
+  // sweep never moves a locked event, even if its slot looks stale).
+  locked         Boolean  @default(false)
   taskId         String?  @unique
   task           Task?    @relation(fields: [taskId], references: [id])
   createdAt      DateTime @default(now())
@@ -31,6 +34,14 @@ enum TaskStatus {
   DONE
 }
 
+// Deep-work tasks are scored toward morning slots, admin toward afternoon
+// — see WORK_HOUR_PREFERENCE in src/lib/scheduler.ts.
+enum TaskEnergy {
+  LOW
+  MEDIUM
+  HIGH
+}
+
 // Auto-scheduling inputs, modeled after FluidCalendar's scoring approach
 // (due date / priority / duration) — see docs/fluidcalendar.md.
 model Task {
@@ -39,6 +50,7 @@ model Task {
   notes       String?
   status      TaskStatus @default(TODO)
   priority    Int        @default(0) // 0 = low .. 3 = urgent
+  energy      TaskEnergy @default(MEDIUM)
   durationMin Int        @default(30)
   dueAt       DateTime?
   event       Event?

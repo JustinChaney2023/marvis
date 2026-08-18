@@ -1,14 +1,30 @@
 import { prisma } from "@/lib/prisma";
 import { expandEvents } from "@/lib/recurrence";
+import type { TaskEnergy } from "@prisma/client";
 
-// MVP auto-scheduler: greedy earliest-fit within work hours, ordered by
-// due date then priority — same weighting order as FluidCalendar's scoring
-// (due date first, priority second), simplified to a strict sort instead
-// of a weighted score. See docs/fluidcalendar.md.
+// Auto-scheduler: work-hours earliest-fit as the primitive (findEarliestSlot,
+// unit-tested directly), with a scored candidate search on top
+// (findBestSlot) so a task doesn't always take the very first open slot —
+// it takes the best of the next few, weighing energy-window match and
+// due-date urgency. See docs/fluidcalendar.md for the FluidCalendar
+// approach this is modeled after (deliberately simplified: a small bounded
+// candidate scan instead of scoring every slot in the horizon).
 const WORK_START_HOUR = 9;
 const WORK_END_HOUR = 18;
 const HORIZON_DAYS = 14;
 const SLOT_GRANULARITY_MIN = 15;
+const BUFFER_MIN = 10;
+const CANDIDATE_LIMIT = 12;
+
+// Deep-work (HIGH) tasks are scored toward morning focus hours, admin-ish
+// (LOW) toward the afternoon; MEDIUM spans the whole work day (no real
+// preference), which also keeps prior scheduleAllPendingTasks behavior
+// close to unchanged for tasks that don't set an energy level.
+const ENERGY_PREFERRED_HOURS: Record<TaskEnergy, [number, number]> = {
+  HIGH: [9, 12],
+  MEDIUM: [9, 18],
+  LOW: [13, 18],
+};
 
 function isWorkDay(date: Date) {
   const day = date.getDay();
@@ -71,11 +87,71 @@ export function findEarliestSlot(
   return null;
 }
 
-export async function scheduleTask(taskId: string) {
-  const task = await prisma.task.findUniqueOrThrow({ where: { id: taskId } });
+function padForBuffer(busy: { start: Date; end: Date }[]) {
+  const ms = BUFFER_MIN * 60_000;
+  return busy.map((b) => ({
+    start: new Date(b.start.getTime() - ms),
+    end: new Date(b.end.getTime() + ms),
+  }));
+}
 
-  const now = new Date();
-  const horizonEnd = new Date(now.getTime() + HORIZON_DAYS * 86_400_000);
+function isEnergyMatch(energy: TaskEnergy, slotStart: Date): boolean {
+  const [prefStart, prefEnd] = ENERGY_PREFERRED_HOURS[energy];
+  const hour = slotStart.getHours();
+  return hour >= prefStart && hour < prefEnd;
+}
+
+function scoreSlot(
+  energy: TaskEnergy,
+  dueAt: Date | null,
+  slot: { start: Date; end: Date },
+): number {
+  let score = 0;
+  if (isEnergyMatch(energy, slot.start)) score += 10;
+  if (dueAt && slot.start > dueAt) score -= 100; // overshooting the due date is bad, but not disqualifying if it's the only option
+  score -= slot.start.getTime() / 1e14; // tie-break toward the earlier candidate
+  return score;
+}
+
+/**
+ * Scans up to CANDIDATE_LIMIT earliest-fit slots and returns the
+ * best-scored one (energy-window match, due-date urgency), instead of
+ * always taking the very first. Stops early once a candidate is both
+ * energy-matched and on-or-before the due date — nothing later could
+ * score better, so there's no reason to keep scanning.
+ */
+export function findBestSlot(
+  task: { durationMin: number; dueAt: Date | null; energy: TaskEnergy },
+  busy: { start: Date; end: Date }[],
+  horizonEnd: Date,
+  from: Date,
+) {
+  let cursor = from;
+  let best: { start: Date; end: Date } | null = null;
+  let bestScore = -Infinity;
+
+  for (let i = 0; i < CANDIDATE_LIMIT; i++) {
+    const slot = findEarliestSlot(cursor, task.durationMin, busy, horizonEnd);
+    if (!slot) break;
+
+    const score = scoreSlot(task.energy, task.dueAt, slot);
+    if (score > bestScore) {
+      bestScore = score;
+      best = slot;
+    }
+
+    const goodEnough =
+      isEnergyMatch(task.energy, slot.start) &&
+      (!task.dueAt || slot.start <= task.dueAt);
+    if (goodEnough) break;
+
+    cursor = new Date(slot.start.getTime() + 60_000);
+  }
+
+  return best;
+}
+
+async function fetchBusyIntervals(now: Date, horizonEnd: Date) {
   // Recurring masters may have started long before `now` and still recur
   // into the horizon, so they can't be filtered by `start` — fetch them
   // unconditionally and expand into occurrences alongside one-off events.
@@ -84,11 +160,19 @@ export async function scheduleTask(taskId: string) {
       OR: [{ start: { lt: horizonEnd } }, { recurrenceRule: { not: null } }],
     },
   });
-  const busy = expandEvents(existing, now, horizonEnd)
+  return expandEvents(existing, now, horizonEnd)
     .map((o) => ({ start: o.start, end: o.end }))
     .sort((a, b) => a.start.getTime() - b.start.getTime());
+}
 
-  const slot = findEarliestSlot(now, task.durationMin, busy, horizonEnd);
+export async function scheduleTask(taskId: string) {
+  const task = await prisma.task.findUniqueOrThrow({ where: { id: taskId } });
+
+  const now = new Date();
+  const horizonEnd = new Date(now.getTime() + HORIZON_DAYS * 86_400_000);
+  const busy = padForBuffer(await fetchBusyIntervals(now, horizonEnd));
+
+  const slot = findBestSlot(task, busy, horizonEnd, now);
   if (!slot) return null;
 
   const event = await prisma.event.upsert({
@@ -110,11 +194,53 @@ export async function scheduleTask(taskId: string) {
 }
 
 /**
- * Schedules every TODO task, most urgent first. Runs sequentially — each
- * placed task becomes "busy" for the next, so order determines who gets
- * the good slots. Tasks that don't fit in the horizon are left as TODO.
+ * A scheduled task's event is stale if its slot has fully elapsed without
+ * the task being marked done (a missed block), or if something else now
+ * overlaps it (the calendar changed underneath it — e.g. a manually
+ * created event, or a since-added recurring series). Locked events are
+ * never touched, even if stale, since locking is the user's explicit
+ * "don't move this" signal.
+ */
+export async function rescheduleStaleTasks() {
+  const now = new Date();
+  const scheduledTasks = await prisma.task.findMany({
+    where: { status: "SCHEDULED" },
+    include: { event: true },
+  });
+  const allEvents = await prisma.event.findMany();
+
+  let count = 0;
+  for (const task of scheduledTasks) {
+    const event = task.event;
+    if (!event || event.locked) continue;
+
+    const isPast = event.end <= now;
+    const windowStart = new Date(event.start.getTime() - 86_400_000);
+    const windowEnd = new Date(event.end.getTime() + 86_400_000);
+    const others = allEvents.filter((e) => e.id !== event.id);
+    const nearbyOccurrences = expandEvents(others, windowStart, windowEnd);
+    const conflict = nearbyOccurrences.some(
+      (o) => o.start < event.end && o.end > event.start,
+    );
+
+    if (isPast || conflict) {
+      await unscheduleTask(task.id);
+      await scheduleTask(task.id);
+      count++;
+    }
+  }
+  return count;
+}
+
+/**
+ * Fixes stale task-events, then schedules every remaining TODO task, most
+ * urgent first. Runs sequentially — each placed task becomes "busy" for
+ * the next, so order determines who gets the good slots. Tasks that don't
+ * fit in the horizon are left as TODO.
  */
 export async function scheduleAllPendingTasks() {
+  await rescheduleStaleTasks();
+
   const tasks = await prisma.task.findMany({
     where: { status: "TODO" },
     orderBy: [

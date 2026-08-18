@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { findEarliestSlot } from "./scheduler";
+import { findBestSlot, findEarliestSlot } from "./scheduler";
 
 // Monday 2026-08-17 09:00 local
 const from = new Date(2026, 7, 17, 9, 0);
@@ -41,6 +41,79 @@ const horizon = new Date(2026, 7, 31, 0, 0);
 {
   const slot = findEarliestSlot(from, 30, [], from);
   assert.equal(slot, null);
+}
+
+// findBestSlot: HIGH-energy task, morning window (9am-12pm) is fully busy
+// and no later same-day candidate matches it either (bounded scan, doesn't
+// search indefinitely) -> falls back to the earliest available slot
+// rather than returning nothing or an arbitrarily-delayed one.
+{
+  const busy = [
+    { start: new Date(2026, 7, 17, 9, 0), end: new Date(2026, 7, 17, 14, 0) },
+  ];
+  const slot = findBestSlot(
+    { durationMin: 30, dueAt: null, energy: "HIGH" },
+    busy,
+    horizon,
+    from,
+  );
+  assert.ok(slot);
+  assert.equal(slot.start.getDate(), 17);
+  assert.equal(slot.start.getHours(), 14);
+}
+
+// findBestSlot: HIGH-energy task, morning window open the very next
+// available day -> does reach it (not stuck on the bounded scan's first
+// few same-day candidates) when the match is within CANDIDATE_LIMIT.
+{
+  const busy = [
+    {
+      start: new Date(2026, 7, 17, 9, 0),
+      end: new Date(2026, 7, 18, 9, 0),
+    },
+  ];
+  const slot = findBestSlot(
+    { durationMin: 30, dueAt: null, energy: "HIGH" },
+    busy,
+    horizon,
+    from,
+  );
+  assert.ok(slot);
+  assert.equal(slot.start.getDate(), 18);
+  assert.equal(slot.start.getHours(), 9);
+}
+
+// findBestSlot: MEDIUM energy (whole work day preferred) -> behaves like
+// plain earliest-fit, since the very first candidate already matches.
+{
+  const slot = findBestSlot(
+    { durationMin: 30, dueAt: null, energy: "MEDIUM" },
+    [],
+    horizon,
+    from,
+  );
+  assert.ok(slot);
+  assert.equal(slot.start.getTime(), from.getTime());
+}
+
+// findBestSlot: the energy window is already fully busy for the day, but
+// later same-day slots are open and before the due date -> must not chase
+// an unreachable energy match into the next day when a same-day,
+// before-due option exists.
+{
+  const dueAt = new Date(2026, 7, 17, 14, 0);
+  const busy = [
+    { start: new Date(2026, 7, 17, 9, 0), end: new Date(2026, 7, 17, 12, 0) },
+  ];
+  const slot = findBestSlot(
+    { durationMin: 30, dueAt, energy: "HIGH" },
+    busy,
+    horizon,
+    from,
+  );
+  assert.ok(slot);
+  assert.equal(slot.start.getDate(), 17);
+  assert.ok(slot.start.getTime() <= dueAt.getTime());
 }
 
 console.log("scheduler.test.ts: all checks passed");
