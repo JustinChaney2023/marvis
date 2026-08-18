@@ -1,5 +1,12 @@
+import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { createTask, toggleTaskDone } from "./actions";
+import {
+  createTask,
+  scheduleAllAction,
+  scheduleTaskAction,
+  toggleTaskDone,
+  unscheduleTaskAction,
+} from "./actions";
 
 const PRIORITY_LABEL = ["Low", "Medium", "High", "Urgent"];
 
@@ -7,6 +14,7 @@ export default async function Home() {
   const tasks = await prisma.task.findMany({
     where: { status: { not: "DONE" } },
     orderBy: [{ dueAt: "asc" }, { priority: "desc" }],
+    include: { event: true },
   });
   const done = await prisma.task.findMany({
     where: { status: "DONE" },
@@ -16,7 +24,22 @@ export default async function Home() {
 
   return (
     <main className="mx-auto w-full max-w-2xl flex-1 px-6 py-12">
-      <h1 className="text-2xl font-semibold">Tasks</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold">Tasks</h1>
+        <nav className="flex items-center gap-3 text-sm">
+          <Link href="/calendar" className="text-zinc-500 hover:underline">
+            Calendar →
+          </Link>
+          <form action={scheduleAllAction}>
+            <button
+              type="submit"
+              className="rounded border border-zinc-300 px-3 py-1.5 font-medium dark:border-zinc-700"
+            >
+              Schedule all
+            </button>
+          </form>
+        </nav>
+      </div>
 
       <form action={createTask} className="mt-6 flex flex-wrap gap-2 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
         <input
@@ -68,8 +91,23 @@ export default async function Home() {
               <p className="text-xs text-zinc-500">
                 {PRIORITY_LABEL[task.priority]} · {task.durationMin}m
                 {task.dueAt ? ` · due ${task.dueAt.toLocaleString()}` : ""}
+                {task.event ? ` · scheduled ${task.event.start.toLocaleString()}` : ""}
               </p>
             </div>
+            <form
+              action={
+                task.event
+                  ? unscheduleTaskAction.bind(null, task.id)
+                  : scheduleTaskAction.bind(null, task.id)
+              }
+            >
+              <button
+                type="submit"
+                className="rounded border border-zinc-300 px-2.5 py-1 text-xs font-medium dark:border-zinc-700"
+              >
+                {task.event ? "Unschedule" : "Schedule"}
+              </button>
+            </form>
           </li>
         ))}
         {tasks.length === 0 && (
