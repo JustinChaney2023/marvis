@@ -4,6 +4,30 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { scheduleAllPendingTasks, scheduleTask, unscheduleTask } from "@/lib/scheduler";
 import { parseQuickCapture } from "@/lib/quickCapture";
+import { expandEvents } from "@/lib/recurrence";
+
+const REMINDER_WINDOW_MIN = 15;
+
+/**
+ * Occurrences (recurring included) starting within the next
+ * REMINDER_WINDOW_MIN minutes, for the client-side notification watcher.
+ * Read-only, no "already notified" tracking here — that's session-local
+ * client state, since it only needs to matter while a tab is open.
+ */
+export async function getUpcomingEventReminders() {
+  const now = new Date();
+  const soon = new Date(now.getTime() + REMINDER_WINDOW_MIN * 60_000);
+  const rows = await prisma.event.findMany({
+    where: {
+      OR: [{ start: { gte: now, lt: soon } }, { recurrenceRule: { not: null } }],
+    },
+  });
+  return expandEvents(rows, now, soon).map((o) => ({
+    id: o.id,
+    title: o.title,
+    startIso: o.start.toISOString(),
+  }));
+}
 
 function energyFromFormData(formData: FormData): "LOW" | "MEDIUM" | "HIGH" {
   const value = String(formData.get("energy") ?? "MEDIUM");
