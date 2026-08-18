@@ -75,7 +75,12 @@ export default async function Page(props: PageProps<"/">) {
   const rows = await prisma.event.findMany({
     where: {
       OR: [
-        { start: { gte: from, lt: to } },
+        // Proper interval overlap, not just "starts in range" — a
+        // multi-day event (e.g. a synced all-day trip) that started
+        // before this range but still overlaps it would otherwise be
+        // missed entirely at the query level, before rendering even
+        // gets a chance to draw it.
+        { start: { lt: to }, end: { gt: from } },
         { recurrenceRule: { not: null } },
       ],
     },
@@ -84,6 +89,7 @@ export default async function Page(props: PageProps<"/">) {
 
   const ruleByMasterId = new Map(rows.map((r) => [r.id, r.recurrenceRule]));
   const lockedByMasterId = new Map(rows.map((r) => [r.id, r.locked]));
+  const allDayByMasterId = new Map(rows.map((r) => [r.id, r.allDay]));
   const events: CalendarEvent[] = expandEvents(rows, from, to)
     .map((o) => ({
       id: o.id,
@@ -94,6 +100,7 @@ export default async function Page(props: PageProps<"/">) {
       isRecurring: o.isRecurring,
       recurrenceRule: ruleByMasterId.get(o.masterId) ?? null,
       locked: lockedByMasterId.get(o.masterId) ?? false,
+      allDay: allDayByMasterId.get(o.masterId) ?? false,
     }))
     .sort((a, b) => a.start.getTime() - b.start.getTime());
 

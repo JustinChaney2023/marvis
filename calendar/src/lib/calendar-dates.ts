@@ -52,6 +52,17 @@ export function isSameDay(a: Date, b: Date): boolean {
   );
 }
 
+// True if an event overlaps the 24h span containing `day` at all — used
+// for all-day/multi-day events, which should show on every day they
+// span, not just the one isSameDay(event.start, day) matches.
+export function overlapsDay(event: { start: Date; end: Date }, day: Date): boolean {
+  const dayStart = new Date(day);
+  dayStart.setHours(0, 0, 0, 0);
+  const dayEnd = new Date(dayStart);
+  dayEnd.setDate(dayEnd.getDate() + 1);
+  return event.start < dayEnd && event.end > dayStart;
+}
+
 export function formatTime(d: Date): string {
   return d.toLocaleTimeString("en-US", {
     hour: "numeric",

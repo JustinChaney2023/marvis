@@ -15,6 +15,7 @@ import {
   HOUR_END,
   HOUR_START,
   isSameDay,
+  overlapsDay,
   parseYMD,
   startOfWeekMonday,
   WEEKDAY_LABELS_MON_FIRST,
@@ -32,6 +33,7 @@ export type CalendarEvent = {
   isRecurring: boolean;
   recurrenceRule: string | null;
   locked: boolean;
+  allDay: boolean;
 };
 
 type Props = {
@@ -362,6 +364,34 @@ function HourGrid({
             })}
           </div>
         </div>
+        {days.some((day) => events.some((e) => e.allDay && overlapsDay(e, day))) && (
+          <div className="flex border-b border-zinc-200 dark:border-zinc-800">
+            <div className="flex w-16 flex-shrink-0 items-center justify-end pr-2 text-[10px] text-zinc-400">
+              All day
+            </div>
+            <div className="flex-1 grid gap-px py-1" style={gridStyle}>
+              {days.map((day) => {
+                const dayAllDay = events.filter(
+                  (e) => e.allDay && overlapsDay(e, day),
+                );
+                return (
+                  <div key={day.toISOString()} className="flex flex-col gap-0.5 px-0.5">
+                    {dayAllDay.map((e) => (
+                      <button
+                        key={e.id}
+                        type="button"
+                        onClick={() => onEventClick(e)}
+                        className="truncate rounded-md border-l-2 border-l-indigo-500 bg-indigo-50 px-1.5 py-0.5 text-left text-[11px] font-medium text-indigo-900 transition-colors hover:brightness-95 dark:bg-indigo-950/30 dark:text-indigo-100 dark:hover:brightness-110"
+                      >
+                        {e.title}
+                      </button>
+                    ))}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
         <div className="flex">
           <div className="w-16 flex-shrink-0">
             {HOURS.map((h) => (
@@ -412,7 +442,7 @@ function DayColumn({
   onEventDragEnd: () => void;
 }) {
   const dayEvents = useMemo(
-    () => events.filter((e) => isSameDay(e.start, day)),
+    () => events.filter((e) => !e.allDay && isSameDay(e.start, day)),
     [events, day],
   );
   const layout = useMemo(() => layoutOverlappingEvents(dayEvents), [dayEvents]);
@@ -702,16 +732,19 @@ function MonthView({
   onEmptyClick: (start: Date, end: Date) => void;
   onEventClick: (event: CalendarEvent) => void;
 }) {
+  // Overlap-based, not an exact formatYMD(event.start) match — otherwise a
+  // multi-day event (a synced all-day trip, say) only ever shows on its
+  // first day and silently vanishes for the rest of its span.
   const eventsByDay = useMemo(() => {
     const map = new Map<string, CalendarEvent[]>();
-    for (const ev of events) {
-      const key = formatYMD(ev.start);
-      const list = map.get(key) ?? [];
-      list.push(ev);
-      map.set(key, list);
+    for (const day of days) {
+      map.set(
+        formatYMD(day),
+        events.filter((ev) => overlapsDay(ev, day)),
+      );
     }
     return map;
-  }, [events]);
+  }, [events, days]);
 
   const currentMonth = viewStart.getMonth();
 

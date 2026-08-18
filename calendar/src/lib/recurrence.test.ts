@@ -14,6 +14,7 @@ import {
       start: new Date(2026, 7, 17, 9, 0),
       end: new Date(2026, 7, 17, 9, 30),
       recurrenceRule: null,
+      allDay: false,
     },
     new Date(2026, 7, 17, 0, 0),
     new Date(2026, 7, 18, 0, 0),
@@ -32,6 +33,7 @@ import {
       start: new Date(2026, 7, 17, 9, 0),
       end: new Date(2026, 7, 17, 9, 30),
       recurrenceRule: null,
+      allDay: false,
     },
     new Date(2026, 7, 20, 0, 0),
     new Date(2026, 7, 21, 0, 0),
@@ -50,6 +52,7 @@ import {
       start,
       end: new Date(2026, 7, 17, 9, 30),
       recurrenceRule: "FREQ=WEEKLY",
+      allDay: false,
     },
     new Date(2026, 7, 17, 0, 0),
     new Date(2026, 8, 7, 0, 0), // 3 weeks later
@@ -75,6 +78,7 @@ import {
       start: new Date(2026, 7, 17, 23, 0),
       end: new Date(2026, 7, 18, 1, 0), // spans midnight into the 18th
       recurrenceRule: "FREQ=DAILY",
+      allDay: false,
     },
     new Date(2026, 7, 18, 0, 0),
     new Date(2026, 7, 19, 0, 0),

@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
-import { defaultNewEventTimes, HOUR_END, HOUR_START } from "./calendar-dates";
+import {
+  defaultNewEventTimes,
+  HOUR_END,
+  HOUR_START,
+  overlapsDay,
+} from "./calendar-dates";
 
 // Normal daytime case: rounds up to the next 30-min mark, no clamping.
 {
@@ -36,6 +41,34 @@ import { defaultNewEventTimes, HOUR_END, HOUR_START } from "./calendar-dates";
   const atEnd = defaultNewEventTimes(new Date(2026, 7, 18, HOUR_END, 0));
   assert.equal(atEnd.start.getDate(), 19);
   assert.equal(atEnd.start.getHours(), HOUR_START);
+}
+
+// overlapsDay: the bug that motivated this — a multi-day all-day event
+// ("Fairbanks", Aug 13 -> Aug 18) must overlap every day in its span, not
+// just its start day, which is what a plain isSameDay(event.start, day)
+// check (the old logic) would wrongly limit it to.
+{
+  const trip = {
+    start: new Date(2026, 7, 13, 0, 0),
+    end: new Date(2026, 7, 18, 0, 0),
+  };
+  assert.equal(overlapsDay(trip, new Date(2026, 7, 13)), true);
+  assert.equal(overlapsDay(trip, new Date(2026, 7, 15)), true); // middle day
+  assert.equal(overlapsDay(trip, new Date(2026, 7, 17)), true); // last real day
+  assert.equal(overlapsDay(trip, new Date(2026, 7, 18)), false); // exclusive end
+  assert.equal(overlapsDay(trip, new Date(2026, 7, 12)), false);
+  assert.equal(overlapsDay(trip, new Date(2026, 7, 19)), false);
+}
+
+// a same-day timed event still matches only its own day
+{
+  const meeting = {
+    start: new Date(2026, 7, 20, 14, 0),
+    end: new Date(2026, 7, 20, 15, 0),
+  };
+  assert.equal(overlapsDay(meeting, new Date(2026, 7, 20)), true);
+  assert.equal(overlapsDay(meeting, new Date(2026, 7, 19)), false);
+  assert.equal(overlapsDay(meeting, new Date(2026, 7, 21)), false);
 }
 
 console.log("calendar-dates.test.ts: all checks passed");

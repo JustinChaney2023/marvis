@@ -6,6 +6,7 @@ export type RecurringEventSource = {
   start: Date;
   end: Date;
   recurrenceRule: string | null;
+  allDay: boolean;
 };
 
 export type Occurrence = {
@@ -18,6 +19,7 @@ export type Occurrence = {
   start: Date;
   end: Date;
   isRecurring: boolean;
+  allDay: boolean;
 };
 
 // Occurrences aren't stored, so a padded lookback catches any occurrence
@@ -39,6 +41,7 @@ export function expandEventOccurrences(
         start: event.start,
         end: event.end,
         isRecurring: false,
+        allDay: event.allDay,
       },
     ];
   }
@@ -62,6 +65,7 @@ export function expandEventOccurrences(
       start: s,
       end: new Date(s.getTime() + durationMs),
       isRecurring: true,
+      allDay: event.allDay,
     }))
     .filter((o) => o.end > rangeStart && o.start < rangeEnd);
 }
