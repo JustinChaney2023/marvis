@@ -63,7 +63,11 @@ enum TaskStatus {
 }
 
 // Deep-work tasks are scored toward morning slots, admin toward afternoon
-// — see WORK_HOUR_PREFERENCE in src/lib/scheduler.ts.
+// — see ENERGY_PREFERRED_HOURS in src/lib/scheduler.ts. The manual picker
+// for this was removed from the task UI (defaults to MEDIUM = no
+// preference) — the field and scheduler logic stay, since the plan is to
+// eventually derive this automatically (e.g. from sleep/energy data)
+// rather than have the user pick it by hand.
 enum TaskEnergy {
   LOW
   MEDIUM
