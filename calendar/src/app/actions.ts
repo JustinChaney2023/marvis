@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { scheduleAllPendingTasks, scheduleTask, unscheduleTask } from "@/lib/scheduler";
 import { parseQuickCapture } from "@/lib/quickCapture";
 import { expandEvents } from "@/lib/recurrence";
+import { syncGoogleCalendar, deleteFromGoogle } from "@/lib/google-sync";
 
 const REMINDER_WINDOW_MIN = 15;
 
@@ -168,6 +169,9 @@ export async function moveEvent(eventId: string, startIso: string, endIso: strin
 
 export async function deleteEvent(eventId: string) {
   const event = await prisma.event.findUnique({ where: { id: eventId } });
+  if (event?.googleEventId) {
+    await deleteFromGoogle(event.googleEventId);
+  }
   await prisma.event.delete({ where: { id: eventId } });
   if (event?.taskId) {
     await prisma.task.update({
@@ -177,4 +181,16 @@ export async function deleteEvent(eventId: string) {
   }
   revalidatePath("/calendar");
   revalidatePath("/");
+}
+
+export async function syncGoogleCalendarAction() {
+  const result = await syncGoogleCalendar();
+  revalidatePath("/calendar");
+  revalidatePath("/settings");
+  return result;
+}
+
+export async function disconnectGoogleAction() {
+  await prisma.googleAccount.deleteMany({});
+  revalidatePath("/settings");
 }
