@@ -95,9 +95,17 @@ model Task {
 // Single row: user-adjustable scheduler knobs. See src/lib/settings.ts for
 // the get-or-create-default accessor scheduler.ts reads from.
 model AppSettings {
-  id        String   @id @default(cuid())
-  bufferMin Int      @default(10)
-  updatedAt DateTime @updatedAt
+  id                 String   @id @default(cuid())
+  bufferMin          Int      @default(10)
+  // Public booking page (src/app/book/[slug]) — a single-user
+  // "book a slot with me" link, not a team feature: visitors pick an
+  // open slot and it becomes a locked Event, same idea as Motion's
+  // most-praised booking-link feature. Null slug = page disabled/404s.
+  bookingSlug        String?  @unique
+  bookingEnabled     Boolean  @default(false)
+  bookingDurationMin Int      @default(30)
+  bookingTitle       String   @default("Book time with me")
+  updatedAt          DateTime @updatedAt
 }
 
 model Project {

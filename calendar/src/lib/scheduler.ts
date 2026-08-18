@@ -203,7 +203,7 @@ async function getProjectScheduledDays(
   return new Set(siblingEvents.map((e) => dateKey(e.start)));
 }
 
-async function fetchBusyIntervals(now: Date, horizonEnd: Date) {
+export async function fetchBusyIntervals(now: Date, horizonEnd: Date) {
   // Recurring masters may have started long before `now` and still recur
   // into the horizon, so they can't be filtered by `start` — fetch them
   // unconditionally and expand into occurrences alongside one-off events.

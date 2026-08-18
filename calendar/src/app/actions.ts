@@ -8,6 +8,7 @@ import { parseQuickCapture } from "@/lib/quickCapture";
 import { expandEvents } from "@/lib/recurrence";
 import { syncGoogleCalendar, deleteFromGoogle } from "@/lib/google-sync";
 import { updateAppSettings } from "@/lib/settings";
+import { createBooking } from "@/lib/booking";
 
 const REMINDER_WINDOW_MIN = 15;
 
@@ -213,4 +214,50 @@ export async function updateSchedulingSettingsAction(formData: FormData) {
   if (!Number.isFinite(bufferMin) || bufferMin < 0 || bufferMin > 120) return;
   await updateAppSettings({ bufferMin });
   revalidatePath("/settings");
+}
+
+function slugify(input: string): string {
+  return input
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+export async function updateBookingSettingsAction(formData: FormData) {
+  const bookingEnabled = formData.get("bookingEnabled") === "on";
+  const bookingTitle = String(formData.get("bookingTitle") ?? "").trim() || "Book time with me";
+  const bookingDurationMin = Number(formData.get("bookingDurationMin") ?? 30);
+  const rawSlug = String(formData.get("bookingSlug") ?? "").trim();
+  const bookingSlug = rawSlug ? slugify(rawSlug) : null;
+
+  if (!Number.isFinite(bookingDurationMin) || bookingDurationMin < 5 || bookingDurationMin > 240) {
+    return;
+  }
+  if (bookingEnabled && !bookingSlug) return;
+
+  try {
+    await updateAppSettings({
+      bookingEnabled,
+      bookingTitle,
+      bookingDurationMin,
+      bookingSlug,
+    });
+  } catch {
+    // Unique constraint on bookingSlug — since it's a single row this can
+    // only happen if the exact same slug is already set, which is a no-op
+    // anyway, but guard rather than let a raw Prisma error surface.
+  }
+  revalidatePath("/settings");
+}
+
+export async function createBookingAction(startIso: string, formData: FormData) {
+  const name = String(formData.get("name") ?? "");
+  const email = String(formData.get("email") ?? "");
+  const notes = String(formData.get("notes") ?? "");
+  const result = await createBooking(startIso, name, email, notes);
+  if (result.ok) {
+    revalidatePath("/");
+  }
+  return result;
 }

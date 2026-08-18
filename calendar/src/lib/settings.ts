@@ -13,7 +13,13 @@ export async function getAppSettings() {
   });
 }
 
-export async function updateAppSettings(data: { bufferMin?: number }) {
+export async function updateAppSettings(data: {
+  bufferMin?: number;
+  bookingSlug?: string | null;
+  bookingEnabled?: boolean;
+  bookingDurationMin?: number;
+  bookingTitle?: string;
+}) {
   return prisma.appSettings.upsert({
     where: { id: SINGLETON_ID },
     create: { id: SINGLETON_ID, ...data },
