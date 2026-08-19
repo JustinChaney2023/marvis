@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/auth";
 import { getAppSettings } from "@/lib/settings";
 import { buildTodayFacts, generateDailyAgendaText } from "@/lib/dailyAgenda";
 import FocusClient, { type FocusTask } from "./FocusClient";
+import ShutdownRitual from "./ShutdownRitual";
 
 export default async function FocusPage() {
   const user = await requireUser();
@@ -56,13 +57,10 @@ export default async function FocusPage() {
 
   return (
     <main className="mx-auto flex w-full max-w-lg flex-1 flex-col px-6 py-12">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold tracking-tight">Focus</h1>
-      </div>
-
-      <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">{agendaText}</p>
+      <p className="text-sm text-zinc-600 dark:text-zinc-400">{agendaText}</p>
 
       <FocusClient queue={queue} />
+      <ShutdownRitual />
     </main>
   );
 }

@@ -38,6 +38,8 @@ model User {
   bookingLinks  BookingLink[]
   automationRules         AutomationRule[]
   automationNotifications AutomationNotification[]
+  timeLogEntries          TimeLogEntry[]
+  habits                  Habit[]
 }
 
 // DB-backed sessions (not signed/stateless JWTs) — lets a logout or a
@@ -74,6 +76,11 @@ model Event {
   locked          Boolean     @default(false)
   taskId          String?     @unique
   task            Task?       @relation(fields: [taskId], references: [id])
+  // A Habit occurrence, unlike a Task's slot, isn't 1:1 — a habit with
+  // timesPerWeek: 3 has 3 Event rows sharing the same habitId each week,
+  // so no unique constraint here (see Habit below).
+  habitId         String?
+  habit           Habit?      @relation(fields: [habitId], references: [id], onDelete: Cascade)
   // Google Calendar sync (src/lib/google-sync.ts). source LOCAL means
   // this app owns it and pushes it to Google; GOOGLE means it was pulled
   // from Google and edits here get pushed back. Dirty tracking can't use
@@ -227,8 +234,22 @@ model Task {
   parentId       String?
   parent         Task?      @relation("TaskSubtasks", fields: [parentId], references: [id], onDelete: Cascade)
   subtasks       Task[]     @relation("TaskSubtasks")
+  timeLogEntries TimeLogEntry[]
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
+}
+
+// One row per timer stop (see stoppedTimerFields in actions.ts) — lets
+// the time-tracking report bucket by week/project, which the plain
+// cumulative Task.trackedMinutes total can't do on its own.
+model TimeLogEntry {
+  id       String   @id @default(cuid())
+  userId   String
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  taskId   String
+  task     Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  minutes  Int
+  loggedAt DateTime @default(now())
 }
 
 // Per-user scheduler knobs and booking-page config (was a single global
@@ -338,4 +359,26 @@ model AutomationNotification {
   message   String
   seen      Boolean  @default(false)
   createdAt DateTime @default(now())
+}
+
+// Flexible recurring routine time-blocking (Reclaim.ai's "Habits"),
+// distinct from a fixed recurring Event and from a recurring Task
+// (which materializes one occurrence at a time on completion). A Habit
+// just wants `timesPerWeek` slots of `durationMin` somewhere in the
+// week — src/lib/habits.ts places them in open slots each week and
+// re-places (not just drops) an occurrence whose slot gets conflicted
+// out by something else, via the same conflict path scheduled tasks use
+// (rescheduleConflictsWith in scheduler.ts).
+model Habit {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title        String
+  durationMin  Int
+  timesPerWeek Int
+  priority     Int      @default(0) // same 0=Low..3=Urgent scale as Task.priority
+  enabled      Boolean  @default(true)
+  events       Event[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }

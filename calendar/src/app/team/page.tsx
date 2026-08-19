@@ -36,10 +36,7 @@ export default async function TeamPage() {
 
   return (
     <main className="mx-auto w-full max-w-2xl flex-1 px-6 py-12">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold tracking-tight">Team</h1>
-      </div>
-      <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+      <p className="text-sm text-zinc-500 dark:text-zinc-400">
         People and AI employees you can assign tasks to. An AI employee is
         just a label for now — assigning it a task shows it as theirs, but
         nothing runs automatically yet.

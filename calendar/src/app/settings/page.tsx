@@ -14,6 +14,7 @@ import AppleSyncButton from "./AppleSyncButton";
 import ShareAvailabilityButton from "./ShareAvailabilityButton";
 import BookingLinksManager from "./BookingLinksManager";
 import AutomationRulesManager from "./AutomationRulesManager";
+import HabitsManager from "./HabitsManager";
 import Button from "../ui/Button";
 import {
   changePasswordAction,
@@ -39,6 +40,10 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
     orderBy: { createdAt: "asc" },
   });
   const automationRules = await prisma.automationRule.findMany({
+    where: { userId: user.id },
+    orderBy: { createdAt: "asc" },
+  });
+  const habits = await prisma.habit.findMany({
     where: { userId: user.id },
     orderBy: { createdAt: "asc" },
   });
@@ -197,6 +202,18 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
         </p>
         <div className="mt-3">
           <AutomationRulesManager rules={automationRules} projects={projects} />
+        </div>
+      </section>
+
+      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
+        <h2 className="text-lg font-semibold">Habits</h2>
+        <p className="mt-1 text-xs text-zinc-400">
+          Flexible routine time — "exercise 3x a week" rather than a fixed
+          recurring event. Placed into open slots each week, and re-placed
+          (not dropped) if something else gets booked over a slot.
+        </p>
+        <div className="mt-3">
+          <HabitsManager habits={habits} />
         </div>
       </section>
 

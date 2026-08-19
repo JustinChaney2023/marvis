@@ -24,8 +24,10 @@ import { nextTaskOccurrence } from "@/lib/taskRecurrence";
 import { generateSubtasks, type GenerateSubtasksResult } from "@/lib/subtaskGenerate";
 import { generateEmailDraft, type DraftEmailResult } from "@/lib/emailDraft";
 import { generateTaskDoc, type DraftDocResult } from "@/lib/docDraft";
+import { buildShutdownSummary, type ShutdownSummary } from "@/lib/shutdown";
 import { runAutomationsForStatusChange } from "@/lib/automations";
 import { askScheduleChat, type ChatMessage, type ChatResult } from "@/lib/scheduleChat";
+import { scheduleHabitsForWeek, rescheduleConflictedHabits } from "@/lib/habits";
 
 const REMINDER_WINDOW_MIN = 15;
 
@@ -245,6 +247,29 @@ export async function draftTaskDocAction(taskId: string): Promise<DraftDocResult
   );
 }
 
+export async function getShutdownSummaryAction(): Promise<ShutdownSummary> {
+  const user = await requireUser();
+  return buildShutdownSummary(user.id);
+}
+
+/**
+ * The shutdown ritual's one bulk action: push every still-open task
+ * left at end of day to tomorrow, same due-time-of-day, unscheduling
+ * any calendar slot it had (same semantics as the single-task delay
+ * button — a deliberate push-off, not a scheduler decision).
+ */
+export async function pushLeftoversToTomorrowAction(taskIds: string[]) {
+  const user = await requireUser();
+  for (const taskId of taskIds) {
+    const existing = await prisma.task.findFirst({ where: { id: taskId, userId: user.id } });
+    if (!existing) continue;
+    const base = existing.dueAt ?? new Date();
+    const tomorrow = new Date(base.getTime() + 24 * 60 * 60 * 1000);
+    await delayTaskAction(taskId, tomorrow.toISOString());
+  }
+  revalidatePath("/focus");
+}
+
 export async function askScheduleChatAction(messages: ChatMessage[]): Promise<ChatResult> {
   const user = await requireUser();
   const settings = await getAppSettings(user.id);
@@ -326,12 +351,29 @@ export async function deleteAssignee(assigneeId: string) {
 // ONGOING, so time is never silently lost (only ever added once, since
 // timerStartedAt is cleared in the same write).
 function stoppedTimerFields(task: { timerStartedAt: Date | null; trackedMinutes: number }) {
-  if (!task.timerStartedAt) return {};
-  const elapsedMin = Math.max(0, (Date.now() - task.timerStartedAt.getTime()) / 60_000);
+  if (!task.timerStartedAt) return { patch: {}, elapsedMin: 0 };
+  const elapsedMin = Math.max(0, Math.round((Date.now() - task.timerStartedAt.getTime()) / 60_000));
   return {
-    trackedMinutes: task.trackedMinutes + Math.round(elapsedMin),
-    timerStartedAt: null,
+    patch: {
+      trackedMinutes: task.trackedMinutes + elapsedMin,
+      timerStartedAt: null,
+    },
+    elapsedMin,
   };
+}
+
+// One row per timer stop, for the time-tracking report — the plain
+// cumulative Task.trackedMinutes total can't be bucketed by week on its
+// own. Fire-and-forget-adjacent (awaited, but never blocks/fails the
+// status change it's attached to since a broken report is much lower
+// stakes than a task update failing).
+async function logTrackedTime(userId: string, taskId: string, elapsedMin: number) {
+  if (elapsedMin <= 0) return;
+  try {
+    await prisma.timeLogEntry.create({ data: { userId, taskId, minutes: elapsedMin } });
+  } catch (err) {
+    console.error("logTrackedTime failed:", err);
+  }
 }
 
 export async function toggleTaskDone(taskId: string, done: boolean) {
@@ -339,13 +381,15 @@ export async function toggleTaskDone(taskId: string, done: boolean) {
   const existing = await prisma.task.findFirst({ where: { id: taskId, userId: user.id } });
   if (!existing) return;
 
+  const timerStop = stoppedTimerFields(existing);
   const task = await prisma.task.update({
     where: { id: taskId },
     data: {
       status: done ? "DONE" : "CREATED",
-      ...stoppedTimerFields(existing),
+      ...timerStop.patch,
     },
   });
+  await logTrackedTime(user.id, taskId, timerStop.elapsedMin);
   runAutomationsForStatusChange(user.id, taskId, task.status).catch((err) =>
     console.error("automation error:", err),
   );
@@ -390,13 +434,15 @@ export async function setTaskStatusAction(taskId: string, status: "CREATED" | "O
   });
   if (!existing) return;
 
+  const timerStop = status === "ONGOING" ? { patch: {}, elapsedMin: 0 } : stoppedTimerFields(existing);
   await prisma.task.update({
     where: { id: taskId },
     data:
       status === "ONGOING"
         ? { status, timerStartedAt: existing.timerStartedAt ?? new Date() }
-        : { status, ...stoppedTimerFields(existing) },
+        : { status, ...timerStop.patch },
   });
+  await logTrackedTime(user.id, taskId, timerStop.elapsedMin);
   runAutomationsForStatusChange(user.id, taskId, status).catch((err) =>
     console.error("automation error:", err),
   );
@@ -418,10 +464,12 @@ export async function delayTaskAction(taskId: string, newDueAtIso: string) {
   const existing = await prisma.task.findFirst({ where: { id: taskId, userId: user.id } });
   if (!existing) return;
 
+  const timerStop = stoppedTimerFields(existing);
   await prisma.task.update({
     where: { id: taskId },
-    data: { status: "DELAYED", dueAt: newDueAt, ...stoppedTimerFields(existing) },
+    data: { status: "DELAYED", dueAt: newDueAt, ...timerStop.patch },
   });
+  await logTrackedTime(user.id, taskId, timerStop.elapsedMin);
   runAutomationsForStatusChange(user.id, taskId, "DELAYED").catch((err) =>
     console.error("automation error:", err),
   );
@@ -447,6 +495,7 @@ export async function unscheduleTaskAction(taskId: string) {
 export async function scheduleAllAction() {
   const user = await requireUser();
   await scheduleAllPendingTasks(user.id);
+  await scheduleHabitsForWeek(user.id);
   revalidatePath("/tasks");
   revalidatePath("/");
 }
@@ -499,6 +548,7 @@ export async function createEvent(formData: FormData) {
   });
   if (!recurrenceRule) {
     await rescheduleConflictsWith(user.id, start, end);
+    await rescheduleConflictedHabits(user.id, start, end);
   }
   revalidatePath("/");
 }
@@ -529,6 +579,7 @@ export async function updateEvent(eventId: string, formData: FormData) {
   });
   if (count > 0 && !recurrenceRule) {
     await rescheduleConflictsWith(user.id, start, end, eventId);
+    await rescheduleConflictedHabits(user.id, start, end, eventId);
   }
   revalidatePath("/");
 }
@@ -543,6 +594,7 @@ export async function moveEvent(eventId: string, startIso: string, endIso: strin
   });
   if (count > 0) {
     await rescheduleConflictsWith(user.id, start, end, eventId);
+    await rescheduleConflictedHabits(user.id, start, end, eventId);
   }
   revalidatePath("/");
 }
@@ -801,6 +853,39 @@ export async function getPendingAutomationNotificationsAction() {
     });
   }
   return pending.map((p) => ({ id: p.id, message: p.message }));
+}
+
+export async function createHabitAction(formData: FormData) {
+  const user = await requireUser();
+  const title = String(formData.get("title") ?? "").trim();
+  const durationMin = Number(formData.get("durationMin") ?? 30);
+  const timesPerWeek = Number(formData.get("timesPerWeek") ?? 1);
+  if (!title || !Number.isFinite(durationMin) || durationMin < 5 || durationMin > 480) return;
+  if (!Number.isFinite(timesPerWeek) || timesPerWeek < 1 || timesPerWeek > 14) return;
+
+  await prisma.habit.create({
+    data: { userId: user.id, title, durationMin, timesPerWeek },
+  });
+  await scheduleHabitsForWeek(user.id);
+  revalidatePath("/settings");
+  revalidatePath("/");
+}
+
+export async function toggleHabitAction(habitId: string, enabled: boolean) {
+  const user = await requireUser();
+  await prisma.habit.updateMany({ where: { id: habitId, userId: user.id }, data: { enabled } });
+  if (enabled) await scheduleHabitsForWeek(user.id);
+  revalidatePath("/settings");
+  revalidatePath("/");
+}
+
+export async function deleteHabitAction(habitId: string) {
+  const user = await requireUser();
+  // Event.habitId cascades on Habit delete (schema onDelete: Cascade), so
+  // this quietly clears this week's already-placed occurrences too.
+  await prisma.habit.deleteMany({ where: { id: habitId, userId: user.id } });
+  revalidatePath("/settings");
+  revalidatePath("/");
 }
 
 // Public, unauthenticated endpoint — cheap in-memory rate limit per IP so

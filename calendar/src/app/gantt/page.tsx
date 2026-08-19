@@ -30,8 +30,28 @@ function dayDiff(a: Date, b: Date): number {
   return Math.round((startOfDay(a).getTime() - startOfDay(b).getTime()) / DAY_MS);
 }
 
+const WEEK_MS = 7 * DAY_MS;
+
 export default async function GanttPage() {
   const user = await requireUser();
+
+  const weekAgo = new Date(Date.now() - WEEK_MS);
+  const recentLogs = await prisma.timeLogEntry.findMany({
+    where: { userId: user.id, loggedAt: { gte: weekAgo } },
+    include: { task: { include: { project: true } } },
+  });
+  const minutesByProjectName = new Map<string, number>();
+  let untrackedMinutes = 0;
+  for (const log of recentLogs) {
+    const name = log.task.project?.name ?? null;
+    if (name) {
+      minutesByProjectName.set(name, (minutesByProjectName.get(name) ?? 0) + log.minutes);
+    } else {
+      untrackedMinutes += log.minutes;
+    }
+  }
+  const trackedReport = [...minutesByProjectName.entries()].sort((a, b) => b[1] - a[1]);
+
   const projects = await prisma.project.findMany({
     where: { userId: user.id },
     orderBy: { createdAt: "asc" },
@@ -94,13 +114,30 @@ export default async function GanttPage() {
 
   return (
     <main className="mx-auto w-full max-w-6xl flex-1 px-6 py-12">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold tracking-tight">Gantt</h1>
-      </div>
-      <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+      <p className="text-sm text-zinc-500 dark:text-zinc-400">
         Open tasks by project, scheduled slot if placed, otherwise created
         date → due date.
       </p>
+
+      {(trackedReport.length > 0 || untrackedMinutes > 0) && (
+        <div className="mt-4 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
+          <h2 className="text-sm font-semibold">Tracked time this week</h2>
+          <ul className="mt-2 flex flex-col gap-1.5">
+            {trackedReport.map(([name, minutes]) => (
+              <li key={name} className="flex items-center justify-between text-sm">
+                <span className="text-zinc-700 dark:text-zinc-300">{name}</span>
+                <span className="text-zinc-500">{(minutes / 60).toFixed(1)}h</span>
+              </li>
+            ))}
+            {untrackedMinutes > 0 && (
+              <li className="flex items-center justify-between text-sm">
+                <span className="text-zinc-500">No project</span>
+                <span className="text-zinc-500">{(untrackedMinutes / 60).toFixed(1)}h</span>
+              </li>
+            )}
+          </ul>
+        </div>
+      )}
 
       {allBars.length === 0 ? (
         <p className="mt-6 rounded-xl border border-dashed border-zinc-200 py-8 text-center text-sm text-zinc-500 dark:border-zinc-700">

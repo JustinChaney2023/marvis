@@ -401,19 +401,26 @@ export default function CalendarClient({
             onEventClick={openEdit}
           />
         ) : (
-          <HourGrid
-            days={range.days}
-            events={events}
-            today={today}
-            onEmptyClick={openCreate}
-            onEventClick={openEdit}
-            draggingEvent={draggingEvent}
-            onEventDragStart={handleEventDragStart}
-            onEventDragEnd={handleEventDragEnd}
-            scrollToNowRef={scrollToNowRef}
-            selectedEventIds={selectedEventIds}
-            onToggleSelect={toggleSelected}
-          />
+          <>
+            <div className="sm:hidden">
+              <AgendaView days={range.days} events={events} today={today} onEventClick={openEdit} />
+            </div>
+            <div className="hidden sm:block">
+              <HourGrid
+                days={range.days}
+                events={events}
+                today={today}
+                onEmptyClick={openCreate}
+                onEventClick={openEdit}
+                draggingEvent={draggingEvent}
+                onEventDragStart={handleEventDragStart}
+                onEventDragEnd={handleEventDragEnd}
+                scrollToNowRef={scrollToNowRef}
+                selectedEventIds={selectedEventIds}
+                onToggleSelect={toggleSelected}
+              />
+            </div>
+          </>
         )}
       </div>
 
@@ -487,6 +494,76 @@ export default function CalendarClient({
         />
       )}
     </>
+  );
+}
+
+// Chronological list instead of an hour grid — grids stop being
+// actionable much below 640px (there's no room for a time column plus
+// multiple day columns), so phones get the list Motion/most calendar
+// apps fall back to at this width instead of a cramped, scroll-heavy
+// grid. Shown via `sm:hidden` alongside HourGrid's `hidden sm:block`,
+// same underlying `events` prop, just a different rendering — no
+// separate data fetch.
+function AgendaView({
+  days,
+  events,
+  today,
+  onEventClick,
+}: {
+  days: Date[];
+  events: CalendarEvent[];
+  today: Date;
+  onEventClick: (event: CalendarEvent) => void;
+}) {
+  const isSameDay = (a: Date, b: Date) =>
+    a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+
+  return (
+    <div className="flex flex-col gap-4">
+      {days.map((day) => {
+        const dayEvents = events
+          .filter((e) => isSameDay(e.start, day))
+          .sort((a, b) => a.start.getTime() - b.start.getTime());
+        return (
+          <div key={day.toISOString()}>
+            <p className="text-xs font-semibold text-zinc-500">
+              {day.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
+              {isSameDay(day, today) && (
+                <span className="ml-1.5 rounded-full bg-indigo-100 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300">
+                  Today
+                </span>
+              )}
+            </p>
+            {dayEvents.length === 0 ? (
+              <p className="mt-1 text-xs text-zinc-400">Nothing scheduled.</p>
+            ) : (
+              <ul className="mt-1.5 flex flex-col gap-1.5">
+                {dayEvents.map((e) => {
+                  const colors = e.projectColor ? PROJECT_EVENT_COLORS[e.projectColor] : null;
+                  return (
+                    <li key={e.id}>
+                      <button
+                        type="button"
+                        onClick={() => onEventClick(e)}
+                        className={`flex w-full items-center gap-2 rounded-lg border-l-4 px-3 py-2 text-left text-sm ${colors ? `${colors.bar} ${colors.bg} ${colors.text}` : "border-l-zinc-400 bg-zinc-50 dark:bg-zinc-700/40"}`}
+                      >
+                        <span className="w-14 flex-shrink-0 text-xs text-zinc-500">
+                          {e.allDay
+                            ? "All day"
+                            : e.start.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}
+                        </span>
+                        <span className="min-w-0 flex-1 truncate font-medium">{e.title}</span>
+                        {e.locked && <LockIcon className="h-3 w-3 flex-shrink-0 opacity-60" />}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        );
+      })}
+    </div>
   );
 }
 

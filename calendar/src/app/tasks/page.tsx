@@ -112,8 +112,7 @@ export default async function Home(props: PageProps<"/tasks">) {
 
   return (
     <main className={`mx-auto w-full flex-1 px-6 py-12 ${view === "board" ? "max-w-6xl" : "max-w-2xl"}`}>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold tracking-tight">Tasks</h1>
+      <div className="flex flex-wrap items-center justify-end gap-3">
         <div className="flex flex-wrap items-center gap-2">
           <form action={scheduleAllAction}>
             <button

@@ -9,14 +9,38 @@ export type AttentionTask = {
   isOverdue: boolean;
 };
 
+export type Overcommitment = {
+  plannedMinutes: number;
+  capMinutes: number;
+};
+
 // Right-hand companion to the calendar — surfaces what actually needs a
 // decision (overdue/due-soon and not yet on the calendar) right next to
 // the view you're already looking at, instead of only on the Tasks page.
 // Hidden below `lg`, same breakpoint as the left sidebar — room here for
 // whatever else ends up wanting a spot next to the calendar later.
-export default function CalendarSidebarRight({ tasks }: { tasks: AttentionTask[] }) {
+export default function CalendarSidebarRight({
+  tasks,
+  overcommitment,
+}: {
+  tasks: AttentionTask[];
+  overcommitment: Overcommitment | null;
+}) {
   return (
     <div className="flex flex-col gap-4">
+      {overcommitment && overcommitment.plannedMinutes > overcommitment.capMinutes && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 shadow-sm ring-1 ring-black/5 dark:border-amber-700 dark:bg-amber-950/30">
+          <h2 className="flex items-center gap-1.5 text-sm font-semibold text-amber-700 dark:text-amber-400">
+            <AlertTriangleIcon className="h-3.5 w-3.5" />
+            Overcommitted today
+          </h2>
+          <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+            {(overcommitment.plannedMinutes / 60).toFixed(1)}h planned of a{" "}
+            {(overcommitment.capMinutes / 60).toFixed(1)}h day.
+          </p>
+        </div>
+      )}
+
       <Card padding="sm">
         <h2 className="text-sm font-semibold">Needs attention</h2>
         {tasks.length === 0 ? (

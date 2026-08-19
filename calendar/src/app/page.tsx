@@ -16,6 +16,7 @@ import {
   type CalendarView,
 } from "@/lib/calendar-dates";
 import { expandEvents } from "@/lib/recurrence";
+import { getAppSettings } from "@/lib/settings";
 import CalendarClient, { type CalendarEvent } from "./calendar/CalendarClient";
 import CalendarSidebarLeft from "./calendar/CalendarSidebarLeft";
 import CalendarSidebarRight, { type AttentionTask } from "./calendar/CalendarSidebarRight";
@@ -146,12 +147,31 @@ export default async function Page(props: PageProps<"/">) {
     isOverdue: t.dueAt! < today,
   }));
 
+  // Overcommitment warning — a visible nudge (Sunsama-style) distinct
+  // from dailyCapMin's existing job of silently gating the auto-
+  // scheduler. Same threshold, different purpose: this fires the moment
+  // *manually* planned time for today crosses it, whatever view you're
+  // actually browsing.
+  const settings = await getAppSettings(user.id);
+  let todayPlannedMinutes: number | null = null;
+  if (settings.dailyCapMin) {
+    const dayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+    const todayRows = await prisma.event.findMany({
+      where: {
+        userId: user.id,
+        OR: [{ start: { lt: dayEnd }, end: { gt: dayStart } }, { recurrenceRule: { not: null } }],
+      },
+    });
+    todayPlannedMinutes = expandEvents(todayRows, dayStart, dayEnd).reduce(
+      (sum, o) => sum + (o.end.getTime() - o.start.getTime()) / 60_000,
+      0,
+    );
+  }
+
   return (
     <main className="mx-auto w-full max-w-[96rem] flex-1 px-6 py-12">
       <header className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-2xl font-bold tracking-tight">Calendar</h1>
-        </div>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <nav className="flex flex-wrap items-center gap-1">
             <div className="inline-flex items-center gap-1 rounded-full bg-zinc-100 p-1 dark:bg-zinc-800">
@@ -214,7 +234,14 @@ export default async function Page(props: PageProps<"/">) {
         </div>
 
         <aside className="hidden lg:block">
-          <CalendarSidebarRight tasks={attentionTasks} />
+          <CalendarSidebarRight
+            tasks={attentionTasks}
+            overcommitment={
+              settings.dailyCapMin && todayPlannedMinutes !== null
+                ? { plannedMinutes: todayPlannedMinutes, capMinutes: settings.dailyCapMin }
+                : null
+            }
+          />
         </aside>
       </div>
     </main>
