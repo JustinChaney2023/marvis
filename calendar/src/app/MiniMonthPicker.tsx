@@ -3,20 +3,13 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon } from "./icons";
-import { formatYMD, parseYMD, type CalendarView } from "@/lib/calendar-dates";
-
-const WEEKDAY_INITIALS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
-
-function buildMonthGrid(monthDate: Date): (Date | null)[] {
-  const year = monthDate.getFullYear();
-  const month = monthDate.getMonth();
-  const firstOfMonth = new Date(year, month, 1);
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const leadingBlanks = firstOfMonth.getDay(); // 0=Sun
-  const cells: (Date | null)[] = Array.from({ length: leadingBlanks }, () => null);
-  for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(year, month, d));
-  return cells;
-}
+import {
+  buildMonthGrid,
+  formatYMD,
+  parseYMD,
+  WEEKDAY_INITIALS,
+  type CalendarView,
+} from "@/lib/calendar-dates";
 
 export default function MiniMonthPicker({
   view,

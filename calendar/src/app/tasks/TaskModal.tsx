@@ -13,6 +13,7 @@ import {
   type WeekdayCode,
 } from "@/lib/recurrence";
 import { PROJECT_EVENT_COLORS } from "@/lib/eventColors";
+import DatePicker from "../ui/DatePicker";
 
 const TASK_COLOR_OPTIONS = Object.keys(PROJECT_EVENT_COLORS);
 
@@ -82,7 +83,9 @@ export default function TaskModal({
   const [customDays, setCustomDays] = useState<WeekdayCode[]>(() =>
     task?.recurrenceRule ? (parseCustomWeeklyDays(task.recurrenceRule) ?? []) : [],
   );
-  const [hasDueDate, setHasDueDate] = useState(Boolean(task?.dueAt));
+  const [startAtValue, setStartAtValue] = useState(task?.startAt ? formatYMD(task.startAt) : "");
+  const [dueAtDateValue, setDueAtDateValue] = useState(task?.dueAt ? formatYMD(task.dueAt) : "");
+  const hasDueDate = Boolean(dueAtDateValue);
   const initialDuration = task?.durationMin ?? 30;
   // A single always-editable number input, not a two-step "pick Custom,
   // then a text field appears" — the preset dropdown is just a quick-fill
@@ -258,28 +261,17 @@ export default function TaskModal({
           <div className="grid grid-cols-2 gap-3">
             <label className="flex flex-col gap-1 text-sm">
               <span className="text-zinc-500">Start date</span>
-              <input
-                type="date"
-                name="startAt"
-                defaultValue={task?.startAt ? formatYMD(task.startAt) : ""}
-                className={inputClass}
-              />
+              <DatePicker name="startAt" value={startAtValue} onChange={setStartAtValue} />
             </label>
             <label className="flex flex-col gap-1 text-sm">
               <span className="text-zinc-500">Due</span>
-              <div className="flex gap-1.5">
-                <input
-                  type="date"
-                  name="dueAtDate"
-                  defaultValue={task?.dueAt ? formatYMD(task.dueAt) : ""}
-                  onChange={(e) => setHasDueDate(Boolean(e.target.value))}
-                  className={`${inputClass} flex-[3]`}
-                />
+              <div className="flex flex-col gap-1.5">
+                <DatePicker name="dueAtDate" value={dueAtDateValue} onChange={setDueAtDateValue} />
                 <input
                   type="time"
                   name="dueAtTime"
                   defaultValue={task?.dueAt ? toLocalInputValue(task.dueAt).slice(11) : DEFAULT_DUE_TIME}
-                  className={`${inputClass} flex-[2]`}
+                  className={inputClass}
                 />
               </div>
             </label>

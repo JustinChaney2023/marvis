@@ -71,6 +71,51 @@ export function formatTime(d: Date): string {
   });
 }
 
+export const WEEKDAY_INITIALS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+
+/** Cells for a month grid: null for the leading blanks before day 1. */
+export function buildMonthGrid(monthDate: Date): (Date | null)[] {
+  const year = monthDate.getFullYear();
+  const month = monthDate.getMonth();
+  const firstOfMonth = new Date(year, month, 1);
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const leadingBlanks = firstOfMonth.getDay(); // 0=Sun
+  const cells: (Date | null)[] = Array.from({ length: leadingBlanks }, () => null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(year, month, d));
+  return cells;
+}
+
+export type QuickPickOption = { label: string; date: Date };
+
+function fridayOfWeek(d: Date): Date {
+  return addDays(startOfWeekMonday(d), 4);
+}
+
+function lastDayOfMonth(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth() + 1, 0);
+}
+
+/**
+ * Deadline quick-picks for DatePicker's popup (Motion's date-picker
+ * shortcuts: Today/Tomorrow/This week/etc). The weekly/monthly ones land
+ * on the work-week's last day (Friday) or a month's last day rather than
+ * "+7 days" — a deadline quick-pick means "by the end of that period,"
+ * and this mirrors the same Mon-Fri work week the scheduler itself
+ * assumes (scheduler.ts's isWorkDay).
+ */
+export function getQuickPickOptions(today: Date): QuickPickOption[] {
+  return [
+    { label: "Today", date: today },
+    { label: "Tomorrow", date: addDays(today, 1) },
+    { label: "This week", date: fridayOfWeek(today) },
+    { label: "7 days from now", date: addDays(today, 7) },
+    { label: "Next week", date: fridayOfWeek(addDays(today, 7)) },
+    { label: "In 2 weeks", date: fridayOfWeek(addDays(today, 14)) },
+    { label: "This month", date: lastDayOfMonth(today) },
+    { label: "Next month", date: lastDayOfMonth(addMonths(today, 1)) },
+  ];
+}
+
 // "Aug 31, 5:00 PM" — a due date/time is always shown together (unlike
 // a plain calendar date), so this pairs formatTime with a short month +
 // day. `toLocaleString()`'s default includes the year and seconds
