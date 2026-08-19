@@ -40,6 +40,7 @@ export type TaskRowData = {
   assigneeId: string | null;
   timeSlotId: string | null;
   color: string | null;
+  hardDeadline: boolean;
   project: { name: string; color: string } | null;
   assignee: { name: string; type: "HUMAN" | "AI" } | null;
   event: { start: Date } | null;
@@ -155,6 +156,7 @@ export default function TaskRow({
     dueAt: task.dueAt,
     recurrenceRule: task.recurrenceRule,
     color: task.color,
+    hardDeadline: task.hardDeadline,
   };
 
   const handleAddSubtask = async (e: React.FormEvent) => {
@@ -294,7 +296,12 @@ export default function TaskRow({
               )}
             </span>
             {task.startAt && <span>· starts {task.startAt.toLocaleDateString()}</span>}
-            {task.dueAt && <span>· due {formatDueDateTime(task.dueAt)}</span>}
+            {task.dueAt && (
+              <span>
+                · due {formatDueDateTime(task.dueAt)}
+                {!task.hardDeadline && <span className="text-zinc-400"> (soft)</span>}
+              </span>
+            )}
             {(isOverdue || isDueSoon) && (
               <span
                 className={

@@ -32,6 +32,7 @@ export type TaskModalTask = {
   dueAt: Date | null;
   recurrenceRule: string | null;
   color: string | null;
+  hardDeadline: boolean;
 };
 
 type Props = {
@@ -283,6 +284,27 @@ export default function TaskModal({
               </div>
             </label>
           </div>
+
+          {hasDueDate && (
+            <label className="flex cursor-pointer items-center justify-between gap-3 text-sm">
+              <span className="text-zinc-700 dark:text-zinc-300">
+                Hard deadline{" "}
+                <span className="text-zinc-500 dark:text-zinc-400">
+                  (must make this date — outranks soft-deadline tasks for open slots)
+                </span>
+              </span>
+              <span className="relative inline-flex items-center">
+                <input
+                  type="checkbox"
+                  name="hardDeadline"
+                  defaultChecked={task?.hardDeadline ?? true}
+                  className="peer sr-only"
+                />
+                <span className="block h-6 w-11 rounded-full bg-zinc-200 transition-colors peer-checked:bg-indigo-600 peer-focus-visible:ring-2 peer-focus-visible:ring-indigo-500/40 dark:bg-zinc-700 dark:peer-checked:bg-indigo-500" />
+                <span className="absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform peer-checked:translate-x-5" />
+              </span>
+            </label>
+          )}
 
           <div className="border-t border-zinc-200 pt-4 dark:border-zinc-700">
             <label className="flex flex-col gap-1 text-sm">

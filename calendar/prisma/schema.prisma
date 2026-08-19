@@ -221,6 +221,15 @@ model Task {
   // an Event's start.
   startAt        DateTime?
   dueAt          DateTime?
+  // Hard = a real commitment the scheduler must prioritize getting a
+  // slot before the due date over anything soft, even a higher-
+  // priority soft task (Motion's documented precedence: hard deadlines
+  // outrank soft ones outright, priority is only a tiebreaker within the
+  // same tier — see scheduleAllPendingTasks' orderBy). Soft = "want to
+  // get to it by then," fine to bump for something more pressing.
+  // Defaults true since most due dates people actually set are real
+  // commitments, not aspirational ones.
+  hardDeadline   Boolean    @default(true)
   // RRULE string, same format as Event.recurrenceRule, anchored to
   // `dueAt` (a recurring task must have a dueAt — it's the DTSTART for
   // computing the next occurrence). Unlike Events, occurrences ARE

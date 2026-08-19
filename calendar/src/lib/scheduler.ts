@@ -453,7 +453,14 @@ export async function scheduleAllPendingTasks(userId: string) {
       event: { is: null },
       parentId: null,
     },
+    // Hard deadlines get first claim on open slots as a whole tier,
+    // ahead of every soft-deadline task regardless of due date — Motion's
+    // documented precedence order (ASAP > hard deadline > soft deadline >
+    // priority), simplified since this app has no ASAP concept. Within
+    // the same tier, soonest due date first, then priority as the final
+    // tiebreaker.
     orderBy: [
+      { hardDeadline: "desc" },
       { dueAt: { sort: "asc", nulls: "last" } },
       { priority: "desc" },
     ],

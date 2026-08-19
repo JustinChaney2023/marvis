@@ -109,6 +109,10 @@ function taskFieldsFromFormData(formData: FormData) {
   const recurrenceRule = dueAt
     ? String(formData.get("recurrenceRule") ?? "").trim() || null
     : null;
+  // Only meaningful with a due date — the checkbox itself is hidden
+  // without one, but guard here too since a checkbox's absence from
+  // FormData when unchecked is indistinguishable from "no due date set".
+  const hardDeadline = dueAt ? formData.get("hardDeadline") === "on" : true;
   return {
     title,
     priority,
@@ -121,6 +125,7 @@ function taskFieldsFromFormData(formData: FormData) {
     timeSlotId,
     color,
     recurrenceRule,
+    hardDeadline,
   };
 }
 
@@ -418,6 +423,8 @@ export async function toggleTaskDone(taskId: string, done: boolean) {
           projectId: task.projectId,
           assigneeId: task.assigneeId,
           recurrenceRule: task.recurrenceRule,
+          hardDeadline: task.hardDeadline,
+          color: task.color,
         },
       });
     }
