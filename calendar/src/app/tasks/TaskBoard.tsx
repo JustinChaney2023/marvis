@@ -12,12 +12,14 @@ export default function TaskBoard({
   done,
   projects,
   assignees,
+  timeSlots,
   defaultProjectId,
 }: {
   tasks: TaskRowData[];
   done: TaskRowData[];
   projects: { id: string; name: string; color: string }[];
   assignees: { id: string; name: string; type: "HUMAN" | "AI" }[];
+  timeSlots: { id: string; name: string }[];
   defaultProjectId: string;
 }) {
   const byStatus: Record<TaskStatus, TaskRowData[]> = {
@@ -47,6 +49,7 @@ export default function TaskBoard({
                 task={task}
                 projects={projects}
                 assignees={assignees}
+                timeSlots={timeSlots}
                 defaultProjectId={defaultProjectId}
               />
             ))}

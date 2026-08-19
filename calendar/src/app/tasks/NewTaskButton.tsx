@@ -7,14 +7,17 @@ import Button from "../ui/Button";
 
 type Project = { id: string; name: string };
 type Assignee = { id: string; name: string; type: "HUMAN" | "AI" };
+type TimeSlot = { id: string; name: string };
 
 export default function NewTaskButton({
   projects,
   assignees,
+  timeSlots,
   defaultProjectId,
 }: {
   projects: Project[];
   assignees: Assignee[];
+  timeSlots: TimeSlot[];
   defaultProjectId: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -30,6 +33,7 @@ export default function NewTaskButton({
           mode="create"
           projects={projects}
           assignees={assignees}
+          timeSlots={timeSlots}
           defaultProjectId={defaultProjectId}
           onClose={() => setOpen(false)}
         />

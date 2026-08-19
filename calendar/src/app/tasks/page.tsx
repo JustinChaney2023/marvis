@@ -56,6 +56,10 @@ export default async function Home(props: PageProps<"/tasks">) {
     where: { userId: user.id },
     orderBy: { createdAt: "asc" },
   });
+  const timeSlots = await prisma.timeSlot.findMany({
+    where: { userId: user.id },
+    orderBy: { createdAt: "asc" },
+  });
   const cookieStore = await cookies();
   const lastProjectId = cookieStore.get("lastProjectId")?.value ?? "";
   const defaultProjectId = projects.some((p) => p.id === lastProjectId)
@@ -142,6 +146,7 @@ export default async function Home(props: PageProps<"/tasks">) {
           <NewTaskButton
             projects={projects}
             assignees={assignees}
+            timeSlots={timeSlots}
             defaultProjectId={defaultProjectId}
           />
         </div>
@@ -249,6 +254,7 @@ export default async function Home(props: PageProps<"/tasks">) {
           done={done}
           projects={projects}
           assignees={assignees}
+          timeSlots={timeSlots}
           defaultProjectId={defaultProjectId}
         />
       ) : (
@@ -259,6 +265,7 @@ export default async function Home(props: PageProps<"/tasks">) {
               task={task}
               projects={projects}
               assignees={assignees}
+              timeSlots={timeSlots}
               defaultProjectId={defaultProjectId}
             />
           ))}

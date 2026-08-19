@@ -53,31 +53,54 @@ function workWindowFor(date: Date) {
  * `busy` (must be pre-sorted by start, ascending), scanning from `from`
  * up to `horizonEnd`. Returns null if nothing fits.
  */
+export type DayWindow = { start: Date; end: Date };
+export type WindowFn = (date: Date) => DayWindow | null;
+
+// Default: the app's original hardcoded 9am-6pm-weekdays assumption,
+// still what a task with no assigned TimeSlot (settings/TimeSlotsManager)
+// schedules against.
+function defaultWindowFn(date: Date): DayWindow | null {
+  return isWorkDay(date) ? workWindowFor(date) : null;
+}
+
 export function findEarliestSlot(
   from: Date,
   durationMin: number,
   busy: { start: Date; end: Date }[],
   horizonEnd: Date,
+  getWindow: WindowFn = defaultWindowFn,
 ) {
   const durationMs = durationMin * 60_000;
   let cursor = roundUpToGranularity(from);
 
+  // Resets cursor to the next calendar day's midnight — not just "+24h",
+  // which preserves time-of-day and can get stuck (e.g. cursor at 17:45
+  // every day forever, always past a 9-6 window's end, since 17:45 is
+  // never "before" that day's start either). Midnight always is.
+  const skipToNextDay = () => {
+    const next = new Date(cursor);
+    next.setDate(next.getDate() + 1);
+    next.setHours(0, 0, 0, 0);
+    cursor = next;
+  };
+
   while (cursor < horizonEnd) {
-    if (!isWorkDay(cursor)) {
-      cursor = workWindowFor(new Date(cursor.getTime() + 86_400_000)).start;
+    const window = getWindow(cursor);
+    if (!window) {
+      skipToNextDay();
       continue;
     }
 
-    const { start: dayStart, end: dayEnd } = workWindowFor(cursor);
+    const { start: dayStart, end: dayEnd } = window;
     if (cursor < dayStart) cursor = dayStart;
     if (cursor >= dayEnd) {
-      cursor = workWindowFor(new Date(cursor.getTime() + 86_400_000)).start;
+      skipToNextDay();
       continue;
     }
 
     const slotEnd = new Date(cursor.getTime() + durationMs);
     if (slotEnd > dayEnd) {
-      cursor = workWindowFor(new Date(cursor.getTime() + 86_400_000)).start;
+      skipToNextDay();
       continue;
     }
 
@@ -89,6 +112,26 @@ export function findEarliestSlot(
   }
 
   return null;
+}
+
+/** Builds a WindowFn from a user-configured TimeSlot (Settings/TimeSlotsManager). */
+export function windowFnForTimeSlot(slot: {
+  daysOfWeek: string;
+  startMin: number;
+  endMin: number;
+}): WindowFn {
+  const days = new Set(slot.daysOfWeek.split(","));
+  const codeForDay = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"];
+  return (date: Date) => {
+    if (!days.has(codeForDay[date.getDay()])) return null;
+    const start = new Date(date);
+    start.setHours(0, 0, 0, 0);
+    start.setMinutes(slot.startMin);
+    const end = new Date(date);
+    end.setHours(0, 0, 0, 0);
+    end.setMinutes(slot.endMin);
+    return { start, end };
+  };
 }
 
 export function padForBuffer(
@@ -154,6 +197,7 @@ export function findBestSlot(
   horizonEnd: Date,
   from: Date,
   projectScheduledDays: Set<string> = new Set(),
+  getWindow?: WindowFn,
 ) {
   let cursor = from;
   let best: { start: Date; end: Date } | null = null;
@@ -162,7 +206,7 @@ export function findBestSlot(
   const limit = wantsClustering ? CLUSTERING_CANDIDATE_LIMIT : CANDIDATE_LIMIT;
 
   for (let i = 0; i < limit; i++) {
-    const slot = findEarliestSlot(cursor, task.durationMin, busy, horizonEnd);
+    const slot = findEarliestSlot(cursor, task.durationMin, busy, horizonEnd, getWindow);
     if (!slot) break;
 
     const score = scoreSlot(task.energy, task.dueAt, slot, projectScheduledDays);
@@ -262,7 +306,11 @@ export async function fetchBusyIntervals(userId: string, now: Date, horizonEnd: 
 }
 
 export async function scheduleTask(userId: string, taskId: string) {
-  const task = await prisma.task.findFirstOrThrow({ where: { id: taskId, userId } });
+  const task = await prisma.task.findFirstOrThrow({
+    where: { id: taskId, userId },
+    include: { timeSlot: true },
+  });
+  const getWindow = task.timeSlot ? windowFnForTimeSlot(task.timeSlot) : undefined;
 
   const now = new Date();
   // startAt is a lower bound on when the scheduler may place this task,
@@ -285,7 +333,7 @@ export async function scheduleTask(userId: string, taskId: string) {
     horizonEnd,
   );
 
-  const slot = findBestSlot(task, busy, horizonEnd, searchFrom, projectScheduledDays);
+  const slot = findBestSlot(task, busy, horizonEnd, searchFrom, projectScheduledDays, getWindow);
   if (!slot) return null;
 
   const event = await prisma.event.upsert({

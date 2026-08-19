@@ -101,6 +101,7 @@ function taskFieldsFromFormData(formData: FormData) {
   const dueAt = dueAtDateRaw ? new Date(`${dueAtDateRaw}T${dueAtTimeRaw}`) : null;
   const projectId = String(formData.get("projectId") ?? "").trim() || null;
   const assigneeId = String(formData.get("assigneeId") ?? "").trim() || null;
+  const timeSlotId = String(formData.get("timeSlotId") ?? "").trim() || null;
   // A recurrence rule with no due date has nothing to anchor to (no
   // DTSTART equivalent) — silently drop it rather than create a task
   // that can never compute a next occurrence.
@@ -116,6 +117,7 @@ function taskFieldsFromFormData(formData: FormData) {
     dueAt,
     projectId,
     assigneeId,
+    timeSlotId,
     recurrenceRule,
   };
 }
@@ -885,6 +887,38 @@ export async function deleteHabitAction(habitId: string) {
   // Event.habitId cascades on Habit delete (schema onDelete: Cascade), so
   // this quietly clears this week's already-placed occurrences too.
   await prisma.habit.deleteMany({ where: { id: habitId, userId: user.id } });
+  revalidatePath("/settings");
+}
+
+const TIME_SLOT_WEEKDAYS = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"];
+
+export async function createTimeSlotAction(formData: FormData) {
+  const user = await requireUser();
+  const name = String(formData.get("name") ?? "").trim();
+  const days = TIME_SLOT_WEEKDAYS.filter((d) => formData.get(`day_${d}`) === "on");
+  const startTime = String(formData.get("startTime") ?? "");
+  const endTime = String(formData.get("endTime") ?? "");
+  if (!name || days.length === 0 || !startTime || !endTime) return;
+
+  const toMin = (t: string) => {
+    const [h, m] = t.split(":").map(Number);
+    return h * 60 + m;
+  };
+  const startMin = toMin(startTime);
+  const endMin = toMin(endTime);
+  if (!Number.isFinite(startMin) || !Number.isFinite(endMin) || endMin <= startMin) return;
+
+  await prisma.timeSlot.create({
+    data: { userId: user.id, name, daysOfWeek: days.join(","), startMin, endMin },
+  });
+  revalidatePath("/settings");
+}
+
+export async function deleteTimeSlotAction(timeSlotId: string) {
+  const user = await requireUser();
+  // Task.timeSlotId is onDelete: SetNull, so tasks using this slot just
+  // fall back to the default work window rather than erroring.
+  await prisma.timeSlot.deleteMany({ where: { id: timeSlotId, userId: user.id } });
   revalidatePath("/settings");
   revalidatePath("/");
 }

@@ -20,6 +20,7 @@ import { STATUS_BADGE, STATUS_LABEL, type TaskStatus } from "./taskStatus";
 
 type Project = { id: string; name: string };
 type Assignee = { id: string; name: string; type: "HUMAN" | "AI" };
+type TimeSlot = { id: string; name: string };
 
 type Subtask = { id: string; title: string; status: TaskStatus };
 
@@ -36,6 +37,7 @@ export type TaskRowData = {
   recurrenceRule: string | null;
   projectId: string | null;
   assigneeId: string | null;
+  timeSlotId: string | null;
   project: { name: string; color: string } | null;
   assignee: { name: string; type: "HUMAN" | "AI" } | null;
   event: { start: Date } | null;
@@ -71,11 +73,13 @@ export default function TaskRow({
   task,
   projects,
   assignees,
+  timeSlots,
   defaultProjectId,
 }: {
   task: TaskRowData;
   projects: Project[];
   assignees: Assignee[];
+  timeSlots: TimeSlot[];
   defaultProjectId: string;
 }) {
   const [editing, setEditing] = useState(false);
@@ -144,6 +148,7 @@ export default function TaskRow({
     durationMin: task.durationMin,
     projectId: task.projectId,
     assigneeId: task.assigneeId,
+    timeSlotId: task.timeSlotId,
     startAt: task.startAt,
     dueAt: task.dueAt,
     recurrenceRule: task.recurrenceRule,
@@ -626,6 +631,7 @@ export default function TaskRow({
           task={modalTask}
           projects={projects}
           assignees={assignees}
+          timeSlots={timeSlots}
           defaultProjectId={defaultProjectId}
           onClose={() => setEditing(false)}
         />

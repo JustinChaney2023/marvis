@@ -15,6 +15,7 @@ import {
 
 type Project = { id: string; name: string };
 type Assignee = { id: string; name: string; type: "HUMAN" | "AI" };
+type TimeSlot = { id: string; name: string };
 
 export type TaskModalTask = {
   id: string;
@@ -23,6 +24,7 @@ export type TaskModalTask = {
   durationMin: number;
   projectId: string | null;
   assigneeId: string | null;
+  timeSlotId: string | null;
   startAt: Date | null;
   dueAt: Date | null;
   recurrenceRule: string | null;
@@ -33,6 +35,7 @@ type Props = {
   task?: TaskModalTask;
   projects: Project[];
   assignees: Assignee[];
+  timeSlots: TimeSlot[];
   defaultProjectId: string;
   onClose: () => void;
 };
@@ -51,7 +54,7 @@ const WEEKDAY_FULL_LABELS = [
 const inputClass =
   "w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800";
 
-export default function TaskModal({ mode, task, projects, assignees, defaultProjectId, onClose }: Props) {
+export default function TaskModal({ mode, task, projects, assignees, timeSlots, defaultProjectId, onClose }: Props) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [recurrenceSelection, setRecurrenceSelection] = useState<string>(() => {
     const rule = task?.recurrenceRule ?? "";
@@ -202,6 +205,20 @@ export default function TaskModal({ mode, task, projects, assignees, defaultProj
               </select>
             </label>
           </div>
+
+          {timeSlots.length > 0 && (
+            <label className="flex flex-col gap-1 text-sm">
+              <span className="text-zinc-500">Time slot</span>
+              <select name="timeSlotId" defaultValue={task?.timeSlotId ?? ""} className={inputClass}>
+                <option value="">Default (9am-6pm weekdays)</option>
+                {timeSlots.map((slot) => (
+                  <option key={slot.id} value={slot.id}>
+                    {slot.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <label className="flex flex-col gap-1 text-sm">

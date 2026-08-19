@@ -15,6 +15,8 @@ import ShareAvailabilityButton from "./ShareAvailabilityButton";
 import BookingLinksManager from "./BookingLinksManager";
 import AutomationRulesManager from "./AutomationRulesManager";
 import HabitsManager from "./HabitsManager";
+import TimeSlotsManager from "./TimeSlotsManager";
+import SettingsTabs from "./SettingsTabs";
 import Button from "../ui/Button";
 import {
   changePasswordAction,
@@ -44,6 +46,10 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
     orderBy: { createdAt: "asc" },
   });
   const habits = await prisma.habit.findMany({
+    where: { userId: user.id },
+    orderBy: { createdAt: "asc" },
+  });
+  const timeSlots = await prisma.timeSlot.findMany({
     where: { userId: user.id },
     orderBy: { createdAt: "asc" },
   });
@@ -80,6 +86,13 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
         </p>
       )}
 
+      <SettingsTabs
+        tabs={[
+          {
+            key: "scheduling",
+            label: "Scheduling",
+            content: (
+              <>
       <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
         <h2 className="text-lg font-semibold">Scheduling</h2>
         <form
@@ -175,25 +188,6 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
       </section>
 
       <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
-        <h2 className="text-lg font-semibold">Booking pages</h2>
-        <p className="mt-1 text-xs text-zinc-400">
-          Each link is its own public page with its own slug, title, and
-          duration — e.g. a 15-min quick chat vs. a 30-min deep dive. Bookings
-          land as locked events on your calendar.
-        </p>
-        <div className="mt-3">
-          <BookingLinksManager links={bookingLinks} />
-        </div>
-        <div className="mt-3">
-          <ShareAvailabilityButton />
-          <p className="mt-1 text-xs text-zinc-400">
-            Copies a plain-text list of your open times — for pasting into
-            an email or DM instead of sending a link.
-          </p>
-        </div>
-      </section>
-
-      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
         <h2 className="text-lg font-semibold">Automations</h2>
         <p className="mt-1 text-xs text-zinc-400">
           When a task&apos;s status changes to X (optionally, only within a
@@ -214,6 +208,45 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
         </p>
         <div className="mt-3">
           <HabitsManager habits={habits} />
+        </div>
+      </section>
+
+      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
+        <h2 className="text-lg font-semibold">Time slots</h2>
+        <p className="mt-1 text-xs text-zinc-400">
+          Named availability windows (Work, Sleep, School, or your own) —
+          assign a task to one on its edit form and the scheduler only
+          places it within that slot's days/hours instead of the default
+          9am-6pm weekdays.
+        </p>
+        <div className="mt-3">
+          <TimeSlotsManager timeSlots={timeSlots} />
+        </div>
+      </section>
+              </>
+            ),
+          },
+          {
+            key: "calendars",
+            label: "Calendars",
+            content: (
+              <>
+      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
+        <h2 className="text-lg font-semibold">Booking pages</h2>
+        <p className="mt-1 text-xs text-zinc-400">
+          Each link is its own public page with its own slug, title, and
+          duration — e.g. a 15-min quick chat vs. a 30-min deep dive. Bookings
+          land as locked events on your calendar.
+        </p>
+        <div className="mt-3">
+          <BookingLinksManager links={bookingLinks} />
+        </div>
+        <div className="mt-3">
+          <ShareAvailabilityButton />
+          <p className="mt-1 text-xs text-zinc-400">
+            Copies a plain-text list of your open times — for pasting into
+            an email or DM instead of sending a link.
+          </p>
         </div>
       </section>
 
@@ -325,7 +358,14 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
           </div>
         )}
       </section>
-
+              </>
+            ),
+          },
+          {
+            key: "account",
+            label: "Account",
+            content: (
+              <>
       <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
         <h2 className="text-lg font-semibold">Account</h2>
         <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
@@ -416,6 +456,11 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
           })}
         </ul>
       </section>
+              </>
+            ),
+          },
+        ]}
+      />
     </main>
   );
 }
