@@ -5,8 +5,8 @@ export type CalendarView = "day" | "week" | "month";
 // created outside this range would exist in the DB but render nowhere on
 // the grid, which is exactly the bug that motivated sharing them here
 // instead of each place hardcoding its own 6/22.
-export const HOUR_START = 6;
-export const HOUR_END = 22;
+export const HOUR_START = 0;
+export const HOUR_END = 24;
 
 export function startOfDay(d: Date): Date {
   const x = new Date(d);

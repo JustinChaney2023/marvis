@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useReducer, useRef, useSyncExternalStore } from "react";
-import { getUpcomingEventReminders } from "./actions";
+import { getUpcomingEventReminders, getPendingAutomationNotificationsAction } from "./actions";
 
 const POLL_MS = 60_000;
 const NOTIFY_WITHIN_MIN = 10;
@@ -58,6 +58,14 @@ export default function NotificationWatcher() {
             });
           }
         }
+
+        // Server-generated (task automations), not derived from a poll
+        // window like event reminders — the action itself marks them
+        // seen, so no local dedup set is needed here.
+        const pendingAutomations = await getPendingAutomationNotificationsAction();
+        for (const n of pendingAutomations) {
+          new Notification("Automation", { body: n.message });
+        }
       } catch (err) {
         console.error(err);
       }
@@ -77,7 +85,7 @@ export default function NotificationWatcher() {
         await Notification.requestPermission();
         forceRecheck();
       }}
-      className="fixed bottom-4 right-4 z-40 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 shadow-sm ring-1 ring-black/5 transition-all hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
+      className="fixed bottom-4 right-4 z-40 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 shadow-sm ring-1 ring-black/5 transition-all hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700/60"
     >
       Enable reminders
     </button>

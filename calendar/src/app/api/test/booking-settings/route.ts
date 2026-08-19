@@ -1,24 +1,44 @@
 import { NextRequest, NextResponse } from "next/server";
-import { updateAppSettings } from "@/lib/settings";
+import { prisma } from "@/lib/prisma";
+import { testRoutesAllowed } from "@/lib/testRouteGuard";
 
 /**
- * Test-only helper: sets booking-related AppSettings fields directly, so
- * Playwright specs can configure/reset the (single, real) booking config
- * around a test run without going through the Settings UI form. Same
- * production guard as /api/test/cleanup.
+ * Test-only helper: upserts a BookingLink by slug directly, so Playwright
+ * specs can configure/reset a booking link around a test run without going
+ * through the Settings UI form. Same production guard as /api/test/cleanup.
+ * Targets the first User row (there's only one on a dev/test instance).
  */
 export async function POST(request: NextRequest) {
-  if (process.env.NODE_ENV === "production") {
-    return NextResponse.json({ error: "disabled in production" }, { status: 403 });
+  if (!testRoutesAllowed()) {
+    return NextResponse.json({ error: "test routes disabled" }, { status: 403 });
+  }
+
+  const user = await prisma.user.findFirst();
+  if (!user) {
+    return NextResponse.json({ error: "no user to attach settings to" }, { status: 400 });
   }
 
   const body = await request.json();
-  const updated = await updateAppSettings({
-    bookingEnabled: body.bookingEnabled,
-    bookingSlug: body.bookingSlug,
-    bookingTitle: body.bookingTitle,
-    bookingDurationMin: body.bookingDurationMin,
+  const slug = String(body.bookingSlug ?? "");
+  if (!slug) {
+    return NextResponse.json({ error: "bookingSlug is required" }, { status: 400 });
+  }
+
+  const link = await prisma.bookingLink.upsert({
+    where: { slug },
+    create: {
+      userId: user.id,
+      slug,
+      title: body.bookingTitle ?? "Book time with me",
+      durationMin: body.bookingDurationMin ?? 30,
+      enabled: body.bookingEnabled ?? true,
+    },
+    update: {
+      title: body.bookingTitle ?? "Book time with me",
+      durationMin: body.bookingDurationMin ?? 30,
+      enabled: body.bookingEnabled ?? true,
+    },
   });
 
-  return NextResponse.json({ ok: true, settings: updated });
+  return NextResponse.json({ ok: true, bookingLink: link });
 }

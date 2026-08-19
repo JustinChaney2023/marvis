@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { createEvent, deleteEvent, updateEvent } from "../actions";
 import { toLocalInputValue } from "@/lib/calendar-dates";
+import { CloseIcon } from "../icons";
+import Button from "../ui/Button";
 import {
   RECURRENCE_PRESETS,
   WEEKDAY_CODES,
@@ -18,12 +20,17 @@ export type EventModalEvent = {
   end: Date;
   recurrenceRule: string | null;
   locked: boolean;
+  meetingUrl: string | null;
 };
 
 type Props = {
   mode: "create" | "edit";
   initialStart: Date;
   initialEnd: Date;
+  // Quick-create prefill (e.g. the "+ Focus block" button) — ignored in
+  // edit mode, which always derives its initial values from `event`.
+  initialTitle?: string;
+  initialLocked?: boolean;
   event: EventModalEvent | null;
   onClose: () => void;
 };
@@ -40,12 +47,14 @@ const WEEKDAY_FULL_LABELS = [
 ] as const;
 
 const inputClass =
-  "rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900";
+  "rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800";
 
 export default function EventModal({
   mode,
   initialStart,
   initialEnd,
+  initialTitle: prefillTitle,
+  initialLocked,
   event,
   onClose,
 }: Props) {
@@ -170,7 +179,7 @@ export default function EventModal({
     );
   };
 
-  const initialTitle = mode === "edit" && event ? event.title : "";
+  const initialTitle = mode === "edit" && event ? event.title : (prefillTitle ?? "");
   const startValue = toLocalInputValue(
     mode === "edit" && event ? event.start : initialStart,
   );
@@ -185,12 +194,12 @@ export default function EventModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
       onClick={onBackdropClick}
       role="dialog"
       aria-modal="true"
     >
-      <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-6 shadow-2xl ring-1 ring-black/5 dark:border-zinc-800 dark:bg-zinc-900">
+      <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-6 shadow-2xl ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold tracking-tight">
             {mode === "create" ? "New event" : "Edit event"}
@@ -199,9 +208,9 @@ export default function EventModal({
             type="button"
             onClick={onClose}
             aria-label="close"
-            className="flex h-7 w-7 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800"
+            className="flex h-7 w-7 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-700"
           >
-            ×
+            <CloseIcon />
           </button>
         </div>
 
@@ -213,6 +222,17 @@ export default function EventModal({
               name="title"
               required
               defaultValue={initialTitle}
+              className={inputClass}
+            />
+          </label>
+
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="text-zinc-500">Meeting link (optional)</span>
+            <input
+              name="meetingUrl"
+              type="url"
+              placeholder="https://..."
+              defaultValue={mode === "edit" ? (event?.meetingUrl ?? "") : ""}
               className={inputClass}
             />
           </label>
@@ -257,7 +277,7 @@ export default function EventModal({
             </div>
           </label>
 
-          <div className="border-t border-zinc-200 pt-4 dark:border-zinc-800">
+          <div className="border-t border-zinc-200 pt-4 dark:border-zinc-700">
             <label className="flex flex-col gap-1 text-sm">
               <span className="text-zinc-500">Repeat</span>
               <select
@@ -289,7 +309,7 @@ export default function EventModal({
                         className={
                           selected
                             ? "flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-600 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400"
-                            : "flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-200 text-xs font-semibold text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                            : "flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-200 text-xs font-semibold text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-400 dark:hover:bg-zinc-700"
                         }
                       >
                         {WEEKDAY_SHORT_LABELS[idx]}
@@ -313,7 +333,7 @@ export default function EventModal({
             </label>
           </div>
 
-          <label className="flex cursor-pointer items-center justify-between gap-3 border-t border-zinc-200 pt-4 text-sm dark:border-zinc-800">
+          <label className="flex cursor-pointer items-center justify-between gap-3 border-t border-zinc-200 pt-4 text-sm dark:border-zinc-700">
             <span className="text-zinc-700 dark:text-zinc-300">
               Locked{" "}
               <span className="text-zinc-500 dark:text-zinc-400">
@@ -324,7 +344,7 @@ export default function EventModal({
               <input
                 type="checkbox"
                 name="locked"
-                defaultChecked={mode === "edit" && !!event?.locked}
+                defaultChecked={mode === "edit" ? !!event?.locked : !!initialLocked}
                 className="peer sr-only"
               />
               <span className="block h-6 w-11 rounded-full bg-zinc-200 transition-colors peer-checked:bg-indigo-600 peer-focus-visible:ring-2 peer-focus-visible:ring-indigo-500/40 dark:bg-zinc-700 dark:peer-checked:bg-indigo-500" />
@@ -335,14 +355,9 @@ export default function EventModal({
           <div className="mt-2 flex items-center justify-between gap-2">
             {mode === "edit" ? (
               <div className="flex flex-col gap-1">
-                <button
-                  type="button"
-                  onClick={handleDelete}
-                  disabled={isSubmitting}
-                  className="rounded-lg border border-red-200 px-3 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-red-50 disabled:opacity-50 dark:border-red-800 dark:text-red-300 dark:hover:bg-red-950/40"
-                >
+                <Button type="button" variant="danger" onClick={handleDelete} disabled={isSubmitting}>
                   Delete
-                </button>
+                </Button>
                 {isEditingRecurring && (
                   <span className="text-xs text-zinc-500">
                     Deletes the whole series.
@@ -353,21 +368,12 @@ export default function EventModal({
               <span />
             )}
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={onClose}
-                disabled={isSubmitting}
-                className="rounded-lg border border-zinc-200 px-3 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
-              >
+              <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
                 Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-all hover:bg-indigo-700 active:scale-[0.98] disabled:opacity-50 dark:bg-indigo-500 dark:hover:bg-indigo-400"
-              >
+              </Button>
+              <Button type="submit" pending={isSubmitting}>
                 {isSubmitting ? "Saving…" : "Save"}
-              </button>
+              </Button>
             </div>
           </div>
         </form>

@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import { requireUser } from "@/lib/auth";
+import MiniMonthPicker from "./MiniMonthPicker";
 import {
   addDays,
   addMonths,
@@ -15,6 +17,8 @@ import {
 } from "@/lib/calendar-dates";
 import { expandEvents } from "@/lib/recurrence";
 import CalendarClient, { type CalendarEvent } from "./calendar/CalendarClient";
+import CalendarSidebarLeft from "./calendar/CalendarSidebarLeft";
+import CalendarSidebarRight, { type AttentionTask } from "./calendar/CalendarSidebarRight";
 
 function viewSwitchTargets(
   view: CalendarView,
@@ -61,11 +65,12 @@ function navTargets(view: CalendarView, start: Date): {
 
 function linkClass(active: boolean): string {
   return active
-    ? "rounded-full bg-white px-3 py-1.5 text-sm font-medium text-zinc-900 shadow-sm transition-colors dark:bg-zinc-800 dark:text-zinc-100"
+    ? "rounded-full bg-white px-3 py-1.5 text-sm font-medium text-zinc-900 shadow-sm transition-colors dark:bg-zinc-700 dark:text-zinc-100"
     : "rounded-full px-3 py-1.5 text-sm text-zinc-500 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100";
 }
 
 export default async function Page(props: PageProps<"/">) {
+  const user = await requireUser();
   const sp = await props.searchParams;
   const view = parseViewParam(sp?.view);
   const start = parseStartParam(sp?.start);
@@ -74,6 +79,7 @@ export default async function Page(props: PageProps<"/">) {
 
   const rows = await prisma.event.findMany({
     where: {
+      userId: user.id,
       OR: [
         // Proper interval overlap, not just "starts in range" — a
         // multi-day event (e.g. a synced all-day trip) that started
@@ -84,12 +90,16 @@ export default async function Page(props: PageProps<"/">) {
         { recurrenceRule: { not: null } },
       ],
     },
+    include: { task: { include: { project: true } } },
     orderBy: { start: "asc" },
   });
 
   const ruleByMasterId = new Map(rows.map((r) => [r.id, r.recurrenceRule]));
   const lockedByMasterId = new Map(rows.map((r) => [r.id, r.locked]));
   const allDayByMasterId = new Map(rows.map((r) => [r.id, r.allDay]));
+  const colorByMasterId = new Map(rows.map((r) => [r.id, r.task?.project?.color ?? null]));
+  const priorityByMasterId = new Map(rows.map((r) => [r.id, r.task?.priority ?? null]));
+  const meetingUrlByMasterId = new Map(rows.map((r) => [r.id, r.meetingUrl]));
   const events: CalendarEvent[] = expandEvents(rows, from, to)
     .map((o) => ({
       id: o.id,
@@ -101,6 +111,9 @@ export default async function Page(props: PageProps<"/">) {
       recurrenceRule: ruleByMasterId.get(o.masterId) ?? null,
       locked: lockedByMasterId.get(o.masterId) ?? false,
       allDay: allDayByMasterId.get(o.masterId) ?? false,
+      projectColor: colorByMasterId.get(o.masterId) ?? null,
+      taskPriority: priorityByMasterId.get(o.masterId) ?? null,
+      meetingUrl: meetingUrlByMasterId.get(o.masterId) ?? null,
     }))
     .sort((a, b) => a.start.getTime() - b.start.getTime());
 
@@ -110,22 +123,38 @@ export default async function Page(props: PageProps<"/">) {
   const nav = navTargets(view, start);
   const switchTargets = viewSwitchTargets(view, start);
 
+  // Right sidebar's "needs attention" list — same overdue/due-soon-and-
+  // unscheduled definition TaskRow uses, computed here instead since this
+  // is a server component with no client-side "now" to react to.
+  const soonThreshold = new Date(today.getTime() + 48 * 60 * 60 * 1000);
+  const attentionRows = await prisma.task.findMany({
+    where: {
+      userId: user.id,
+      parentId: null,
+      status: { in: ["CREATED", "ONGOING"] },
+      event: { is: null },
+      dueAt: { lt: soonThreshold },
+    },
+    orderBy: { dueAt: "asc" },
+    take: 6,
+    select: { id: true, title: true, dueAt: true },
+  });
+  const attentionTasks: AttentionTask[] = attentionRows.map((t) => ({
+    id: t.id,
+    title: t.title,
+    dueAt: t.dueAt!,
+    isOverdue: t.dueAt! < today,
+  }));
+
   return (
-    <main className="mx-auto w-full max-w-6xl flex-1 px-6 py-12">
+    <main className="mx-auto w-full max-w-[96rem] flex-1 px-6 py-12">
       <header className="flex flex-col gap-3">
-        <div className="flex items-center justify-between">
-          <Link
-            href="/tasks"
-            className="text-sm text-zinc-500 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100"
-          >
-            ← Tasks
-          </Link>
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-2xl font-bold tracking-tight">Calendar</h1>
-          <div className="w-16" />
         </div>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <nav className="flex flex-wrap items-center gap-1">
-            <div className="inline-flex items-center gap-1 rounded-full bg-zinc-100 p-1 dark:bg-zinc-900">
+            <div className="inline-flex items-center gap-1 rounded-full bg-zinc-100 p-1 dark:bg-zinc-800">
               <Link
                 href={`/?view=day&start=${switchTargets.day}`}
                 className={linkClass(view === "day")}
@@ -145,21 +174,24 @@ export default async function Page(props: PageProps<"/">) {
                 Month
               </Link>
             </div>
-            <span className="mx-1 h-5 w-px bg-zinc-200 dark:bg-zinc-800" />
+            <span className="mx-1 h-5 w-px bg-zinc-200 dark:bg-zinc-700" />
             <Link
               href={`/?view=${view}&start=${nav.prev}`}
-              className="rounded-full px-3 py-1.5 text-sm text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+              className="rounded-full px-3 py-1.5 text-sm text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-700 dark:hover:text-zinc-100"
             >
               ← Prev
             </Link>
             <Link
               href={`/?view=${view}&start=${nav.next}`}
-              className="rounded-full px-3 py-1.5 text-sm text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+              className="rounded-full px-3 py-1.5 text-sm text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-700 dark:hover:text-zinc-100"
             >
               Next →
             </Link>
           </nav>
-          <p className="text-sm text-zinc-500">{nav.label}</p>
+          <div className="flex items-center gap-1">
+            <p className="text-sm text-zinc-500">{nav.label}</p>
+            <MiniMonthPicker view={view} startYMD={startYMD} />
+          </div>
         </div>
         <p className="text-xs text-zinc-400">
           Shortcuts: <kbd>j</kbd>/<kbd>k</kbd> prev/next, <kbd>d</kbd>/
@@ -167,12 +199,24 @@ export default async function Page(props: PageProps<"/">) {
         </p>
       </header>
 
-      <CalendarClient
-        view={view}
-        startYMD={startYMD}
-        todayISO={todayISO}
-        events={events}
-      />
+      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[13rem_1fr_15rem]">
+        <aside className="hidden lg:block">
+          <CalendarSidebarLeft view={view} startYMD={startYMD} />
+        </aside>
+
+        <div className="min-w-0">
+          <CalendarClient
+            view={view}
+            startYMD={startYMD}
+            todayISO={todayISO}
+            events={events}
+          />
+        </div>
+
+        <aside className="hidden lg:block">
+          <CalendarSidebarRight tasks={attentionTasks} />
+        </aside>
+      </div>
     </main>
   );
 }

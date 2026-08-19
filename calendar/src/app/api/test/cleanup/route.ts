@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { testRoutesAllowed } from "@/lib/testRouteGuard";
 
 /**
  * Test-only helper: deletes Event/Task rows whose title starts with a
@@ -9,8 +10,8 @@ import { prisma } from "@/lib/prisma";
  * as a second guard rail even though nothing routes here in normal use.
  */
 export async function POST(request: NextRequest) {
-  if (process.env.NODE_ENV === "production") {
-    return NextResponse.json({ error: "disabled in production" }, { status: 403 });
+  if (!testRoutesAllowed()) {
+    return NextResponse.json({ error: "test routes disabled" }, { status: 403 });
   }
 
   const { prefix } = await request.json();

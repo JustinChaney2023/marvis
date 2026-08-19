@@ -195,6 +195,7 @@ export function findBestSlot(
 }
 
 async function getProjectScheduledDays(
+  userId: string,
   projectId: string | null,
   excludeTaskId: string,
   now: Date,
@@ -203,6 +204,7 @@ async function getProjectScheduledDays(
   if (!projectId) return new Set();
   const siblingEvents = await prisma.event.findMany({
     where: {
+      userId,
       start: { gte: now, lt: horizonEnd },
       task: { projectId, id: { not: excludeTaskId } },
     },
@@ -211,12 +213,46 @@ async function getProjectScheduledDays(
   return new Set(siblingEvents.map((e) => dateKey(e.start)));
 }
 
-export async function fetchBusyIntervals(now: Date, horizonEnd: Date) {
+/**
+ * "Breathing room" cap — once a work day's already-busy minutes (within
+ * work hours) reach `capMin`, blocks the rest of that day's work window
+ * as synthetic busy time so findEarliestSlot skips straight to the next
+ * day. Approximate on purpose (a task that starts before the cap is hit
+ * can still land partly past it) rather than tracking exact remaining
+ * budget — the goal is "leave some slack most days," not a hard ceiling.
+ */
+function applyDailyCap(
+  busy: { start: Date; end: Date }[],
+  now: Date,
+  horizonEnd: Date,
+  capMin: number | null,
+): { start: Date; end: Date }[] {
+  if (!capMin) return busy;
+
+  const blocks: { start: Date; end: Date }[] = [];
+  for (let day = new Date(now); day < horizonEnd; day = new Date(day.getTime() + 86_400_000)) {
+    if (!isWorkDay(day)) continue;
+    const { start: dayStart, end: dayEnd } = workWindowFor(day);
+    const busyMinutes = busy.reduce((sum, b) => {
+      const overlapStart = b.start > dayStart ? b.start : dayStart;
+      const overlapEnd = b.end < dayEnd ? b.end : dayEnd;
+      const overlapMs = overlapEnd.getTime() - overlapStart.getTime();
+      return overlapMs > 0 ? sum + overlapMs / 60_000 : sum;
+    }, 0);
+    if (busyMinutes >= capMin) {
+      blocks.push({ start: dayStart, end: dayEnd });
+    }
+  }
+  return busy.concat(blocks);
+}
+
+export async function fetchBusyIntervals(userId: string, now: Date, horizonEnd: Date) {
   // Recurring masters may have started long before `now` and still recur
   // into the horizon, so they can't be filtered by `start` — fetch them
   // unconditionally and expand into occurrences alongside one-off events.
   const existing = await prisma.event.findMany({
     where: {
+      userId,
       OR: [{ start: { lt: horizonEnd } }, { recurrenceRule: { not: null } }],
     },
   });
@@ -225,29 +261,37 @@ export async function fetchBusyIntervals(now: Date, horizonEnd: Date) {
     .sort((a, b) => a.start.getTime() - b.start.getTime());
 }
 
-export async function scheduleTask(taskId: string) {
-  const task = await prisma.task.findUniqueOrThrow({ where: { id: taskId } });
+export async function scheduleTask(userId: string, taskId: string) {
+  const task = await prisma.task.findFirstOrThrow({ where: { id: taskId, userId } });
 
   const now = new Date();
+  // startAt is a lower bound on when the scheduler may place this task,
+  // not a hard commitment — never search before "now" even if startAt is
+  // in the past.
+  const searchFrom = task.startAt && task.startAt > now ? task.startAt : now;
   const horizonEnd = new Date(now.getTime() + HORIZON_DAYS * 86_400_000);
-  const settings = await getAppSettings();
-  const busy = padForBuffer(
-    await fetchBusyIntervals(now, horizonEnd),
-    settings.bufferMin,
+  const settings = await getAppSettings(userId);
+  const busy = applyDailyCap(
+    padForBuffer(await fetchBusyIntervals(userId, now, horizonEnd), settings.bufferMin),
+    now,
+    horizonEnd,
+    settings.dailyCapMin,
   );
   const projectScheduledDays = await getProjectScheduledDays(
+    userId,
     task.projectId,
     task.id,
     now,
     horizonEnd,
   );
 
-  const slot = findBestSlot(task, busy, horizonEnd, now, projectScheduledDays);
+  const slot = findBestSlot(task, busy, horizonEnd, searchFrom, projectScheduledDays);
   if (!slot) return null;
 
   const event = await prisma.event.upsert({
     where: { taskId },
     create: {
+      userId,
       title: task.title,
       start: slot.start,
       end: slot.end,
@@ -256,12 +300,50 @@ export async function scheduleTask(taskId: string) {
     },
     update: { start: slot.start, end: slot.end, title: task.title, localDirty: true },
   });
-  await prisma.task.update({
-    where: { id: taskId },
-    data: { status: "SCHEDULED" },
-  });
+  // Scheduling doesn't change the task's lifecycle status — having a
+  // calendar slot (this Event row existing) is tracked independently of
+  // CREATED/ONGOING/DELAYED/DONE. A task can be "ongoing" whether or not
+  // it has a slot, and a scheduled task is still just "created" until
+  // marked otherwise.
 
   return event;
+}
+
+/**
+ * Immediately re-plans any unlocked scheduled task whose event now
+ * overlaps `[start, end)` — called right after creating/moving/booking
+ * an event, so a new conflict gets fixed the moment it's created instead
+ * of waiting for the next full Schedule-all/Reschedule-all pass.
+ * `excludeEventId` skips the event being created/moved itself (e.g.
+ * dragging a scheduled task's own block shouldn't count as "conflicting
+ * with itself").
+ */
+export async function rescheduleConflictsWith(
+  userId: string,
+  start: Date,
+  end: Date,
+  excludeEventId?: string,
+): Promise<number> {
+  const scheduledTasks = await prisma.task.findMany({
+    where: { userId, event: { isNot: null } },
+    include: { event: true },
+  });
+
+  let count = 0;
+  for (const task of scheduledTasks) {
+    const event = task.event;
+    if (!event || event.locked || event.id === excludeEventId) continue;
+    // A scheduled task's own event is always a single occurrence (the
+    // scheduler creates one per task, never a recurring one), so a plain
+    // interval check is enough — no need to expand recurrence here.
+    const conflict = event.start < end && event.end > start;
+    if (conflict) {
+      await unscheduleTask(userId, task.id);
+      await scheduleTask(userId, task.id);
+      count++;
+    }
+  }
+  return count;
 }
 
 /**
@@ -272,13 +354,13 @@ export async function scheduleTask(taskId: string) {
  * never touched, even if stale, since locking is the user's explicit
  * "don't move this" signal.
  */
-export async function rescheduleStaleTasks() {
+export async function rescheduleStaleTasks(userId: string) {
   const now = new Date();
   const scheduledTasks = await prisma.task.findMany({
-    where: { status: "SCHEDULED" },
+    where: { userId, event: { isNot: null } },
     include: { event: true },
   });
-  const allEvents = await prisma.event.findMany();
+  const allEvents = await prisma.event.findMany({ where: { userId } });
 
   let count = 0;
   for (const task of scheduledTasks) {
@@ -295,8 +377,8 @@ export async function rescheduleStaleTasks() {
     );
 
     if (isPast || conflict) {
-      await unscheduleTask(task.id);
-      await scheduleTask(task.id);
+      await unscheduleTask(userId, task.id);
+      await scheduleTask(userId, task.id);
       count++;
     }
   }
@@ -304,16 +386,25 @@ export async function rescheduleStaleTasks() {
 }
 
 /**
- * Fixes stale task-events, then schedules every remaining TODO task, most
- * urgent first. Runs sequentially — each placed task becomes "busy" for
- * the next, so order determines who gets the good slots. Tasks that don't
- * fit in the horizon are left as TODO.
+ * Fixes stale task-events, then schedules every remaining unscheduled
+ * CREATED/ONGOING task, most urgent first. Runs sequentially — each
+ * placed task becomes "busy" for the next, so order determines who gets
+ * the good slots. Tasks that don't fit in the horizon are left as-is.
+ * DELAYED tasks are deliberately excluded — that's the whole point of
+ * delaying one, and DONE tasks obviously don't need a slot.
  */
-export async function scheduleAllPendingTasks() {
-  await rescheduleStaleTasks();
+export async function scheduleAllPendingTasks(userId: string) {
+  await rescheduleStaleTasks(userId);
 
   const tasks = await prisma.task.findMany({
-    where: { status: "TODO" },
+    // Subtasks are checklist items under a parent task, not independently
+    // schedulable calendar blocks — exclude them from the sweep.
+    where: {
+      userId,
+      status: { in: ["CREATED", "ONGOING"] },
+      event: { is: null },
+      parentId: null,
+    },
     orderBy: [
       { dueAt: { sort: "asc", nulls: "last" } },
       { priority: "desc" },
@@ -322,16 +413,39 @@ export async function scheduleAllPendingTasks() {
 
   const results: { taskId: string; scheduled: boolean }[] = [];
   for (const task of tasks) {
-    const event = await scheduleTask(task.id);
+    const event = await scheduleTask(userId, task.id);
     results.push({ taskId: task.id, scheduled: event !== null });
   }
   return results;
 }
 
-export async function unscheduleTask(taskId: string) {
-  await prisma.event.deleteMany({ where: { taskId } });
-  await prisma.task.update({
-    where: { id: taskId },
-    data: { status: "TODO" },
+/**
+ * Motion's "reschedule all" — unlike scheduleAllPendingTasks (which only
+ * fixes stale slots and places brand-new tasks), this re-plans EVERY
+ * unlocked scheduled task from scratch, not just the ones that drifted.
+ * Useful after a due date changes, a bunch of tasks got added out of
+ * order, or the calendar just feels like it needs a fresh pass. Locked
+ * events (including ones tied to a task, e.g. a manually-pinned slot)
+ * are left exactly where they are — same "don't touch it" contract as
+ * everywhere else in the scheduler.
+ */
+export async function rescheduleAll(userId: string) {
+  const scheduledTasks = await prisma.task.findMany({
+    where: { userId, event: { isNot: null } },
+    include: { event: true },
   });
+  for (const task of scheduledTasks) {
+    if (task.event?.locked) continue;
+    await unscheduleTask(userId, task.id);
+  }
+  return scheduleAllPendingTasks(userId);
+}
+
+export async function unscheduleTask(userId: string, taskId: string) {
+  // Doesn't touch status — a task's lifecycle (CREATED/ONGOING/DELAYED/
+  // DONE) is independent of whether it currently has a calendar slot.
+  // Losing its slot just puts it back in scheduleAllPendingTasks' sweep
+  // (status in [CREATED, ONGOING] and no event), which needs no status
+  // change to work.
+  await prisma.event.deleteMany({ where: { taskId, userId } });
 }

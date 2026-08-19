@@ -19,15 +19,16 @@ const MAX_NOTES_LEN = 2000;
  * auto-scheduler would also consider free — a visitor can never book over
  * something the scheduler would have placed a task into, or vice versa.
  */
-export async function getAvailableBookingSlots(): Promise<
-  { day: string; slots: Date[] }[]
-> {
-  const settings = await getAppSettings();
+export async function getAvailableBookingSlots(
+  ownerUserId: string,
+  durationMin: number,
+): Promise<{ day: string; slots: Date[] }[]> {
+  const settings = await getAppSettings(ownerUserId);
   const now = new Date();
   const horizonEnd = new Date(now.getTime() + BOOKING_HORIZON_DAYS * 86_400_000);
 
   const busy = padForBuffer(
-    await fetchBusyIntervals(now, horizonEnd),
+    await fetchBusyIntervals(ownerUserId, now, horizonEnd),
     settings.bufferMin,
   );
 
@@ -36,7 +37,7 @@ export async function getAvailableBookingSlots(): Promise<
   for (let i = 0; i < BOOKING_HORIZON_DAYS * MAX_SLOTS_PER_DAY; i++) {
     const slot = findEarliestSlot(
       cursor,
-      settings.bookingDurationMin,
+      durationMin,
       busy,
       horizonEnd,
     );
@@ -48,7 +49,7 @@ export async function getAvailableBookingSlots(): Promise<
       list.push(slot.start);
       byDay.set(key, list);
     }
-    cursor = new Date(slot.start.getTime() + settings.bookingDurationMin * 60_000);
+    cursor = new Date(slot.start.getTime() + durationMin * 60_000);
   }
 
   return Array.from(byDay.entries()).map(([day, slots]) => ({ day, slots }));
@@ -64,19 +65,22 @@ export type CreateBookingResult =
 // concurrent requests could both pass. Doesn't survive a restart or scale
 // across processes, which is fine at this scale; the alternative (a real
 // DB-level exclusion constraint) is more machinery than this deployment
-// warrants.
-let bookingQueue: Promise<unknown> = Promise.resolve();
+// warrants. Keyed per owner so two different people's booking pages don't
+// serialize behind each other.
+const bookingQueues = new Map<string, Promise<unknown>>();
 
 /**
  * Creates a booking as a locked Event (so it's immune to auto-
  * rescheduling), after re-validating that `startIso` is an actual slot
  * getAvailableBookingSlots() would have generated — not just "doesn't
  * overlap something," which would let a visitor book outside work hours,
- * on a non-work day, or arbitrarily far past the horizon. Serialized via
- * bookingQueue so two near-simultaneous submissions for the same slot
- * can't both pass the check before either write lands.
+ * on a non-work day, or arbitrarily far past the horizon. Serialized per
+ * owner via bookingQueues so two near-simultaneous submissions for the
+ * same slot can't both pass the check before either write lands.
  */
 export async function createBooking(
+  ownerUserId: string,
+  bookingLinkId: string,
   startIso: string,
   name: string,
   email: string,
@@ -90,10 +94,11 @@ export async function createBooking(
   }
 
   const run = async (): Promise<CreateBookingResult> => {
-    const settings = await getAppSettings();
-    if (!settings.bookingEnabled) {
+    const link = await prisma.bookingLink.findUnique({ where: { id: bookingLinkId } });
+    if (!link || link.userId !== ownerUserId || !link.enabled) {
       return { ok: false, error: "Booking is not currently enabled." };
     }
+    const settings = await getAppSettings(ownerUserId);
 
     const start = new Date(startIso);
     if (Number.isNaN(start.getTime()) || start.getTime() < Date.now()) {
@@ -107,7 +112,7 @@ export async function createBooking(
     }
 
     const busy = padForBuffer(
-      await fetchBusyIntervals(now, horizonEnd),
+      await fetchBusyIntervals(ownerUserId, now, horizonEnd),
       settings.bufferMin,
     );
 
@@ -117,7 +122,7 @@ export async function createBooking(
     // weekend, mid-way through an existing block) yields something later.
     const derived = findEarliestSlot(
       start,
-      settings.bookingDurationMin,
+      link.durationMin,
       busy,
       horizonEnd,
     );
@@ -131,7 +136,8 @@ export async function createBooking(
 
     await prisma.event.create({
       data: {
-        title: `${trimmedName} — ${settings.bookingTitle}`,
+        userId: ownerUserId,
+        title: `${trimmedName} — ${link.title}`,
         start: derived.start,
         end: derived.end,
         locked: true,
@@ -142,7 +148,8 @@ export async function createBooking(
     return { ok: true };
   };
 
-  const result = bookingQueue.then(run, run);
-  bookingQueue = result.catch(() => {});
+  const queue = bookingQueues.get(ownerUserId) ?? Promise.resolve();
+  const result = queue.then(run, run);
+  bookingQueues.set(ownerUserId, result.catch(() => {}));
   return result;
 }

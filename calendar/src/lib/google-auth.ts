@@ -1,5 +1,6 @@
 import { google } from "googleapis";
 import { prisma } from "@/lib/prisma";
+import { decryptSecret, encryptSecret } from "@/lib/tokenCrypto";
 
 export function getRedirectUri(): string {
   const base = process.env.APP_URL ?? "http://localhost:3000";
@@ -19,16 +20,18 @@ export function createOAuthClient() {
 
 /**
  * Returns an OAuth2 client with valid (refreshed if needed) credentials
- * for the single connected GoogleAccount, or null if none is connected.
+ * for this user's connected GoogleAccount, or null if none is connected.
  */
-export async function getAuthorizedClient() {
-  const account = await prisma.googleAccount.findFirst();
+export async function getAuthorizedClient(userId: string) {
+  const account = await prisma.googleAccount.findUnique({ where: { userId } });
   if (!account) return null;
 
   const client = createOAuthClient();
+  const accessToken = decryptSecret(account.accessToken);
+  const refreshToken = decryptSecret(account.refreshToken);
   client.setCredentials({
-    access_token: account.accessToken,
-    refresh_token: account.refreshToken,
+    access_token: accessToken,
+    refresh_token: refreshToken,
     expiry_date: account.expiresAt.getTime(),
   });
 
@@ -37,7 +40,7 @@ export async function getAuthorizedClient() {
     await prisma.googleAccount.update({
       where: { id: account.id },
       data: {
-        accessToken: credentials.access_token ?? account.accessToken,
+        accessToken: encryptSecret(credentials.access_token ?? accessToken),
         expiresAt: new Date(credentials.expiry_date ?? Date.now() + 3600_000),
       },
     });

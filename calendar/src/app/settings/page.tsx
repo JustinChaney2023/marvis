@@ -1,22 +1,56 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import { requireUser, getCurrentSessionId } from "@/lib/auth";
 import { getAppSettings } from "@/lib/settings";
 import {
   disconnectGoogleAction,
-  updateBookingSettingsAction,
+  connectAppleAction,
+  disconnectAppleAction,
+  updateAiSettingsAction,
   updateSchedulingSettingsAction,
 } from "../actions";
 import SyncButton from "./SyncButton";
-
-const BOOKING_DURATION_PRESETS_MIN = [15, 30, 45, 60, 90];
+import AppleSyncButton from "./AppleSyncButton";
+import ShareAvailabilityButton from "./ShareAvailabilityButton";
+import BookingLinksManager from "./BookingLinksManager";
+import AutomationRulesManager from "./AutomationRulesManager";
+import Button from "../ui/Button";
+import {
+  changePasswordAction,
+  logoutAction,
+  revokeOtherSessionsAction,
+  revokeSessionAction,
+} from "../authActions";
 
 export default async function SettingsPage(props: PageProps<"/settings">) {
+  const user = await requireUser();
   const sp = await props.searchParams;
   const connected = sp?.google_connected === "1";
   const error = typeof sp?.google_error === "string" ? sp.google_error : null;
+  const passwordError = typeof sp?.password_error === "string" ? sp.password_error : null;
+  const passwordChanged = sp?.password_changed === "1";
+  const appleError = typeof sp?.apple_error === "string" ? sp.apple_error : null;
 
-  const account = await prisma.googleAccount.findFirst();
-  const settings = await getAppSettings();
+  const account = await prisma.googleAccount.findUnique({ where: { userId: user.id } });
+  const appleAccount = await prisma.appleAccount.findUnique({ where: { userId: user.id } });
+  const settings = await getAppSettings(user.id);
+  const bookingLinks = await prisma.bookingLink.findMany({
+    where: { userId: user.id },
+    orderBy: { createdAt: "asc" },
+  });
+  const automationRules = await prisma.automationRule.findMany({
+    where: { userId: user.id },
+    orderBy: { createdAt: "asc" },
+  });
+  const projects = await prisma.project.findMany({
+    where: { userId: user.id },
+    orderBy: { createdAt: "asc" },
+  });
+  const currentSessionId = await getCurrentSessionId();
+  const sessions = await prisma.session.findMany({
+    where: { userId: user.id },
+    orderBy: { createdAt: "desc" },
+  });
 
   return (
     <main className="mx-auto w-full max-w-2xl flex-1 px-6 py-12">
@@ -41,7 +75,7 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
         </p>
       )}
 
-      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-zinc-800 dark:bg-zinc-900">
+      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
         <h2 className="text-lg font-semibold">Scheduling</h2>
         <form
           action={updateSchedulingSettingsAction}
@@ -57,131 +91,116 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
                 min={0}
                 max={120}
                 step={5}
-                className="w-24 rounded-lg border border-zinc-200 bg-white px-2 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900"
+                className="w-24 rounded-lg border border-zinc-200 bg-white px-2 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800"
               />
               <span className="text-zinc-500">minutes</span>
             </div>
           </label>
-          <button
-            type="submit"
-            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-all hover:bg-indigo-700 active:scale-[0.98] dark:bg-indigo-500 dark:hover:bg-indigo-400"
-          >
-            Save
-          </button>
-        </form>
-        <p className="mt-2 text-xs text-zinc-400">
-          The auto-scheduler leaves at least this much gap around every
-          event when placing a task.
-        </p>
-      </section>
-
-      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-zinc-800 dark:bg-zinc-900">
-        <h2 className="text-lg font-semibold">Booking page</h2>
-        <form
-          action={updateBookingSettingsAction}
-          className="mt-3 flex flex-col gap-4"
-        >
-          <label className="flex cursor-pointer items-center justify-between gap-3 text-sm">
-            <span className="text-zinc-700 dark:text-zinc-300">
-              Enable booking page
-            </span>
-            <span className="relative inline-flex items-center">
-              <input
-                type="checkbox"
-                name="bookingEnabled"
-                defaultChecked={settings.bookingEnabled}
-                className="peer sr-only"
-              />
-              <span className="block h-6 w-11 rounded-full bg-zinc-200 transition-colors peer-checked:bg-indigo-600 peer-focus-visible:ring-2 peer-focus-visible:ring-indigo-500/40 dark:bg-zinc-700 dark:peer-checked:bg-indigo-500" />
-              <span className="absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform peer-checked:translate-x-5" />
-            </span>
-          </label>
-
           <label className="flex flex-col gap-1 text-sm">
-            <span className="text-zinc-500">URL slug</span>
-            <div className="flex items-center gap-2">
-              <span className="text-zinc-500">/book/</span>
-              <input
-                type="text"
-                name="bookingSlug"
-                defaultValue={settings.bookingSlug ?? ""}
-                placeholder="your-name"
-                className="w-48 rounded-lg border border-zinc-200 bg-white px-2 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900"
-              />
-            </div>
-            {settings.bookingSlug ? (
-              <span className="text-xs text-zinc-400">
-                Your page: <code className="rounded bg-zinc-100 px-1 py-0.5 text-xs dark:bg-zinc-800">/book/{settings.bookingSlug}</code>
-              </span>
-            ) : (
-              <span className="text-xs text-zinc-400">
-                Letters, numbers, and hyphens. Spaces and punctuation become
-                hyphens on save.
-              </span>
-            )}
-          </label>
-
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-zinc-500">Page title</span>
-            <input
-              type="text"
-              name="bookingTitle"
-              defaultValue={settings.bookingTitle}
-              required
-              className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900"
-            />
-          </label>
-
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-zinc-500">Duration</span>
+            <span className="text-zinc-500">Daily cap (breathing room)</span>
             <div className="flex items-center gap-2">
               <input
                 type="number"
-                name="bookingDurationMin"
-                defaultValue={settings.bookingDurationMin}
-                min={5}
-                max={240}
-                step={5}
-                list="booking-duration-presets"
-                aria-label="Booking duration in minutes"
-                className="w-24 rounded-lg border border-zinc-200 bg-white px-2 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900"
+                name="dailyCapMin"
+                defaultValue={settings.dailyCapMin ?? ""}
+                placeholder="No cap"
+                min={30}
+                max={960}
+                step={15}
+                className="w-24 rounded-lg border border-zinc-200 bg-white px-2 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800"
               />
               <span className="text-zinc-500">minutes</span>
             </div>
-            <datalist id="booking-duration-presets">
-              {BOOKING_DURATION_PRESETS_MIN.map((m) => (
-                <option key={m} value={m} />
-              ))}
-            </datalist>
           </label>
+          <Button type="submit">Save</Button>
+        </form>
+        <p className="mt-2 text-xs text-zinc-400">
+          The auto-scheduler leaves at least the buffer gap around every
+          event, and — if a daily cap is set — stops placing new tasks on
+          a day once that many minutes are already scheduled, leaving
+          slack for whatever unplanned work shows up. Leave the cap blank
+          for no limit.
+        </p>
+      </section>
 
+      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
+        <h2 className="text-lg font-semibold">AI / local model</h2>
+        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+          <Link href="/tasks/import" className="text-indigo-600 dark:text-indigo-400">
+            Syllabus import
+          </Link>{" "}
+          uses Claude by default. Point it at a self-hosted model instead
+          — e.g. Ollama running on a desktop, reachable from your other
+          devices over Tailscale — and it stops depending on a cloud
+          subscription entirely.
+        </p>
+        <form action={updateAiSettingsAction} className="mt-3 flex flex-col gap-3">
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="text-zinc-500">Local AI URL</span>
+            <input
+              type="url"
+              name="localAiUrl"
+              defaultValue={settings.localAiUrl ?? ""}
+              placeholder="http://100.x.x.x:11434/v1"
+              className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800"
+            />
+            <span className="text-xs text-zinc-400">
+              The OpenAI-compatible base URL — Ollama serves this at{" "}
+              <code className="rounded bg-zinc-100 px-1 py-0.5 dark:bg-zinc-700">/v1</code>.
+            </span>
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="text-zinc-500">Model name</span>
+            <input
+              type="text"
+              name="localAiModel"
+              defaultValue={settings.localAiModel ?? ""}
+              placeholder="llama3.1"
+              className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800"
+            />
+          </label>
           <div>
-            <button
-              type="submit"
-              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-all hover:bg-indigo-700 active:scale-[0.98] dark:bg-indigo-500 dark:hover:bg-indigo-400"
-            >
-              Save
-            </button>
+            <Button type="submit">Save</Button>
           </div>
         </form>
         <p className="mt-2 text-xs text-zinc-400">
-          Share a single link that lets visitors pick an open slot. Bookings
-          land as locked events on your calendar.
+          Leave both blank to use Claude (needs <code>ANTHROPIC_API_KEY</code> in
+          your server&apos;s <code>.env</code>).
         </p>
-        {settings.bookingEnabled && settings.bookingSlug && (
-          <a
-            href={`/book/${settings.bookingSlug}`}
-            target="_blank"
-            rel="noreferrer"
-            className="mt-3 inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700 transition-colors hover:bg-indigo-100 dark:border-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-300 dark:hover:bg-indigo-950/60"
-          >
-            <span className="h-1.5 w-1.5 rounded-full bg-indigo-500" />/book/
-            {settings.bookingSlug}
-          </a>
-        )}
       </section>
 
-      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-zinc-800 dark:bg-zinc-900">
+      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
+        <h2 className="text-lg font-semibold">Booking pages</h2>
+        <p className="mt-1 text-xs text-zinc-400">
+          Each link is its own public page with its own slug, title, and
+          duration — e.g. a 15-min quick chat vs. a 30-min deep dive. Bookings
+          land as locked events on your calendar.
+        </p>
+        <div className="mt-3">
+          <BookingLinksManager links={bookingLinks} />
+        </div>
+        <div className="mt-3">
+          <ShareAvailabilityButton />
+          <p className="mt-1 text-xs text-zinc-400">
+            Copies a plain-text list of your open times — for pasting into
+            an email or DM instead of sending a link.
+          </p>
+        </div>
+      </section>
+
+      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
+        <h2 className="text-lg font-semibold">Automations</h2>
+        <p className="mt-1 text-xs text-zinc-400">
+          When a task&apos;s status changes to X (optionally, only within a
+          specific project), automatically do Y — reusing the AI subtask/
+          email-draft features already in this app.
+        </p>
+        <div className="mt-3">
+          <AutomationRulesManager rules={automationRules} projects={projects} />
+        </div>
+      </section>
+
+      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
         <h2 className="text-lg font-semibold">Google Calendar</h2>
 
         {account ? (
@@ -195,19 +214,14 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
             <div className="flex items-center gap-3">
               <SyncButton />
               <form action={disconnectGoogleAction}>
-                <button
-                  type="submit"
-                  className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
-                >
-                  Disconnect
-                </button>
+                <Button type="submit" variant="secondary">Disconnect</Button>
               </form>
             </div>
             <p className="text-xs text-zinc-400">
               Syncs the last 7 days through the next 90. Local events push to
-              Google; Google events pull in as read-synced events. Deleting
-              this app&apos;s events also deletes them on Google — deletions
-              made directly on Google aren&apos;t detected yet.
+              Google; Google events pull in as read-synced events. Deletions
+              sync both ways — deleting here removes it on Google, and
+              deleting it on Google removes it here on the next sync.
             </p>
           </div>
         ) : (
@@ -215,7 +229,7 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
             <p className="text-sm text-zinc-600 dark:text-zinc-400">
               Not connected. You&apos;ll need a Google Cloud OAuth client
               first — see{" "}
-              <code className="rounded bg-zinc-100 px-1 py-0.5 text-xs dark:bg-zinc-800">
+              <code className="rounded bg-zinc-100 px-1 py-0.5 text-xs dark:bg-zinc-700">
                 docs/google-calendar-setup.md
               </code>{" "}
               in the repo, then set <code>GOOGLE_CLIENT_ID</code> and{" "}
@@ -229,6 +243,161 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
             </a>
           </div>
         )}
+      </section>
+
+      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
+        <h2 className="text-lg font-semibold">Apple Calendar</h2>
+
+        {appleAccount ? (
+          <div className="mt-3 space-y-3">
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">
+              Connected as <span className="font-medium">{appleAccount.appleId}</span>.
+              {appleAccount.lastSyncedAt
+                ? ` Last synced ${appleAccount.lastSyncedAt.toLocaleString()}.`
+                : " Never synced yet."}
+            </p>
+            <div className="flex items-center gap-3">
+              <AppleSyncButton />
+              <form action={disconnectAppleAction}>
+                <Button type="submit" variant="secondary">Disconnect</Button>
+              </form>
+            </div>
+            <p className="text-xs text-zinc-400">
+              Read-only overlay, not a two-way sync like Google — events pull in
+              (past 7 days through the next 90) as locked blocks so the
+              scheduler won&apos;t double-book them, but nothing created or
+              edited here is ever pushed to iCloud.
+            </p>
+          </div>
+        ) : (
+          <div className="mt-3 space-y-3">
+            {appleError && (
+              <p className="text-sm text-red-600 dark:text-red-400">{appleError}</p>
+            )}
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">
+              Apple has no OAuth login for third-party apps — use an{" "}
+              <a
+                href="https://support.apple.com/en-us/102654"
+                target="_blank"
+                rel="noreferrer"
+                className="text-indigo-600 underline dark:text-indigo-400"
+              >
+                app-specific password
+              </a>{" "}
+              from your Apple ID account page instead of your real password.
+            </p>
+            <form action={connectAppleAction} className="flex flex-col gap-3">
+              <input
+                name="appleId"
+                type="email"
+                placeholder="you@icloud.com"
+                required
+                className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800"
+              />
+              <input
+                name="appPassword"
+                type="password"
+                placeholder="App-specific password"
+                required
+                className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800"
+              />
+              <div>
+                <Button type="submit">Connect Apple Calendar</Button>
+              </div>
+            </form>
+          </div>
+        )}
+      </section>
+
+      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
+        <h2 className="text-lg font-semibold">Account</h2>
+        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+          Signed in as <span className="font-medium">{user.email}</span>.
+        </p>
+        <div className="mt-3 flex items-center gap-3">
+          {user.isAdmin && (
+            <Link
+              href="/feedback-inbox"
+              className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700/60"
+            >
+              Feedback inbox
+            </Link>
+          )}
+          <form action={logoutAction}>
+            <Button type="submit" variant="secondary">Log out</Button>
+          </form>
+        </div>
+
+        <form action={changePasswordAction} className="mt-5 flex flex-col gap-3 border-t border-zinc-200 pt-4 dark:border-zinc-700">
+          <h3 className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Change password</h3>
+          <div className="flex flex-wrap gap-3">
+            <input
+              type="password"
+              name="currentPassword"
+              placeholder="Current password"
+              required
+              className="min-w-[10rem] flex-1 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800"
+            />
+            <input
+              type="password"
+              name="newPassword"
+              placeholder="New password (min. 8 characters)"
+              required
+              minLength={8}
+              className="min-w-[10rem] flex-1 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800"
+            />
+          </div>
+          {passwordError && (
+            <p className="text-sm text-red-600 dark:text-red-400">{passwordError}</p>
+          )}
+          {passwordChanged && (
+            <p className="text-sm text-green-600 dark:text-green-400">Password changed.</p>
+          )}
+          <div>
+            <Button type="submit" variant="secondary">Update password</Button>
+          </div>
+        </form>
+      </section>
+
+      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Active sessions</h2>
+          {sessions.length > 1 && (
+            <form action={revokeOtherSessionsAction}>
+              <Button type="submit" variant="secondary">Log out everywhere else</Button>
+            </form>
+          )}
+        </div>
+        <ul className="mt-3 space-y-2">
+          {sessions.map((s) => {
+            const isCurrent = s.id === currentSessionId;
+            return (
+              <li
+                key={s.id}
+                className="flex items-center justify-between gap-3 rounded-lg border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-700"
+              >
+                <div>
+                  <span className="font-medium">
+                    {isCurrent ? "This device" : "Other device"}
+                  </span>
+                  <span className="ml-2 text-xs text-zinc-500">
+                    signed in {s.createdAt.toLocaleString()} · expires {s.expiresAt.toLocaleDateString()}
+                  </span>
+                </div>
+                {!isCurrent && (
+                  <form action={revokeSessionAction.bind(null, s.id)}>
+                    <button
+                      type="submit"
+                      className="text-xs text-zinc-400 transition-colors hover:text-red-600 dark:hover:text-red-400"
+                    >
+                      Log out
+                    </button>
+                  </form>
+                )}
+              </li>
+            );
+          })}
+        </ul>
       </section>
     </main>
   );

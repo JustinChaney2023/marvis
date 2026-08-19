@@ -1,28 +1,25 @@
 import { prisma } from "@/lib/prisma";
 
-// Fixed id + upsert, not findFirst-then-create — the latter races under
-// concurrent calls (two requests both see "no row" and both create one),
-// which happened in practice while testing this.
-const SINGLETON_ID = "app-settings";
-
-export async function getAppSettings() {
+export async function getAppSettings(userId: string) {
   return prisma.appSettings.upsert({
-    where: { id: SINGLETON_ID },
-    create: { id: SINGLETON_ID },
+    where: { userId },
+    create: { userId },
     update: {},
   });
 }
 
-export async function updateAppSettings(data: {
-  bufferMin?: number;
-  bookingSlug?: string | null;
-  bookingEnabled?: boolean;
-  bookingDurationMin?: number;
-  bookingTitle?: string;
-}) {
+export async function updateAppSettings(
+  userId: string,
+  data: {
+    bufferMin?: number;
+    dailyCapMin?: number | null;
+    localAiUrl?: string | null;
+    localAiModel?: string | null;
+  },
+) {
   return prisma.appSettings.upsert({
-    where: { id: SINGLETON_ID },
-    create: { id: SINGLETON_ID, ...data },
+    where: { userId },
+    create: { userId, ...data },
     update: data,
   });
 }

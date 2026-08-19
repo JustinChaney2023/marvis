@@ -7,9 +7,59 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// Real per-person accounts (added when this moved from a single-user app
+// toward self-hosted + friends). userId columns below are nullable rather
+// than required — this app ran for a while as genuinely single-user with
+// no User table at all, and a hard NOT NULL migration against that
+// pre-existing data risks an unrecoverable failure. Instead, the first
+// person to sign up (src/app/authActions.ts) adopts every row that still
+// has userId: null, and every write from that point on always sets it —
+// nullable is a migration safety valve, not a supported "ownerless" state.
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String?
+  // The first account created (during the single-user -> multi-user
+  // migration, or on a fresh install) — gates the feedback inbox and any
+  // future admin-only surface. Not a general role system.
+  isAdmin      Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  sessions      Session[]
+  events        Event[]
+  tasks         Task[]
+  projects      Project[]
+  googleAccount GoogleAccount?
+  appleAccount  AppleAccount?
+  settings      AppSettings?
+  assignees     Assignee[]
+  feedback      Feedback[]
+  bookingLinks  BookingLink[]
+  automationRules         AutomationRule[]
+  automationNotifications AutomationNotification[]
+}
+
+// DB-backed sessions (not signed/stateless JWTs) — lets a logout or a
+// password change actually revoke access immediately, which a bare signed
+// cookie can't do without a separate revocation list anyway.
+model Session {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
 model Event {
   id              String      @id @default(cuid())
+  userId          String?
+  user            User?       @relation(fields: [userId], references: [id], onDelete: Cascade)
   title           String
+  // Video-call link (Zoom/Meet/whatever) shown by MeetingBanner.tsx when
+  // the event's about to start — plain URL, no per-provider parsing.
+  meetingUrl      String?
   start           DateTime
   end             DateTime
   allDay          Boolean     @default(false)
@@ -35,6 +85,9 @@ model Event {
   googleEventId   String?     @unique
   googleUpdatedAt DateTime?
   localDirty      Boolean     @default(false)
+  // CalDAV UID for Apple-synced events (src/lib/apple-sync.ts) — read-only
+  // overlay, no push-back, so unlike Google there's no dirty-tracking here.
+  appleEventUid   String?     @unique
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 }
@@ -42,11 +95,15 @@ model Event {
 enum EventSource {
   LOCAL
   GOOGLE
+  APPLE
 }
 
-// Single row: this is a single-user app, one connected Google account.
+// One connected Google account per user (was a single global row back when
+// this was single-user).
 model GoogleAccount {
   id           String    @id @default(cuid())
+  userId       String?   @unique
+  user         User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
   email        String
   accessToken  String
   refreshToken String
@@ -59,9 +116,38 @@ model GoogleAccount {
   updatedAt    DateTime  @updatedAt
 }
 
+// One connected Apple/iCloud CalDAV account per user — read-only overlay
+// (src/lib/apple-sync.ts pulls events in as source: APPLE, locked so they
+// can't be dragged; nothing is ever pushed back to iCloud), unlike the
+// two-way Google sync above. Auth is an iCloud app-specific password
+// (appleprivacy.apple.com/account/manage), not OAuth — Apple has no
+// public CalDAV OAuth flow for third-party apps.
+model AppleAccount {
+  id           String    @id @default(cuid())
+  userId       String?   @unique
+  user         User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  appleId      String
+  // Encrypted at rest via src/lib/tokenCrypto.ts when TOKEN_ENCRYPTION_KEY
+  // is set, same as Google's tokens.
+  appPassword  String
+  lastSyncedAt DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+// A task's lifecycle is independent of whether it has a calendar slot
+// (that's tracked by Event.taskId, not here) — CREATED/ONGOING tasks with
+// no event yet are exactly what the auto-scheduler sweeps for. ONGOING
+// can be set manually ("I'm working on this now") or is shown by the UI
+// automatically whenever now falls inside the task's scheduled event
+// window — that display-only computation isn't a stored value, see
+// TaskRow.tsx. DELAYED always means "explicitly pushed off" (dueAt
+// bumped, unscheduled if it had a slot) — it's a deliberate action, never
+// inferred.
 enum TaskStatus {
-  TODO
-  SCHEDULED
+  CREATED
+  ONGOING
+  DELAYED
   DONE
 }
 
@@ -77,16 +163,49 @@ enum TaskEnergy {
   HIGH
 }
 
+// Who a task is assigned to — a person (you, a friend) or an "AI
+// employee". Deliberately just a label for now: assigning a task to an AI
+// employee puts it on their name/calendar like any teammate, but nothing
+// autonomously executes it yet. See docs/motion-feature-backlog.md.
+enum AssigneeType {
+  HUMAN
+  AI
+}
+
+model Assignee {
+  id        String       @id @default(cuid())
+  userId    String?
+  user      User?        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  role      String?
+  type      AssigneeType @default(HUMAN)
+  tasks     Task[]
+  createdAt DateTime     @default(now())
+}
+
 // Auto-scheduling inputs, modeled after FluidCalendar's scoring approach
 // (due date / priority / duration) — see docs/fluidcalendar.md.
 model Task {
   id             String     @id @default(cuid())
+  userId         String?
+  user           User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
   title          String
   notes          String?
-  status         TaskStatus @default(TODO)
+  status         TaskStatus @default(CREATED)
   priority       Int        @default(0) // 0 = low .. 3 = urgent
   energy         TaskEnergy @default(MEDIUM)
-  durationMin    Int        @default(30)
+  durationMin    Int        @default(30) // the estimate
+  // Actual time tracked, accumulated across every ONGOING session (not
+  // just the current one) — see finalizeTaskTimer in src/app/actions.ts.
+  trackedMinutes Int        @default(0)
+  // Set when the task becomes ONGOING (manually, via the timer), cleared
+  // and folded into trackedMinutes whenever it leaves ONGOING. Null =
+  // no timer currently running.
+  timerStartedAt DateTime?
+  // Earliest day the scheduler may place this task — optional, unlike
+  // dueAt. A plain lower bound on scheduling, not a hard commitment like
+  // an Event's start.
+  startAt        DateTime?
   dueAt          DateTime?
   // RRULE string, same format as Event.recurrenceRule, anchored to
   // `dueAt` (a recurring task must have a dueAt — it's the DTSTART for
@@ -98,33 +217,125 @@ model Task {
   recurrenceRule String?
   projectId      String?
   project        Project?   @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  assigneeId     String?
+  assignee       Assignee?  @relation(fields: [assigneeId], references: [id], onDelete: SetNull)
   event          Event?
+  // One level of subtasks (a subtask can't itself have subtasks — this
+  // app doesn't enforce that in the schema, but nothing in the UI ever
+  // creates a subtask of a subtask). Deleting the parent deletes its
+  // subtasks rather than orphaning them.
+  parentId       String?
+  parent         Task?      @relation("TaskSubtasks", fields: [parentId], references: [id], onDelete: Cascade)
+  subtasks       Task[]     @relation("TaskSubtasks")
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
 }
 
-// Single row: user-adjustable scheduler knobs. See src/lib/settings.ts for
-// the get-or-create-default accessor scheduler.ts reads from.
+// Per-user scheduler knobs and booking-page config (was a single global
+// row back when this was single-user).
 model AppSettings {
   id                 String   @id @default(cuid())
+  userId             String?  @unique
+  user               User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
   bufferMin          Int      @default(10)
-  // Public booking page (src/app/book/[slug]) — a single-user
-  // "book a slot with me" link, not a team feature: visitors pick an
-  // open slot and it becomes a locked Event, same idea as Motion's
-  // most-praised booking-link feature. Null slug = page disabled/404s.
-  bookingSlug        String?  @unique
-  bookingEnabled     Boolean  @default(false)
-  bookingDurationMin Int      @default(30)
-  bookingTitle       String   @default("Book time with me")
+  // "Breathing room" — once a day's already-scheduled task minutes (within
+  // work hours) reach this, the auto-scheduler stops placing new tasks
+  // that day and moves on to the next, leaving slack for unplanned work
+  // instead of packing every open slot. Null = no cap (previous behavior).
+  dailyCapMin        Int?
+  // Optional self-hosted model for /tasks/import (e.g. Ollama on a home
+  // desktop, reachable at a Tailscale address from other devices) — an
+  // OpenAI-compatible chat-completions endpoint. When set, syllabus
+  // extraction calls this instead of the Claude API, so it isn't
+  // subscription-dependent. Null = use Claude (needs ANTHROPIC_API_KEY).
+  localAiUrl         String?
+  localAiModel       String?
   updatedAt          DateTime @updatedAt
 }
 
 model Project {
   id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
   name      String
   // Tailwind color family name (e.g. "indigo", "amber") used to derive
   // badge/pill classes — see PROJECT_COLORS in src/app/page.tsx.
   color     String   @default("zinc")
   tasks     Task[]
+  automationRules AutomationRule[]
+  createdAt DateTime @default(now())
+}
+
+enum FeedbackCategory {
+  BUG
+  SUGGESTION
+  OTHER
+}
+
+// Free-form in-app feedback (feedback button, any page) — lands here
+// instead of email/Slack so it's queryable while iterating on the app.
+model Feedback {
+  id        String           @id @default(cuid())
+  userId    String?
+  user      User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
+  category  FeedbackCategory @default(SUGGESTION)
+  message   String
+  // Path the reporter was on when they opened the form, for context.
+  page      String?
+  createdAt DateTime         @default(now())
+}
+
+// Multiple public booking pages per user (e.g. a 15-min quick chat vs. a
+// 30-min deep dive), replacing the single bookingSlug/Enabled/Duration/
+// Title fields AppSettings used to carry. Each is independently
+// enable-able and has its own slug/title/duration.
+model BookingLink {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  slug        String   @unique
+  title       String
+  durationMin Int
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// Trigger = a task's status changing to `triggerStatus` (optionally
+// scoped to one project); action = one of a small fixed set below,
+// reusing features already built elsewhere (AI subtasks, AI email
+// drafts) rather than a general-purpose action language. Evaluated by
+// runAutomationsForStatusChange in src/lib/automations.ts, called from
+// every place a task's status actually changes (setTaskStatusAction,
+// toggleTaskDone, delayTaskAction).
+enum AutomationAction {
+  NOTIFY
+  GENERATE_SUBTASKS
+  DRAFT_EMAIL
+  SET_PRIORITY_URGENT
+}
+
+model AutomationRule {
+  id            String           @id @default(cuid())
+  userId        String
+  user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  triggerStatus TaskStatus
+  projectId     String?
+  project       Project?         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  action        AutomationAction
+  enabled       Boolean          @default(true)
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+}
+
+// Queued by the NOTIFY action, polled by NotificationWatcher.tsx the
+// same way it already polls for upcoming-event reminders — a real
+// browser Notification, not a DB-only "inbox" nobody looks at.
+model AutomationNotification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  message   String
+  seen      Boolean  @default(false)
   createdAt DateTime @default(now())
 }

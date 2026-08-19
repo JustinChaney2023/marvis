@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { createBookingAction } from "../../actions";
+import { CloseIcon } from "../../icons";
+import Button from "../../ui/Button";
 
 export type BookingDay = {
   dayLabel: string;
@@ -9,6 +11,7 @@ export type BookingDay = {
 };
 
 type Props = {
+  slug: string;
   title: string;
   durationMinutes: number;
   availability: BookingDay[];
@@ -20,7 +23,7 @@ type Confirmation = {
 };
 
 const inputClass =
-  "rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900";
+  "rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800";
 
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString(undefined, {
@@ -43,6 +46,7 @@ function formatDayHeading(dayLabel: string): string {
 }
 
 export default function BookingClient({
+  slug,
   title,
   durationMinutes,
   availability,
@@ -71,7 +75,7 @@ export default function BookingClient({
     setIsSubmitting(true);
     setErrorMsg(null);
     try {
-      const result = await createBookingAction(selectedSlot.slotIso, formData);
+      const result = await createBookingAction(slug, selectedSlot.slotIso, formData);
       if (result.ok) {
         setSelectedSlot(null);
         setConfirmation({
@@ -132,7 +136,7 @@ export default function BookingClient({
     <>
       <div className="mt-6 space-y-6">
         {!hasAnySlots && (
-          <p className="rounded-lg border border-dashed border-zinc-200 py-6 text-center text-sm text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
+          <p className="rounded-lg border border-dashed border-zinc-200 py-6 text-center text-sm text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
             No open times in the next two weeks.
           </p>
         )}
@@ -151,7 +155,7 @@ export default function BookingClient({
                       setErrorMsg(null);
                       setSelectedSlot({ dayLabel: day.dayLabel, slotIso: iso });
                     }}
-                    className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 shadow-sm transition-all hover:border-indigo-300 hover:bg-indigo-50 active:scale-[0.98] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-indigo-500/50 dark:hover:bg-indigo-950/40"
+                    className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 shadow-sm transition-all hover:border-indigo-300 hover:bg-indigo-50 active:scale-[0.98] dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:border-indigo-500/50 dark:hover:bg-indigo-950/40"
                   >
                     {formatTime(iso)}
                   </button>
@@ -164,12 +168,12 @@ export default function BookingClient({
 
       {selectedSlot && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
           onClick={onBackdropClick}
           role="dialog"
           aria-modal="true"
         >
-          <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-6 shadow-2xl ring-1 ring-black/5 dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-6 shadow-2xl ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold tracking-tight">
                 {formatTime(selectedSlot.slotIso)} ·{" "}
@@ -184,9 +188,9 @@ export default function BookingClient({
                   }
                 }}
                 aria-label="close"
-                className="flex h-7 w-7 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                className="flex h-7 w-7 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-700"
               >
-                ×
+                <CloseIcon />
               </button>
             </div>
             <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
@@ -234,8 +238,9 @@ export default function BookingClient({
               )}
 
               <div className="flex items-center justify-end gap-2">
-                <button
+                <Button
                   type="button"
+                  variant="outline"
                   onClick={() => {
                     if (!isSubmitting) {
                       setSelectedSlot(null);
@@ -243,17 +248,12 @@ export default function BookingClient({
                     }
                   }}
                   disabled={isSubmitting}
-                  className="rounded-lg border border-zinc-200 px-3 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
                 >
                   Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-all hover:bg-indigo-700 active:scale-[0.98] disabled:opacity-50 dark:bg-indigo-500 dark:hover:bg-indigo-400"
-                >
+                </Button>
+                <Button type="submit" pending={isSubmitting}>
                   {isSubmitting ? "Booking…" : "Confirm"}
-                </button>
+                </Button>
               </div>
             </form>
           </div>

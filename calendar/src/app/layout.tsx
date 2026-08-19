@@ -3,8 +3,8 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import QuickCapture from "./QuickCapture";
 import NotificationWatcher from "./NotificationWatcher";
-import ThemeToggle from "./ThemeToggle";
-import SettingsButton from "./SettingsButton";
+import MeetingBanner from "./MeetingBanner";
+import TopBar from "./TopBar";
 
 // Runs before paint so there's no flash of the wrong theme. Kept as a
 // plain string (not a .ts file) since it needs to execute inline, before
@@ -45,12 +45,12 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>
-      <body className="min-h-full flex flex-col bg-zinc-50 text-zinc-900 transition-colors duration-200 dark:bg-black dark:text-zinc-50">
-        {children}
+      <body className="flex h-full flex-col overflow-hidden bg-zinc-50 text-zinc-900 transition-colors duration-200 dark:bg-zinc-900 dark:text-zinc-50">
+        <TopBar />
+        <MeetingBanner />
+        <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
         <QuickCapture />
         <NotificationWatcher />
-        <ThemeToggle />
-        <SettingsButton />
       </body>
     </html>
   );

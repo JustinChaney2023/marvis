@@ -8,24 +8,12 @@ export default async function PublicBookingPage(
 ) {
   const { slug } = await props.params;
 
-  // Direct lookup, not getAppSettings() — the single AppSettings row may
-  // not even have a bookingSlug yet (fresh install, owner hasn't set it
-  // up), and the only thing we actually need to check is "does this
-  // exact slug match an enabled booking row?".
-  const settings = await prisma.appSettings.findFirst({
-    where: { bookingSlug: slug },
-    select: {
-      bookingEnabled: true,
-      bookingTitle: true,
-      bookingDurationMin: true,
-      bookingSlug: true,
-    },
-  });
-  if (!settings || !settings.bookingEnabled || !settings.bookingSlug) {
+  const link = await prisma.bookingLink.findUnique({ where: { slug } });
+  if (!link || !link.enabled) {
     notFound();
   }
 
-  const raw = await getAvailableBookingSlots();
+  const raw = await getAvailableBookingSlots(link.userId, link.durationMin);
   const availability: BookingDay[] = raw.map((entry) => ({
     dayLabel: entry.day,
     slots: entry.slots.map((d) => d.toISOString()),
@@ -33,18 +21,19 @@ export default async function PublicBookingPage(
 
   return (
     <main className="mx-auto w-full max-w-lg flex-1 px-6 py-12">
-      <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm ring-1 ring-black/5 dark:border-zinc-800 dark:bg-zinc-900">
+      <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
         <h1 className="text-2xl font-bold tracking-tight">
-          {settings.bookingTitle}
+          {link.title}
         </h1>
         <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-          Pick a time ({settings.bookingDurationMin} min) — shown in your
+          Pick a time ({link.durationMin} min) — shown in your
           local time zone
         </p>
 
         <BookingClient
-          title={settings.bookingTitle}
-          durationMinutes={settings.bookingDurationMin}
+          slug={slug}
+          title={link.title}
+          durationMinutes={link.durationMin}
           availability={availability}
         />
       </div>

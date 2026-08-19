@@ -14,21 +14,22 @@ import {
   assert.equal(end.getTime() - start.getTime(), 30 * 60_000);
 }
 
-// The bug this file exists to catch: "+ New event" at 4am (before
-// HOUR_START) used to create a real event that rendered nowhere on the
-// hour grid — clicking it looked completely broken with no error anywhere.
+// The grid is now the full 24h (HOUR_START 0 / HOUR_END 24, so the
+// clamp below is a no-op) — this used to be the "4am gets clamped to
+// HOUR_START" case back when the grid was 6am-10pm; now 4am is a normal
+// in-window time and should round up within the same day, unclamped.
 {
   const { start } = defaultNewEventTimes(new Date(2026, 7, 18, 4, 0));
   assert.equal(start.getDate(), 18);
-  assert.equal(start.getHours(), HOUR_START);
+  assert.equal(start.getHours(), 4);
 }
 
-// Late night (after HOUR_END) rolls to next day's HOUR_START, not today
-// at an hour that still wouldn't render.
+// Same story at the old HOUR_END boundary (10pm) — no longer clamped to
+// the next day since the grid now runs all 24 hours.
 {
   const { start } = defaultNewEventTimes(new Date(2026, 7, 18, 23, 0));
-  assert.equal(start.getDate(), 19);
-  assert.equal(start.getHours(), HOUR_START);
+  assert.equal(start.getDate(), 18);
+  assert.equal(start.getHours(), 23);
 }
 
 // Midnight-wrap: rounding up from 23:31-23:59 crosses into the next

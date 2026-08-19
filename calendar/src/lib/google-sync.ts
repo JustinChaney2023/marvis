@@ -25,12 +25,13 @@ function extractRRule(recurrence: string[] | null | undefined): string | null {
  * src/lib/recurrence.ts the same as locally-created recurring events —
  * not imported as hundreds of individual occurrence rows.
  *
- * Known gap (v1): doesn't detect events deleted on the Google side
- * (would need showDeleted + tombstone handling) — only creates/updates.
+ * Also deletes local rows whose Google counterpart came back
+ * status: "cancelled" (showDeleted: true) — a deletion made directly on
+ * Google, not through this app, removes the local copy on the next sync.
  */
-export async function importFromGoogle() {
-  const auth = await getAuthorizedClient();
-  if (!auth) return { imported: 0 };
+export async function importFromGoogle(userId: string) {
+  const auth = await getAuthorizedClient(userId);
+  if (!auth) return { imported: 0, deleted: 0 };
   const calendar = google.calendar({ version: "v3", auth: auth.client });
 
   const timeMin = new Date(
@@ -46,13 +47,29 @@ export async function importFromGoogle() {
     timeMax,
     singleEvents: false,
     maxResults: 250,
+    // Without this, Google silently omits cancelled items from the
+    // window instead of returning them with status: "cancelled" — the
+    // only way to see a Google-side deletion at all.
+    showDeleted: true,
   });
 
   const items = res.data.items ?? [];
   let imported = 0;
+  let deleted = 0;
   for (const item of items) {
     try {
-      if (!item.id || item.status === "cancelled") continue;
+      if (!item.id) continue;
+      if (item.status === "cancelled") {
+        // Deleted directly on Google (not through this app) — remove the
+        // local copy so it doesn't linger here after being gone on
+        // Google. Scoped by googleEventId (unique), so this can never
+        // touch a LOCAL-sourced event.
+        const { count } = await prisma.event.deleteMany({
+          where: { googleEventId: item.id },
+        });
+        deleted += count;
+        continue;
+      }
       // singleEvents: false returns recurring masters, but also leaks
       // exception instances (a moved/edited single occurrence) as
       // separate items carrying recurringEventId. Importing those as
@@ -76,6 +93,7 @@ export async function importFromGoogle() {
       await prisma.event.upsert({
         where: { googleEventId: item.id },
         create: {
+          userId,
           title: item.summary ?? "(untitled)",
           start,
           end,
@@ -106,7 +124,7 @@ export async function importFromGoogle() {
     data: { lastSyncedAt: new Date() },
   });
 
-  return { imported };
+  return { imported, deleted };
 }
 
 /**
@@ -117,12 +135,12 @@ export async function importFromGoogle() {
  * bookkeeping and importFromGoogle's upserts, which made every row look
  * permanently dirty regardless of any real local edit.
  */
-export async function exportToGoogle() {
-  const auth = await getAuthorizedClient();
+export async function exportToGoogle(userId: string) {
+  const auth = await getAuthorizedClient(userId);
   if (!auth) return { exported: 0 };
   const calendar = google.calendar({ version: "v3", auth: auth.client });
 
-  const all = await prisma.event.findMany();
+  const all = await prisma.event.findMany({ where: { userId } });
   const toPush = all.filter((e) => !e.googleEventId || e.localDirty);
 
   let exported = 0;
@@ -190,8 +208,8 @@ export async function exportToGoogle() {
 }
 
 /** Push local deletion of a Google-linked event before its row is removed. */
-export async function deleteFromGoogle(googleEventId: string) {
-  const auth = await getAuthorizedClient();
+export async function deleteFromGoogle(userId: string, googleEventId: string) {
+  const auth = await getAuthorizedClient(userId);
   if (!auth) return;
   const calendar = google.calendar({ version: "v3", auth: auth.client });
   try {
@@ -206,8 +224,8 @@ export async function deleteFromGoogle(googleEventId: string) {
   }
 }
 
-export async function syncGoogleCalendar() {
-  const exportResult = await exportToGoogle();
-  const importResult = await importFromGoogle();
+export async function syncGoogleCalendar(userId: string) {
+  const exportResult = await exportToGoogle(userId);
+  const importResult = await importFromGoogle(userId);
   return { ...exportResult, ...importResult };
 }

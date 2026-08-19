@@ -7,18 +7,22 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "tsx src/lib/scheduler.test.ts && tsx src/lib/recurrence.test.ts && tsx src/lib/quickCapture.test.ts && tsx src/lib/calendar-dates.test.ts && tsx src/lib/taskRecurrence.test.ts",
+    "test": "tsx src/lib/scheduler.test.ts && tsx src/lib/recurrence.test.ts && tsx src/lib/quickCapture.test.ts && tsx src/lib/calendar-dates.test.ts && tsx src/lib/taskRecurrence.test.ts && tsx src/app/calendar/CalendarClient.test.ts",
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.117.1",
     "@prisma/client": "^6.19.3",
     "dotenv": "^17.4.2",
     "googleapis": "^175.0.0",
+    "ical.js": "^2.2.1",
     "next": "16.3.1",
     "prisma": "^6.19.3",
     "react": "19.2.8",
     "react-dom": "19.2.8",
-    "rrule": "^2.8.1"
+    "rrule": "^2.8.1",
+    "tsdav": "^2.3.1",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",

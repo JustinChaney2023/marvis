@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   addDays,
   addMonths,
@@ -22,7 +22,8 @@ import {
   type CalendarView,
 } from "@/lib/calendar-dates";
 import EventModal, { type EventModalEvent } from "./EventModal";
-import { moveEvent } from "../actions";
+import { LockIcon, FlagIcon } from "../icons";
+import { moveEvent, deleteEvent } from "../actions";
 
 export type CalendarEvent = {
   id: string;
@@ -34,7 +35,34 @@ export type CalendarEvent = {
   recurrenceRule: string | null;
   locked: boolean;
   allDay: boolean;
+  meetingUrl: string | null;
+  // The project's Tailwind color family (e.g. "indigo") via task.project,
+  // or null for a manually-created event with no task/project — see
+  // PROJECT_EVENT_COLORS below for the class lookup.
+  projectColor: string | null;
+  // The linked task's priority (0=Low..3=Urgent), or null for a manual
+  // event with no task. Only High/Urgent get a visible flag — see
+  // EventBlock, showing every priority level would clutter a block this
+  // small.
+  taskPriority: number | null;
 };
+
+// Full literal class strings, same reasoning as tasks/page.tsx's
+// PROJECT_COLOR_BADGE — Tailwind's JIT scanner can't see `bg-${color}-500`.
+export const PROJECT_EVENT_COLORS: Record<
+  string,
+  { bar: string; bg: string; text: string }
+> = {
+  zinc: { bar: "border-l-zinc-500", bg: "bg-zinc-50 dark:bg-zinc-700/40", text: "text-zinc-900 dark:text-zinc-100" },
+  red: { bar: "border-l-red-500", bg: "bg-red-50 dark:bg-red-950/30", text: "text-red-900 dark:text-red-100" },
+  amber: { bar: "border-l-amber-500", bg: "bg-amber-50 dark:bg-amber-950/30", text: "text-amber-900 dark:text-amber-100" },
+  green: { bar: "border-l-green-500", bg: "bg-green-50 dark:bg-green-950/30", text: "text-green-900 dark:text-green-100" },
+  blue: { bar: "border-l-blue-500", bg: "bg-blue-50 dark:bg-blue-950/30", text: "text-blue-900 dark:text-blue-100" },
+  indigo: { bar: "border-l-indigo-500", bg: "bg-indigo-50 dark:bg-indigo-950/30", text: "text-indigo-900 dark:text-indigo-100" },
+  violet: { bar: "border-l-violet-500", bg: "bg-violet-50 dark:bg-violet-950/30", text: "text-violet-900 dark:text-violet-100" },
+  pink: { bar: "border-l-pink-500", bg: "bg-pink-50 dark:bg-pink-950/30", text: "text-pink-900 dark:text-pink-100" },
+};
+const DEFAULT_EVENT_COLOR = PROJECT_EVENT_COLORS.indigo;
 
 type Props = {
   view: CalendarView;
@@ -54,7 +82,7 @@ type PlacedEvent = { event: CalendarEvent; col: number; cols: number };
 
 type DraggingEvent = { id: string; masterId: string; durationMs: number };
 
-function layoutOverlappingEvents(events: CalendarEvent[]): PlacedEvent[] {
+export function layoutOverlappingEvents(events: CalendarEvent[]): PlacedEvent[] {
   const sorted = [...events].sort(
     (a, b) => a.start.getTime() - b.start.getTime(),
   );
@@ -76,6 +104,12 @@ function layoutOverlappingEvents(events: CalendarEvent[]): PlacedEvent[] {
   const result: PlacedEvent[] = [];
   for (const cluster of clusters) {
     const columns: CalendarEvent[][] = [];
+    // Track where this cluster's entries start in `result` so the cols
+    // backfill below only touches its own entries — indexing by position
+    // instead of `cluster.includes(r.event)` scanning the whole
+    // (ever-growing) result array per cluster, which made this whole
+    // function scale as roughly O(n^2) on a busy day with many clusters.
+    const startIdx = result.length;
     for (const ev of cluster) {
       let placed = false;
       for (let i = 0; i < columns.length; i++) {
@@ -93,10 +127,8 @@ function layoutOverlappingEvents(events: CalendarEvent[]): PlacedEvent[] {
       }
     }
     const cols = columns.length;
-    for (const r of result) {
-      if (cluster.includes(r.event)) {
-        r.cols = cols;
-      }
+    for (let i = startIdx; i < result.length; i++) {
+      result[i].cols = cols;
     }
   }
   return result;
@@ -161,7 +193,7 @@ function minutesToDate(day: Date, minutes: number): Date {
 }
 
 type ModalState =
-  | { mode: "create"; start: Date; end: Date }
+  | { mode: "create"; start: Date; end: Date; initialTitle?: string; initialLocked?: boolean }
   | { mode: "edit"; event: EventModalEvent };
 
 export default function CalendarClient({
@@ -172,12 +204,76 @@ export default function CalendarClient({
 }: Props) {
   const [modalState, setModalState] = useState<ModalState | null>(null);
   const [draggingEvent, setDraggingEvent] = useState<DraggingEvent | null>(null);
+  const [selectedEventIds, setSelectedEventIds] = useState<Set<string>>(new Set());
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const start = useMemo(() => parseYMD(startYMD), [startYMD]);
   const today = useMemo(() => parseYMD(todayISO), [todayISO]);
   const range = useMemo(() => computeRange(view, start), [view, start]);
+  // A stale selection pointing at events no longer on screen (after
+  // navigating to a different date/view) would leave the "N selected"
+  // bar showing with nothing visibly selected — clear it on navigation.
+  useEffect(() => {
+    setSelectedEventIds(new Set());
+  }, [view, startYMD]);
 
-  const openCreate = (s: Date, e: Date) =>
-    setModalState({ mode: "create", start: s, end: e });
+  const openCreate = (
+    s: Date,
+    e: Date,
+    prefill?: { title?: string; locked?: boolean },
+  ) =>
+    setModalState({
+      mode: "create",
+      start: s,
+      end: e,
+      initialTitle: prefill?.title,
+      initialLocked: prefill?.locked,
+    });
+  const toggleSelected = (id: string) => {
+    setSelectedEventIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+  const clearSelection = () => setSelectedEventIds(new Set());
+  // "Bulk move" without reconciling a group-drag against the existing
+  // single-event native HTML5 drag-and-drop (the hard, still-open half
+  // of GitHub issue #3) — nudging the whole selection by a fixed amount
+  // is a real, much smaller way to move several events together at once.
+  // Skips locked/recurring events, same as the per-event drag already does.
+  const handleBulkNudge = async (deltaMinutes: number) => {
+    if (selectedEventIds.size === 0 || isBulkDeleting) return;
+    const deltaMs = deltaMinutes * 60_000;
+    const targets = events.filter(
+      (e) => selectedEventIds.has(e.id) && !e.locked && !e.isRecurring,
+    );
+    try {
+      await Promise.all(
+        targets.map((e) =>
+          moveEvent(
+            e.masterId,
+            new Date(e.start.getTime() + deltaMs).toISOString(),
+            new Date(e.end.getTime() + deltaMs).toISOString(),
+          ),
+        ),
+      );
+    } catch (err) {
+      console.error(err);
+    }
+  };
+  const handleBulkDelete = async () => {
+    if (selectedEventIds.size === 0 || isBulkDeleting) return;
+    setIsBulkDeleting(true);
+    try {
+      await Promise.all([...selectedEventIds].map((id) => deleteEvent(id)));
+      clearSelection();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsBulkDeleting(false);
+    }
+  };
   const openEdit = (event: CalendarEvent) => {
     setModalState({
       mode: "edit",
@@ -188,10 +284,12 @@ export default function CalendarClient({
         end: event.end,
         recurrenceRule: event.recurrenceRule,
         locked: event.locked,
+        meetingUrl: event.meetingUrl,
       },
     });
   };
   const closeModal = () => setModalState(null);
+  const scrollToNowRef = useRef<(() => void) | null>(null);
 
   const router = useRouter();
   useEffect(() => {
@@ -205,7 +303,12 @@ export default function CalendarClient({
       if (modalState || isTypingTarget(e.target) || e.metaKey || e.ctrlKey) return;
 
       if (e.key === "t") {
-        router.push(`/?view=${view}&start=${formatYMD(new Date())}`);
+        const isAlreadyToday = formatYMD(start) === formatYMD(new Date());
+        if (isAlreadyToday) {
+          scrollToNowRef.current?.();
+        } else {
+          router.push(`/?view=${view}&start=${formatYMD(new Date())}`);
+        }
         return;
       }
       if (e.key === "d" || e.key === "w" || e.key === "m") {
@@ -248,7 +351,33 @@ export default function CalendarClient({
 
   return (
     <>
-      <div className="mt-4 flex justify-end">
+      <div className="mt-4 flex justify-end gap-2">
+        {view !== "month" && (
+          <button
+            type="button"
+            onClick={() => {
+              if (formatYMD(start) === formatYMD(new Date())) {
+                scrollToNowRef.current?.();
+              } else {
+                router.push(`/?view=${view}&start=${formatYMD(new Date())}`);
+              }
+            }}
+            className="rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 shadow-sm transition-colors hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-200 dark:hover:bg-zinc-700"
+          >
+            Now
+          </button>
+        )}
+        <button
+          type="button"
+          title="A locked block the auto-scheduler won't place tasks into"
+          onClick={() => {
+            const { start, end } = defaultNewEventTimes();
+            openCreate(start, end, { title: "Focus time", locked: true });
+          }}
+          className="rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 shadow-sm transition-colors hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-200 dark:hover:bg-zinc-700"
+        >
+          + Focus block
+        </button>
         <button
           type="button"
           onClick={() => {
@@ -281,15 +410,69 @@ export default function CalendarClient({
             draggingEvent={draggingEvent}
             onEventDragStart={handleEventDragStart}
             onEventDragEnd={handleEventDragEnd}
+            scrollToNowRef={scrollToNowRef}
+            selectedEventIds={selectedEventIds}
+            onToggleSelect={toggleSelected}
           />
         )}
       </div>
+
+      {selectedEventIds.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 z-40 flex -translate-x-1/2 items-center gap-3 rounded-full border border-zinc-200 bg-white px-4 py-2 shadow-lg ring-1 ring-black/5 dark:border-zinc-600 dark:bg-zinc-800">
+          <span className="text-sm font-medium">
+            {selectedEventIds.size} selected
+          </span>
+          <div className="flex items-center gap-1 border-l border-zinc-200 pl-3 dark:border-zinc-600">
+            <button
+              type="button"
+              title="Move all selected 15 minutes earlier"
+              onClick={() => handleBulkNudge(-15)}
+              className="rounded-full px-2 py-1 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700"
+            >
+              −15m
+            </button>
+            <button
+              type="button"
+              title="Move all selected 15 minutes later"
+              onClick={() => handleBulkNudge(15)}
+              className="rounded-full px-2 py-1 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700"
+            >
+              +15m
+            </button>
+            <button
+              type="button"
+              title="Move all selected 1 day later"
+              onClick={() => handleBulkNudge(24 * 60)}
+              className="rounded-full px-2 py-1 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700"
+            >
+              +1d
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={handleBulkDelete}
+            disabled={isBulkDeleting}
+            className="rounded-full bg-red-600 px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50 dark:bg-red-500 dark:hover:bg-red-400"
+          >
+            {isBulkDeleting ? "Deleting…" : "Delete"}
+          </button>
+          <button
+            type="button"
+            onClick={clearSelection}
+            className="text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
+          >
+            Clear
+          </button>
+        </div>
+      )}
 
       {modalState?.mode === "create" && (
         <EventModal
           mode="create"
           initialStart={modalState.start}
           initialEnd={modalState.end}
+          initialTitle={modalState.initialTitle}
+          initialLocked={modalState.initialLocked}
           event={null}
           onClose={closeModal}
         />
@@ -316,6 +499,9 @@ function HourGrid({
   draggingEvent,
   onEventDragStart,
   onEventDragEnd,
+  scrollToNowRef,
+  selectedEventIds,
+  onToggleSelect,
 }: {
   days: Date[];
   events: CalendarEvent[];
@@ -325,6 +511,9 @@ function HourGrid({
   draggingEvent: DraggingEvent | null;
   onEventDragStart: (id: string, masterId: string, durationMs: number) => void;
   onEventDragEnd: () => void;
+  scrollToNowRef: React.MutableRefObject<(() => void) | null>;
+  selectedEventIds: Set<string>;
+  onToggleSelect: (id: string) => void;
 }) {
   const gridStyle = {
     gridTemplateColumns: `repeat(${days.length}, minmax(0, 1fr))`,
@@ -333,6 +522,33 @@ function HourGrid({
   // (7 columns) needs — that would make single-day mobile use scroll for
   // no reason. Scale with column count instead of a single fixed value.
   const minWidthRem = Math.max(days.length * 5, 18);
+
+  // Full 24h grid (like Motion) doesn't fit on screen at once, so the
+  // hour body scrolls independently of the day header — and starts
+  // scrolled to just before the current time instead of midnight.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollToNow = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const now = new Date();
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+    const scrollToMinutes = Math.max(0, nowMinutes - 120);
+    el.scrollTo({ top: (scrollToMinutes / 60) * HOUR_HEIGHT, behavior: "smooth" });
+  };
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const now = new Date();
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+    const scrollToMinutes = Math.max(0, nowMinutes - 120);
+    el.scrollTop = (scrollToMinutes / 60) * HOUR_HEIGHT;
+  }, []);
+  useEffect(() => {
+    scrollToNowRef.current = scrollToNow;
+    return () => {
+      scrollToNowRef.current = null;
+    };
+  });
 
   return (
     <div className="overflow-x-auto">
@@ -345,7 +561,7 @@ function HourGrid({
               return (
                 <div
                   key={day.toISOString()}
-                  className="border-b border-l border-zinc-200 px-2 py-1.5 text-center dark:border-zinc-800"
+                  className="border-b border-l border-zinc-200 px-2 py-1.5 text-center dark:border-zinc-700"
                 >
                   <div className="text-xs font-medium text-zinc-500">
                     {dayWeekdayLabel(day)}
@@ -365,7 +581,7 @@ function HourGrid({
           </div>
         </div>
         {days.some((day) => events.some((e) => e.allDay && overlapsDay(e, day))) && (
-          <div className="flex border-b border-zinc-200 dark:border-zinc-800">
+          <div className="flex border-b border-zinc-200 dark:border-zinc-700">
             <div className="flex w-16 flex-shrink-0 items-center justify-end pr-2 text-[10px] text-zinc-400">
               All day
             </div>
@@ -392,7 +608,10 @@ function HourGrid({
             </div>
           </div>
         )}
-        <div className="flex">
+        <div
+          ref={scrollRef}
+          className="calendar-scroll flex max-h-[70vh] overflow-y-auto"
+        >
           <div className="w-16 flex-shrink-0">
             {HOURS.map((h) => (
               <div
@@ -409,12 +628,15 @@ function HourGrid({
               <DayColumn
                 key={day.toISOString()}
                 day={day}
+                isToday={isSameDay(day, today)}
                 events={events}
                 onEmptyClick={onEmptyClick}
                 onEventClick={onEventClick}
                 draggingEvent={draggingEvent}
                 onEventDragStart={onEventDragStart}
                 onEventDragEnd={onEventDragEnd}
+                selectedEventIds={selectedEventIds}
+                onToggleSelect={onToggleSelect}
               />
             ))}
           </div>
@@ -426,21 +648,33 @@ function HourGrid({
 
 function DayColumn({
   day,
+  isToday,
   events,
   onEmptyClick,
   onEventClick,
   draggingEvent,
   onEventDragStart,
   onEventDragEnd,
+  selectedEventIds,
+  onToggleSelect,
 }: {
   day: Date;
+  isToday: boolean;
   events: CalendarEvent[];
   onEmptyClick: (start: Date, end: Date) => void;
   onEventClick: (event: CalendarEvent) => void;
   draggingEvent: DraggingEvent | null;
   onEventDragStart: (id: string, masterId: string, durationMs: number) => void;
   onEventDragEnd: () => void;
+  selectedEventIds: Set<string>;
+  onToggleSelect: (id: string) => void;
 }) {
+  // Recomputed each render (not just on mount) so the line keeps pace
+  // while the tab stays open, same as the header's today highlight.
+  const nowTop = isToday
+    ? ((new Date().getHours() * 60 + new Date().getMinutes() - HOUR_START * 60) / 60) *
+      HOUR_HEIGHT
+    : null;
   const dayEvents = useMemo(
     () => events.filter((e) => !e.allDay && isSameDay(e.start, day)),
     [events, day],
@@ -530,19 +764,32 @@ function DayColumn({
 
   return (
     <div
-      className="relative border-l border-zinc-200 dark:border-zinc-800"
+      className={
+        isToday
+          ? "relative border-l border-zinc-200 bg-indigo-50/40 dark:border-zinc-700 dark:bg-indigo-500/[0.06]"
+          : "relative border-l border-zinc-200 dark:border-zinc-700"
+      }
       style={{ height: `${TOTAL_HEIGHT}px` }}
     >
       {HOURS.map((h) => (
         <div
           key={h}
-          className="pointer-events-none absolute left-0 right-0 border-t border-zinc-200 dark:border-zinc-800"
+          className="pointer-events-none absolute left-0 right-0 border-t border-zinc-200 dark:border-zinc-700"
           style={{
             top: `${(h - HOUR_START) * HOUR_HEIGHT}px`,
             height: `${HOUR_HEIGHT}px`,
           }}
         />
       ))}
+      {nowTop !== null && (
+        <div
+          className="pointer-events-none absolute left-0 right-0 z-10 flex items-center"
+          style={{ top: `${nowTop}px` }}
+        >
+          <div className="-ml-1 h-2 w-2 flex-shrink-0 rounded-full bg-red-500" />
+          <div className="h-px flex-1 bg-red-500" />
+        </div>
+      )}
       <div
         className="absolute inset-0"
         onMouseDown={handleMouseDown}
@@ -576,6 +823,8 @@ function DayColumn({
             onMoveStart={onEventDragStart}
             onMoveEnd={onEventDragEnd}
             onClick={onEventClick}
+            selected={selectedEventIds.has(event.id)}
+            onToggleSelect={onToggleSelect}
           />
         );
       })}
@@ -593,6 +842,8 @@ function EventBlock({
   onMoveStart,
   onMoveEnd,
   onClick,
+  selected,
+  onToggleSelect,
 }: {
   event: CalendarEvent;
   top: number;
@@ -603,6 +854,8 @@ function EventBlock({
   onMoveStart: (id: string, masterId: string, durationMs: number) => void;
   onMoveEnd: () => void;
   onClick: (event: CalendarEvent) => void;
+  selected: boolean;
+  onToggleSelect: (id: string) => void;
 }) {
   const [previewEnd, setPreviewEnd] = useState<Date | null>(null);
   const [previewHeight, setPreviewHeight] = useState<number | null>(null);
@@ -667,6 +920,9 @@ function EventBlock({
 
   const displayHeight = previewHeight ?? height;
   const displayEnd = previewEnd ?? event.end;
+  const color = event.projectColor
+    ? (PROJECT_EVENT_COLORS[event.projectColor] ?? DEFAULT_EVENT_COLOR)
+    : DEFAULT_EVENT_COLOR;
 
   return (
     <button
@@ -676,12 +932,17 @@ function EventBlock({
       onDragEnd={handleDragEnd}
       onClick={(e) => {
         e.stopPropagation();
+        if (e.shiftKey || e.metaKey || e.ctrlKey) {
+          onToggleSelect(event.id);
+          return;
+        }
         onClick(event);
       }}
       type="button"
-      className={`group absolute overflow-hidden rounded-lg border-y border-r border-zinc-200/40 border-l-2 border-l-indigo-500 bg-indigo-50 p-1.5 text-left text-indigo-900 shadow-sm transition-all hover:shadow-md hover:brightness-95 dark:border-zinc-700/60 dark:bg-indigo-950/30 dark:text-indigo-100 dark:hover:brightness-110 ${
+      title="Shift/Cmd/Ctrl-click to select multiple events"
+      className={`group absolute overflow-hidden rounded-lg border-y border-r border-zinc-200/40 border-l-2 p-1.5 text-left shadow-sm transition-all hover:shadow-md hover:brightness-95 dark:border-zinc-600/60 dark:hover:brightness-110 ${color.bar} ${color.bg} ${color.text} ${
         isDragging ? "opacity-40" : ""
-      }`}
+      } ${selected ? "ring-2 ring-indigo-500 ring-offset-1 dark:ring-offset-zinc-900" : ""}`}
       style={{
         top: `${top}px`,
         height: `${displayHeight}px`,
@@ -693,12 +954,31 @@ function EventBlock({
         <span
           aria-label="Locked"
           title="Locked — won't be moved by auto-scheduling or drag"
-          className="absolute right-1 top-1 text-[10px] opacity-70"
+          className="absolute right-1 top-1 opacity-70"
         >
-          🔒
+          <LockIcon className="h-2.5 w-2.5" />
         </span>
       )}
-      <div className="truncate pr-3 text-xs font-medium">{event.title}</div>
+      {event.taskPriority !== null && event.taskPriority >= 2 && (
+        <span
+          aria-label={event.taskPriority === 3 ? "Urgent priority" : "High priority"}
+          title={event.taskPriority === 3 ? "Urgent priority task" : "High priority task"}
+          className={
+            event.taskPriority === 3
+              ? "absolute left-1 top-1 text-red-600 dark:text-red-400"
+              : "absolute left-1 top-1 text-amber-600 dark:text-amber-400"
+          }
+        >
+          <FlagIcon className="h-2.5 w-2.5" />
+        </span>
+      )}
+      <div
+        className={`truncate pr-3 text-xs font-medium ${
+          event.taskPriority !== null && event.taskPriority >= 2 ? "pl-3" : ""
+        }`}
+      >
+        {event.title}
+      </div>
       {displayHeight >= 32 && (
         <div className="truncate text-[10px] opacity-80">
           {formatTime(event.start)} – {formatTime(displayEnd)}
@@ -749,11 +1029,11 @@ function MonthView({
   const currentMonth = viewStart.getMonth();
 
   return (
-    <div className="grid grid-cols-7 gap-px overflow-hidden rounded-xl border border-zinc-200 bg-zinc-200 shadow-sm ring-1 ring-black/5 dark:border-zinc-800 dark:bg-zinc-800">
+    <div className="grid grid-cols-7 gap-px overflow-hidden rounded-xl border border-zinc-200 bg-zinc-200 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-700">
       {WEEKDAY_LABELS_MON_FIRST.map((label) => (
         <div
           key={label}
-          className="bg-white px-2 py-1.5 text-center text-xs font-medium text-zinc-500 dark:bg-zinc-900"
+          className="bg-white px-2 py-1.5 text-center text-xs font-medium text-zinc-500 dark:bg-zinc-800"
         >
           {label}
         </div>
@@ -806,13 +1086,13 @@ function MonthCell({
   const dayNumberClass = isToday
     ? "inline-flex h-6 w-6 items-center justify-center rounded-full bg-indigo-600 text-xs font-bold text-white shadow-sm"
     : inCurrentMonth
-      ? "inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold text-zinc-900 transition-colors hover:bg-zinc-100 dark:text-zinc-100 dark:hover:bg-zinc-800"
+      ? "inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold text-zinc-900 transition-colors hover:bg-zinc-100 dark:text-zinc-100 dark:hover:bg-zinc-700"
       : "inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold text-zinc-400";
 
   return (
     <div
       onClick={handleClick}
-      className="flex min-h-[7rem] cursor-pointer flex-col gap-1 bg-white p-1.5 transition-colors hover:bg-zinc-50 dark:bg-zinc-900 dark:hover:bg-zinc-800/50"
+      className="flex min-h-[7rem] cursor-pointer flex-col gap-1 bg-white p-1.5 transition-colors hover:bg-zinc-50 dark:bg-zinc-800 dark:hover:bg-zinc-700/50"
     >
       <Link
         data-day-link
@@ -838,9 +1118,9 @@ function MonthCell({
               <span
                 aria-label="Locked"
                 title="Locked"
-                className="ml-1 text-[10px] opacity-70"
+                className="ml-1 inline-block opacity-70"
               >
-                🔒
+                <LockIcon className="inline h-2.5 w-2.5" />
               </span>
             )}
           </button>

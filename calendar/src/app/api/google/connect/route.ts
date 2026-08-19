@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createOAuthClient } from "@/lib/google-auth";
+import { requireUser } from "@/lib/auth";
 
 export async function GET(request: NextRequest) {
+  await requireUser();
   try {
     const client = createOAuthClient();
     const url = client.generateAuthUrl({

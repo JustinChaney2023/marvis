@@ -8,11 +8,48 @@ everything for you to read this morning. This is that writeup. Every
 commit tonight is in `git log` in the `calendar` directory with detailed
 messages — this doc is the summary, that's the detail if you want it.
 
-**Read this whole thing before using the app today** — two of the bugs
+**Read this whole thing before using the app today** — three of the bugs
 found tonight were serious enough that I'd have wanted to flag them even
-outside an autonomous run.
+outside an autonomous run. One of them (below) was live and about to fire
+on your real Google Calendar the next time you hit "sync" — it's fixed,
+but read it.
 
-## The two bugs that mattered most
+## The bug that mattered most: Google sync was about to strip your real events
+
+A third independent review (Fable, after the two below) found the sync
+code's "has this changed since last sync?" check was broken in a way that
+made **every one of your 12 real synced events** (classes, work shifts,
+Sleep, the Fairbanks trip, your dentist appointment) look locally edited,
+permanently, even though you never touched them. I confirmed this against
+your live DB before fixing anything: all 12 had the "dirty" flag set.
+
+Pushing a "dirty" event to Google uses a full-replace API call with only
+title/start/end/recurrence in the body — every field it doesn't mention
+(description, location, reminders, attendees) gets wiped. The very next
+sync would have gutted your Dentist Cleaning event's details, then almost
+certainly failed outright on the first recurring class it hit next,
+because recurring exports were also missing a required timezone field.
+
+Fixed by replacing the broken updatedAt-based check with a real "was this
+actually edited locally" flag, set only by your own edits and cleared once
+a push succeeds, and by adding the missing timezone. Also fixed while in
+there: one failing event no longer aborts the whole sync batch; an event
+deleted on Google no longer permanently wedges every future sync; a
+Google-side edit to one occurrence of a recurring series no longer imports
+as a confusing duplicate; all-day events (your trips) were rendering a day
+early because of a UTC/local date mix-up. I verified the live DB directly
+before and after — all 12 events now show as clean, not dirty — and ran
+your full test suite (all still passing). No calls were made against your
+real Google account during the review; this was found by tracing the code
+and checking database state only.
+
+**What I didn't build tonight:** proper preservation of single-occurrence
+edits/deletions within a recurring series synced from Google (e.g. you
+skip one class on Google — that exception is currently skipped on import
+rather than round-tripped). That's a bigger feature; flagging it as a
+known gap rather than a live risk.
+
+## The two other bugs that mattered most
 
 1. **Every recurring event/task in this app would have drifted an hour
    after Daylight Saving Time ends (Nov 1).** The `rrule` library computes
