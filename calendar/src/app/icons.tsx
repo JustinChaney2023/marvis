@@ -105,8 +105,9 @@ export function ChatIcon({ className = "h-4 w-4" }: IconProps) {
 export function MegaphoneIcon({ className = "h-4 w-4" }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className={className} aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M3 10v4a1 1 0 001 1h2l6 4V5l-6 4H4a1 1 0 00-1 1z" />
-      <path strokeLinecap="round" d="M17 9a4 4 0 010 6M20 6.5a8 8 0 010 11" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 11v2a2 2 0 002 2h1l10 4V5L6 9H5a2 2 0 00-2 2z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6 15v4a1 1 0 001 1h1a1 1 0 001-1v-3" />
+      <path strokeLinecap="round" d="M20 9.5c.6.6 1 1.5 1 2.5s-.4 1.9-1 2.5" />
     </svg>
   );
 }

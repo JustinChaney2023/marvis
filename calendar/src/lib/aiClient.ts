@@ -1,6 +1,8 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import type { z } from "zod";
+import { isIP } from "node:net";
+import { lookup } from "node:dns/promises";
 
 export type LocalAiConfig = { url: string; model: string };
 
@@ -88,6 +90,34 @@ async function callClaude<T>({
   }
 }
 
+function isLinkLocalAddress(ip: string): boolean {
+  if (isIP(ip) === 4) {
+    const [a, b] = ip.split(".").map(Number);
+    return a === 169 && b === 254;
+  }
+  const lower = ip.toLowerCase();
+  return lower.startsWith("fe80:") || lower.includes("::ffff:169.254.");
+}
+
+// Settings → AI lets any signed-in user point this app's server at an
+// arbitrary "local AI" URL (Ollama/LM Studio on localhost or the LAN is
+// the whole point of the feature, so ordinary private addresses are left
+// alone). But 169.254.169.254 — the cloud metadata endpoint on AWS/GCP/
+// Azure/etc — has no legitimate reason to ever be a local-AI target, and
+// hitting it from the server rather than the user's own browser is a
+// real SSRF path to instance credentials on any cloud deployment. Checked
+// against the resolved address, not the hostname string, so a DNS name
+// that merely resolves to a link-local address is caught too.
+async function assertNotLinkLocal(url: string): Promise<void> {
+  const hostname = new URL(url).hostname;
+  const addresses = isIP(hostname)
+    ? [hostname]
+    : (await lookup(hostname, { all: true })).map((entry) => entry.address);
+  if (addresses.some(isLinkLocalAddress)) {
+    throw new Error("Refusing to contact a link-local address.");
+  }
+}
+
 async function callLocalAi<T>({
   system,
   userContent,
@@ -103,6 +133,7 @@ async function callLocalAi<T>({
 }): Promise<AiJsonResult<T>> {
   const endpoint = `${localAi.url.replace(/\/+$/, "")}/chat/completions`;
   try {
+    await assertNotLinkLocal(localAi.url);
     const res = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
