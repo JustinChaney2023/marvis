@@ -18,7 +18,7 @@ const BASE =
 
 const VARIANTS: Record<Variant, string> = {
   primary:
-    "bg-indigo-600 px-4 py-2 text-white shadow-sm hover:bg-indigo-700 active:scale-[0.98] dark:bg-indigo-500 dark:hover:bg-indigo-400",
+    "bg-gradient-to-b from-indigo-500 to-indigo-600 px-4 py-2 text-white shadow-sm hover:from-indigo-500 hover:to-indigo-700 active:scale-[0.98] dark:from-indigo-400 dark:to-indigo-500 dark:hover:to-indigo-400",
   // Filled toolbar-style button (bg-white + shadow + ring) — "Schedule
   // all", "Sync now", etc.
   secondary:
