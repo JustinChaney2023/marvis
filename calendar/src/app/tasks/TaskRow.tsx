@@ -15,6 +15,7 @@ import {
   delayTaskAction,
 } from "../actions";
 import { PersonIcon, RobotIcon, RepeatIcon, AlertTriangleIcon, ChevronRightIcon, CloseIcon, SparkleIcon } from "../icons";
+import { formatDueDateTime } from "@/lib/calendar-dates";
 import TaskModal, { type TaskModalTask } from "./TaskModal";
 import { STATUS_BADGE, STATUS_LABEL, type TaskStatus } from "./taskStatus";
 
@@ -293,7 +294,7 @@ export default function TaskRow({
               )}
             </span>
             {task.startAt && <span>· starts {task.startAt.toLocaleDateString()}</span>}
-            {task.dueAt && <span>· due {task.dueAt.toLocaleString()}</span>}
+            {task.dueAt && <span>· due {formatDueDateTime(task.dueAt)}</span>}
             {(isOverdue || isDueSoon) && (
               <span
                 className={
@@ -315,7 +316,7 @@ export default function TaskRow({
                 <RepeatIcon /> repeats
               </span>
             )}
-            {task.event && <span>· scheduled {task.event.start.toLocaleString()}</span>}
+            {task.event && <span>· scheduled {formatDueDateTime(task.event.start)}</span>}
           </div>
         </button>
         {task.status === "CREATED" && (

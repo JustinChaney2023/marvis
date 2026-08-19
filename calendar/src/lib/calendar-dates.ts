@@ -71,6 +71,15 @@ export function formatTime(d: Date): string {
   });
 }
 
+// "Aug 31, 5:00 PM" — a due date/time is always shown together (unlike
+// a plain calendar date), so this pairs formatTime with a short month +
+// day. `toLocaleString()`'s default includes the year and seconds
+// ("8/31/2026, 5:00:00 PM"), which is noisier than a task row needs.
+export function formatDueDateTime(d: Date): string {
+  const datePart = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return `${datePart}, ${formatTime(d)}`;
+}
+
 export function formatHourLabel(hour24: number): string {
   const period = hour24 >= 12 ? "PM" : "AM";
   const h12 = hour24 % 12 === 0 ? 12 : hour24 % 12;

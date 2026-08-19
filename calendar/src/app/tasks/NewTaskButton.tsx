@@ -14,11 +14,13 @@ export default function NewTaskButton({
   assignees,
   timeSlots,
   defaultProjectId,
+  defaultAssigneeId,
 }: {
   projects: Project[];
   assignees: Assignee[];
   timeSlots: TimeSlot[];
   defaultProjectId: string;
+  defaultAssigneeId?: string;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -35,6 +37,7 @@ export default function NewTaskButton({
           assignees={assignees}
           timeSlots={timeSlots}
           defaultProjectId={defaultProjectId}
+          defaultAssigneeId={defaultAssigneeId}
           onClose={() => setOpen(false)}
         />
       )}

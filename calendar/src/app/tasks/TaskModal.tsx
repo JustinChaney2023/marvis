@@ -41,6 +41,10 @@ type Props = {
   assignees: Assignee[];
   timeSlots: TimeSlot[];
   defaultProjectId: string;
+  // Only meaningful in create mode — edit mode always uses the task's
+  // own already-saved assigneeId (including explicitly unassigned),
+  // never this.
+  defaultAssigneeId?: string;
   onClose: () => void;
 };
 
@@ -58,7 +62,16 @@ const WEEKDAY_FULL_LABELS = [
 const inputClass =
   "w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800";
 
-export default function TaskModal({ mode, task, projects, assignees, timeSlots, defaultProjectId, onClose }: Props) {
+export default function TaskModal({
+  mode,
+  task,
+  projects,
+  assignees,
+  timeSlots,
+  defaultProjectId,
+  defaultAssigneeId,
+  onClose,
+}: Props) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [recurrenceSelection, setRecurrenceSelection] = useState<string>(() => {
     const rule = task?.recurrenceRule ?? "";
@@ -70,9 +83,10 @@ export default function TaskModal({ mode, task, projects, assignees, timeSlots, 
   );
   const [hasDueDate, setHasDueDate] = useState(Boolean(task?.dueAt));
   const initialDuration = task?.durationMin ?? 30;
-  const [durationIsCustom, setDurationIsCustom] = useState(
-    !DURATION_PRESETS_MIN.includes(initialDuration),
-  );
+  // A single always-editable number input, not a two-step "pick Custom,
+  // then a text field appears" — the preset dropdown is just a quick-fill
+  // shortcut into the same field, not a separate mode.
+  const [durationValue, setDurationValue] = useState(String(initialDuration));
 
   const toggleDay = (code: WeekdayCode) => {
     setCustomDays((prev) =>
@@ -156,34 +170,34 @@ export default function TaskModal({ mode, task, projects, assignees, timeSlots, 
             </label>
             <label className="flex flex-col gap-1 text-sm">
               <span className="text-zinc-500">Duration</span>
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="number"
+                  name="durationMin"
+                  value={durationValue}
+                  onChange={(e) => setDurationValue(e.target.value)}
+                  min={1}
+                  step={1}
+                  aria-label="Duration in minutes"
+                  className={inputClass}
+                />
+                <span className="text-xs text-zinc-400">min</span>
+              </div>
               <select
-                name={durationIsCustom ? undefined : "durationMin"}
-                defaultValue={durationIsCustom ? "custom" : String(initialDuration)}
-                onChange={(e) => setDurationIsCustom(e.target.value === "custom")}
-                className={inputClass}
+                value=""
+                aria-label="Common durations"
+                onChange={(e) => {
+                  if (e.target.value) setDurationValue(e.target.value);
+                }}
+                className={`${inputClass} mt-1 text-xs text-zinc-400`}
               >
+                <option value="">Common durations…</option>
                 {DURATION_PRESETS_MIN.map((m) => (
                   <option key={m} value={m}>
                     {m} min
                   </option>
                 ))}
-                <option value="custom">Custom…</option>
               </select>
-              {durationIsCustom && (
-                <div className="mt-1.5 flex items-center gap-1.5">
-                  <input
-                    type="number"
-                    name="durationMin"
-                    defaultValue={initialDuration}
-                    min={1}
-                    step={1}
-                    aria-label="Custom duration in minutes"
-                    className={inputClass}
-                    autoFocus
-                  />
-                  <span className="text-xs text-zinc-400">min</span>
-                </div>
-              )}
             </label>
           </div>
 
@@ -199,7 +213,11 @@ export default function TaskModal({ mode, task, projects, assignees, timeSlots, 
             </label>
             <label className="flex flex-col gap-1 text-sm">
               <span className="text-zinc-500">Assign to</span>
-              <select name="assigneeId" defaultValue={task?.assigneeId ?? ""} className={inputClass}>
+              <select
+                name="assigneeId"
+                defaultValue={task ? task.assigneeId ?? "" : defaultAssigneeId ?? ""}
+                className={inputClass}
+              >
                 <option value="">Unassigned</option>
                 {assignees.map((a) => (
                   <option key={a.id} value={a.id}>

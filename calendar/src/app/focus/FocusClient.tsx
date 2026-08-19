@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { toggleTaskDone } from "../actions";
+import { formatDueDateTime } from "@/lib/calendar-dates";
 
 export type FocusTask = {
   id: string;
@@ -102,7 +103,7 @@ export default function FocusClient({ queue }: { queue: FocusTask[] }) {
           <span className="inline-flex items-center rounded-full bg-zinc-100 px-2 py-0.5 dark:bg-zinc-700">
             {PRIORITY_LABEL[task.priority]}
           </span>
-          {task.dueAt && <span>due {task.dueAt.toLocaleString()}</span>}
+          {task.dueAt && <span>due {formatDueDateTime(task.dueAt)}</span>}
         </div>
       </div>
 

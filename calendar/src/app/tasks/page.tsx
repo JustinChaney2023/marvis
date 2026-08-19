@@ -56,6 +56,18 @@ export default async function Home(props: PageProps<"/tasks">) {
     where: { userId: user.id },
     orderBy: { createdAt: "asc" },
   });
+  // Every account gets a standing "Myself" assignee, lazily created on
+  // first visit — new tasks default to it (most tasks are for yourself,
+  // not a specific teammate/AI) rather than "Unassigned" every time.
+  // A real Assignee row, not a special-cased id, so it sorts/filters/
+  // displays exactly like any other assignee everywhere else.
+  let myselfAssignee = assignees.find((a) => a.name === "Myself");
+  if (!myselfAssignee) {
+    myselfAssignee = await prisma.assignee.create({
+      data: { userId: user.id, name: "Myself", type: "HUMAN" },
+    });
+    assignees.unshift(myselfAssignee);
+  }
   const timeSlots = await prisma.timeSlot.findMany({
     where: { userId: user.id },
     orderBy: { createdAt: "asc" },
@@ -148,6 +160,7 @@ export default async function Home(props: PageProps<"/tasks">) {
             assignees={assignees}
             timeSlots={timeSlots}
             defaultProjectId={defaultProjectId}
+            defaultAssigneeId={myselfAssignee.id}
           />
         </div>
       </div>
