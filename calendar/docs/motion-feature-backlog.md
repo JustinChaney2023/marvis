@@ -7,6 +7,40 @@ labeled `calendar` (this repo covers more than just the calendar app) —
 this doc is the detailed running log, the issues are the at-a-glance
 tracker.
 
+## Competitor research session (2026-08-19, second pass)
+Shipped issues #6, #8, #9 (scoped to Apple only), #11, #12, #13, #17, #18,
+#19, #21, #22, #24 this session (see each issue's closing comment for
+detail/verification). #16 (meeting notetaker) deferred — needs a real
+audio/transcription pipeline. #20 (Zoom/Slack/Gmail) still blocked on
+OAuth app registrations only the account owner can create.
+
+Went looking beyond Motion itself for what's still missing, comparing
+against its direct competitors (Reclaim.ai, Sunsama) since Motion's own
+review sentiment (G2/Capterra 2026) repeatedly flags "limited project
+management," "no real answer for information overload," and "advanced
+reporting" as gaps — not things Motion does better, so worth looking at
+who does. New issues filed:
+- #26 **Habits** (Reclaim.ai) — flexible recurring routine time-blocking
+  that reschedules itself around conflicts, distinct from both fixed
+  recurring events and the current one-task-at-a-time recurring-task
+  model.
+- #27 **Daily overcommitment warning** (Sunsama) — a visible "7h planned
+  of a 6h day" nudge when manually adding tasks, vs. the existing
+  `dailyCapMin` which only silently gates the *auto-scheduler*.
+- #28 **Daily shutdown ritual** (Sunsama) — end-of-day review/carry-over
+  flow, the natural closing counterpart to the daily agenda summary (#12).
+- #29 **Mobile agenda view** — chronological list instead of the hour
+  grid below ~640px, per calendar-UI best-practice research (grids stop
+  being actionable below ~360px).
+- #30 **Time-tracking report** — weekly tracked-minutes-by-project
+  rollup; the data (`Task.trackedMinutes`) already exists, this is one
+  view on top of it, not a new analytics subsystem.
+
+Also researched calendar-specific UI/UX best practices (event-overflow
+handling, mobile date-picker patterns, information-density layering).
+Confirmed this app's month view already does the standard "+N more"
+overflow pattern correctly — no gap there.
+
 ## UI improvement session (2026-08-19)
 Researched real Motion user feedback (G2, Capterra, Forbes Advisor,
 ClickUp's comparison review, Trustpilot/Reddit sentiment surfaced via
