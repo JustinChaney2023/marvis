@@ -43,3 +43,16 @@ body {
 .dark .calendar-scroll::-webkit-scrollbar-thumb {
   background-color: rgb(63 63 70);
 }
+
+/* Native date/time/datetime-local inputs render their calendar-icon and
+   dropdown picker in whatever color-scheme the browser assumes — left
+   at the default (light), that's a bright white icon/popup stamped into
+   an otherwise dark-themed field, which is what actually read as "ugly"
+   rather than the field itself. This just tells the browser which
+   scheme the surrounding UI is actually in, so its own native picker
+   chrome matches instead of clashing. */
+.dark input[type="date"],
+.dark input[type="time"],
+.dark input[type="datetime-local"] {
+  color-scheme: dark;
+}

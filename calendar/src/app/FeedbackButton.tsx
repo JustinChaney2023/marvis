@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { submitFeedbackAction } from "./actions";
-import { ChatIcon } from "./icons";
+import { MegaphoneIcon } from "./icons";
 import Button from "./ui/Button";
 
 export default function FeedbackButton() {
@@ -24,7 +24,7 @@ export default function FeedbackButton() {
         title="Send feedback"
         className="flex h-9 w-9 items-center justify-center rounded-full border border-zinc-200 bg-white shadow-sm ring-1 ring-black/5 transition-all hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:hover:bg-zinc-700/60"
       >
-        <ChatIcon />
+        <MegaphoneIcon />
       </button>
 
       {open && (
