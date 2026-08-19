@@ -96,8 +96,9 @@ function taskFieldsFromFormData(formData: FormData) {
   const durationMin = Number(formData.get("durationMin") ?? 30);
   const startAtRaw = String(formData.get("startAt") ?? "");
   const startAt = startAtRaw ? new Date(startAtRaw) : null;
-  const dueAtRaw = String(formData.get("dueAt") ?? "");
-  const dueAt = dueAtRaw ? new Date(dueAtRaw) : null;
+  const dueAtDateRaw = String(formData.get("dueAtDate") ?? "");
+  const dueAtTimeRaw = String(formData.get("dueAtTime") ?? "") || "17:00";
+  const dueAt = dueAtDateRaw ? new Date(`${dueAtDateRaw}T${dueAtTimeRaw}`) : null;
   const projectId = String(formData.get("projectId") ?? "").trim() || null;
   const assigneeId = String(formData.get("assigneeId") ?? "").trim() || null;
   // A recurrence rule with no due date has nothing to anchor to (no

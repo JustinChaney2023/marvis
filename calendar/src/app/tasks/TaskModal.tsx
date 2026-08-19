@@ -39,6 +39,10 @@ type Props = {
 
 const PRIORITY_LABEL = ["Low", "Medium", "High", "Urgent"];
 const DURATION_PRESETS_MIN = [5, 10, 15, 20, 25, 30, 45, 60, 90, 120];
+// Picking just a due *date* with no time used to leave the time at
+// midnight (a browser datetime-local default nobody wants for a task
+// due date) — default to end-of-workday instead.
+const DEFAULT_DUE_TIME = "17:00";
 const WEEKDAY_SHORT_LABELS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"] as const;
 const WEEKDAY_FULL_LABELS = [
   "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday",
@@ -58,6 +62,10 @@ export default function TaskModal({ mode, task, projects, assignees, defaultProj
     task?.recurrenceRule ? (parseCustomWeeklyDays(task.recurrenceRule) ?? []) : [],
   );
   const [hasDueDate, setHasDueDate] = useState(Boolean(task?.dueAt));
+  const initialDuration = task?.durationMin ?? 30;
+  const [durationIsCustom, setDurationIsCustom] = useState(
+    !DURATION_PRESETS_MIN.includes(initialDuration),
+  );
 
   const toggleDay = (code: WeekdayCode) => {
     setCustomDays((prev) =>
@@ -141,24 +149,34 @@ export default function TaskModal({ mode, task, projects, assignees, defaultProj
             </label>
             <label className="flex flex-col gap-1 text-sm">
               <span className="text-zinc-500">Duration</span>
-              <div className="flex items-center gap-1.5">
-                <input
-                  type="number"
-                  name="durationMin"
-                  defaultValue={task?.durationMin ?? 30}
-                  min={5}
-                  step={5}
-                  list="duration-presets"
-                  aria-label="Duration in minutes"
-                  className={inputClass}
-                />
-                <span className="text-xs text-zinc-400">min</span>
-              </div>
-              <datalist id="duration-presets">
+              <select
+                name={durationIsCustom ? undefined : "durationMin"}
+                defaultValue={durationIsCustom ? "custom" : String(initialDuration)}
+                onChange={(e) => setDurationIsCustom(e.target.value === "custom")}
+                className={inputClass}
+              >
                 {DURATION_PRESETS_MIN.map((m) => (
-                  <option key={m} value={m} />
+                  <option key={m} value={m}>
+                    {m} min
+                  </option>
                 ))}
-              </datalist>
+                <option value="custom">Custom…</option>
+              </select>
+              {durationIsCustom && (
+                <div className="mt-1.5 flex items-center gap-1.5">
+                  <input
+                    type="number"
+                    name="durationMin"
+                    defaultValue={initialDuration}
+                    min={1}
+                    step={1}
+                    aria-label="Custom duration in minutes"
+                    className={inputClass}
+                    autoFocus
+                  />
+                  <span className="text-xs text-zinc-400">min</span>
+                </div>
+              )}
             </label>
           </div>
 
@@ -197,13 +215,21 @@ export default function TaskModal({ mode, task, projects, assignees, defaultProj
             </label>
             <label className="flex flex-col gap-1 text-sm">
               <span className="text-zinc-500">Due</span>
-              <input
-                type="datetime-local"
-                name="dueAt"
-                defaultValue={task?.dueAt ? toLocalInputValue(task.dueAt) : ""}
-                onChange={(e) => setHasDueDate(Boolean(e.target.value))}
-                className={inputClass}
-              />
+              <div className="flex gap-1.5">
+                <input
+                  type="date"
+                  name="dueAtDate"
+                  defaultValue={task?.dueAt ? formatYMD(task.dueAt) : ""}
+                  onChange={(e) => setHasDueDate(Boolean(e.target.value))}
+                  className={`${inputClass} flex-[3]`}
+                />
+                <input
+                  type="time"
+                  name="dueAtTime"
+                  defaultValue={task?.dueAt ? toLocalInputValue(task.dueAt).slice(11) : DEFAULT_DUE_TIME}
+                  className={`${inputClass} flex-[2]`}
+                />
+              </div>
             </label>
           </div>
 
