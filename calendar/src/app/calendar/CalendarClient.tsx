@@ -22,6 +22,7 @@ import {
   type CalendarView,
 } from "@/lib/calendar-dates";
 import EventModal, { type EventModalEvent } from "./EventModal";
+import QuickCreatePopup from "./QuickCreatePopup";
 import { LockIcon, FlagIcon } from "../icons";
 import { moveEvent, deleteEvent } from "../actions";
 import { PROJECT_EVENT_COLORS, DEFAULT_EVENT_COLOR } from "@/lib/eventColors";
@@ -183,7 +184,12 @@ function minutesToDate(day: Date, minutes: number): Date {
 
 type ModalState =
   | { mode: "create"; start: Date; end: Date; initialTitle?: string; initialLocked?: boolean }
-  | { mode: "edit"; event: EventModalEvent };
+  | { mode: "edit"; event: EventModalEvent }
+  // Dragging/clicking empty space on the grid opens this lightweight
+  // "what is this" popup first, instead of the full event editor — see
+  // QuickCreatePopup. The toolbar's own "+ New event"/"+ Focus block"
+  // buttons skip straight to "create" (unchanged).
+  | { mode: "quick"; start: Date; end: Date };
 
 export default function CalendarClient({
   view,
@@ -217,6 +223,8 @@ export default function CalendarClient({
       initialTitle: prefill?.title,
       initialLocked: prefill?.locked,
     });
+  const openQuickCreate = (s: Date, e: Date) =>
+    setModalState({ mode: "quick", start: s, end: e });
   const toggleSelected = (id: string) => {
     setSelectedEventIds((prev) => {
       const next = new Set(prev);
@@ -387,7 +395,7 @@ export default function CalendarClient({
             events={events}
             today={today}
             viewStart={start}
-            onEmptyClick={openCreate}
+            onEmptyClick={openQuickCreate}
             onEventClick={openEdit}
           />
         ) : (
@@ -400,7 +408,7 @@ export default function CalendarClient({
                 days={range.days}
                 events={events}
                 today={today}
-                onEmptyClick={openCreate}
+                onEmptyClick={openQuickCreate}
                 onEventClick={openEdit}
                 draggingEvent={draggingEvent}
                 onEventDragStart={handleEventDragStart}
@@ -481,6 +489,14 @@ export default function CalendarClient({
           initialEnd={modalState.event.end}
           event={modalState.event}
           onClose={closeModal}
+        />
+      )}
+      {modalState?.mode === "quick" && (
+        <QuickCreatePopup
+          start={modalState.start}
+          end={modalState.end}
+          onClose={closeModal}
+          onCreatedEvent={(event) => setModalState({ mode: "edit", event })}
         />
       )}
     </>
@@ -1006,7 +1022,11 @@ function EventBlock({
   return (
     <button
       data-event
-      draggable={!event.isRecurring && !event.locked}
+      // Locked only means "the scheduler won't auto-move this" — it
+      // doesn't stop the user from dragging it themselves. Recurring
+      // events still can't be dragged at all (unrelated limitation:
+      // there's no per-occurrence override, only the whole series).
+      draggable={!event.isRecurring}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
       onClick={(e) => {
@@ -1063,7 +1083,7 @@ function EventBlock({
           {formatTime(event.start)} – {formatTime(displayEnd)}
         </div>
       )}
-      {!event.isRecurring && !event.locked && (
+      {!event.isRecurring && (
         <div
           draggable={false}
           onMouseDown={handleResizeMouseDown}

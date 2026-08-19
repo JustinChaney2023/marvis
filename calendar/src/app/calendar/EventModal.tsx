@@ -362,7 +362,7 @@ export default function EventModal({
             <span className="text-zinc-700 dark:text-zinc-300">
               Locked{" "}
               <span className="text-zinc-500 dark:text-zinc-400">
-                (won&apos;t be moved by auto-scheduling or drag)
+                (won&apos;t be moved by auto-scheduling — you can still drag it yourself)
               </span>
             </span>
             <span className="relative inline-flex items-center">

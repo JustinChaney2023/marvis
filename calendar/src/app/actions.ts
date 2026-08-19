@@ -597,9 +597,13 @@ export async function moveEvent(eventId: string, startIso: string, endIso: strin
   const user = await requireUser();
   const start = new Date(startIso);
   const end = new Date(endIso);
+  // A manual drag or resize is the user's own explicit placement — lock
+  // it so the scheduler doesn't undo it on the next pass. `locked` only
+  // blocks the *scheduler*, not further manual drags (see EventBlock),
+  // and the Locked toggle in the edit modal can always turn it back off.
   const { count } = await prisma.event.updateMany({
     where: { id: eventId, userId: user.id },
-    data: { start, end, localDirty: true },
+    data: { start, end, locked: true, localDirty: true },
   });
   if (count > 0) {
     await rescheduleConflictsWith(user.id, start, end, eventId);
@@ -621,6 +625,64 @@ export async function deleteEvent(eventId: string) {
   await prisma.event.delete({ where: { id: eventId } });
   revalidatePath("/");
   revalidatePath("/tasks");
+}
+
+/**
+ * Drag-to-create's "Event" branch (QuickCreatePopup) — a manually placed
+ * block is exactly what Locked already means, so it starts locked, same
+ * as a manual drag/resize of an existing event (see moveEvent). Returns
+ * the new event's id so the popup can hand off straight into the full
+ * EventModal for further detail.
+ */
+export async function createQuickEventAction(
+  title: string,
+  startIso: string,
+  endIso: string,
+): Promise<string | null> {
+  const user = await requireUser();
+  const trimmed = title.trim();
+  if (!trimmed) return null;
+  const start = new Date(startIso);
+  const end = new Date(endIso);
+
+  const event = await prisma.event.create({
+    data: { userId: user.id, title: trimmed, start, end, locked: true, localDirty: true },
+  });
+  await rescheduleConflictsWith(user.id, start, end, event.id);
+  await rescheduleConflictedHabits(user.id, start, end, event.id);
+  revalidatePath("/");
+  return event.id;
+}
+
+/**
+ * Drag-to-create's "Task" branch — a real Task row (shows up on /tasks
+ * like any other) plus a locked Event pinning it to exactly the dragged
+ * slot, same two-row shape scheduleTask() creates when the auto-
+ * scheduler places a task, just skipping slot search since the user
+ * already picked the slot.
+ */
+export async function createQuickTaskAction(
+  title: string,
+  startIso: string,
+  endIso: string,
+): Promise<void> {
+  const user = await requireUser();
+  const trimmed = title.trim();
+  if (!trimmed) return;
+  const start = new Date(startIso);
+  const end = new Date(endIso);
+  const durationMin = Math.max(1, Math.round((end.getTime() - start.getTime()) / 60_000));
+
+  const task = await prisma.task.create({
+    data: { userId: user.id, title: trimmed, durationMin },
+  });
+  const event = await prisma.event.create({
+    data: { userId: user.id, title: trimmed, start, end, taskId: task.id, locked: true, localDirty: true },
+  });
+  await rescheduleConflictsWith(user.id, start, end, event.id);
+  await rescheduleConflictedHabits(user.id, start, end, event.id);
+  revalidatePath("/tasks");
+  revalidatePath("/");
 }
 
 export async function syncGoogleCalendarAction() {
