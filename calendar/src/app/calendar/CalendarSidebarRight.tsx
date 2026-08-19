@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { AlertTriangleIcon } from "../icons";
+import { AlertTriangleIcon, LockIcon } from "../icons";
+import { formatTime } from "@/lib/calendar-dates";
 import Card from "../ui/Card";
 
 export type AttentionTask = {
@@ -7,6 +8,22 @@ export type AttentionTask = {
   title: string;
   dueAt: Date;
   isOverdue: boolean;
+};
+
+export type UpcomingItem = {
+  id: string;
+  title: string;
+  startIso: string;
+  endIso: string;
+  // A scheduled task's block (its linked Event), vs. a plain event.
+  isTask: boolean;
+  locked: boolean;
+};
+
+export type UpcomingDay = {
+  dayKey: string;
+  dayLabel: string;
+  items: UpcomingItem[];
 };
 
 export type Overcommitment = {
@@ -21,9 +38,11 @@ export type Overcommitment = {
 // whatever else ends up wanting a spot next to the calendar later.
 export default function CalendarSidebarRight({
   tasks,
+  upcomingDays,
   overcommitment,
 }: {
   tasks: AttentionTask[];
+  upcomingDays: UpcomingDay[];
   overcommitment: Overcommitment | null;
 }) {
   return (
@@ -71,6 +90,38 @@ export default function CalendarSidebarRight({
           </ul>
         )}
       </Card>
+
+      {upcomingDays.length > 0 && (
+        <Card padding="sm">
+          <h2 className="text-sm font-semibold">Upcoming</h2>
+          <div className="mt-2 flex flex-col gap-3">
+            {upcomingDays.map((day) => (
+              <div key={day.dayKey}>
+                <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-400">
+                  {day.dayLabel}
+                </p>
+                <ul className="mt-1 flex flex-col gap-1">
+                  {day.items.map((item) => (
+                    <li key={item.id} className="flex items-start gap-1.5 rounded-lg px-1.5 py-1 text-xs">
+                      {item.locked && (
+                        <LockIcon className="mt-0.5 h-2.5 w-2.5 flex-shrink-0 text-zinc-400" />
+                      )}
+                      <span className="min-w-0">
+                        <span className="block truncate font-medium text-zinc-700 dark:text-zinc-300">
+                          {item.title}
+                        </span>
+                        <span className="text-zinc-400">
+                          {formatTime(new Date(item.startIso))} – {formatTime(new Date(item.endIso))}
+                        </span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       <Card padding="sm">
         <h2 className="text-sm font-semibold">Quick links</h2>

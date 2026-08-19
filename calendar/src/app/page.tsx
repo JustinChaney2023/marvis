@@ -10,6 +10,7 @@ import {
   formatMonthLabel,
   formatWeekRangeLabel,
   formatYMD,
+  isSameDay,
   parseStartParam,
   parseViewParam,
   startOfWeekMonday,
@@ -19,7 +20,11 @@ import { expandEvents } from "@/lib/recurrence";
 import { getAppSettings } from "@/lib/settings";
 import CalendarClient, { type CalendarEvent } from "./calendar/CalendarClient";
 import CalendarSidebarLeft from "./calendar/CalendarSidebarLeft";
-import CalendarSidebarRight, { type AttentionTask } from "./calendar/CalendarSidebarRight";
+import CalendarSidebarRight, {
+  type AttentionTask,
+  type UpcomingDay,
+  type UpcomingItem,
+} from "./calendar/CalendarSidebarRight";
 
 function viewSwitchTargets(
   view: CalendarView,
@@ -154,6 +159,52 @@ export default async function Page(props: PageProps<"/">) {
   // scheduler. Same threshold, different purpose: this fires the moment
   // *manually* planned time for today crosses it, whatever view you're
   // actually browsing.
+  // Right sidebar's day-grouped agenda — independent of whatever range
+  // the main grid is currently showing (day/week/month), always "the
+  // next UPCOMING_AGENDA_DAYS days" so it's a stable place to glance at
+  // what's coming up regardless of which view you're browsing.
+  const UPCOMING_AGENDA_DAYS = 7;
+  const agendaStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const agendaEnd = new Date(agendaStart.getTime() + UPCOMING_AGENDA_DAYS * 86_400_000);
+  const upcomingRows = await prisma.event.findMany({
+    where: {
+      userId: user.id,
+      OR: [
+        { start: { lt: agendaEnd }, end: { gt: agendaStart } },
+        { recurrenceRule: { not: null } },
+      ],
+    },
+    include: { task: { select: { id: true } } },
+    orderBy: { start: "asc" },
+  });
+  const taskByMasterId = new Map(upcomingRows.map((r) => [r.id, Boolean(r.task)]));
+  const lockedByUpcomingMasterId = new Map(upcomingRows.map((r) => [r.id, r.locked]));
+  const upcomingByDay = new Map<string, UpcomingItem[]>();
+  for (const o of expandEvents(upcomingRows, agendaStart, agendaEnd)) {
+    const dayKey = formatYMD(o.start);
+    const list = upcomingByDay.get(dayKey) ?? [];
+    list.push({
+      id: o.id,
+      title: o.title,
+      startIso: o.start.toISOString(),
+      endIso: o.end.toISOString(),
+      isTask: taskByMasterId.get(o.masterId) ?? false,
+      locked: lockedByUpcomingMasterId.get(o.masterId) ?? false,
+    });
+    upcomingByDay.set(dayKey, list);
+  }
+  const upcomingDays: UpcomingDay[] = Array.from({ length: UPCOMING_AGENDA_DAYS }, (_, i) => {
+    const day = addDays(agendaStart, i);
+    const dayKey = formatYMD(day);
+    return {
+      dayKey,
+      dayLabel: isSameDay(day, today) ? "Today" : formatDayLabel(day),
+      items: (upcomingByDay.get(dayKey) ?? []).sort(
+        (a, b) => new Date(a.startIso).getTime() - new Date(b.startIso).getTime(),
+      ),
+    };
+  }).filter((d) => d.items.length > 0);
+
   const settings = await getAppSettings(user.id);
   let todayPlannedMinutes: number | null = null;
   if (settings.dailyCapMin) {
@@ -238,6 +289,7 @@ export default async function Page(props: PageProps<"/">) {
         <aside className="hidden lg:block">
           <CalendarSidebarRight
             tasks={attentionTasks}
+            upcomingDays={upcomingDays}
             overcommitment={
               settings.dailyCapMin && todayPlannedMinutes !== null
                 ? { plannedMinutes: todayPlannedMinutes, capMinutes: settings.dailyCapMin }
