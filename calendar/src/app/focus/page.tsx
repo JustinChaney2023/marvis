@@ -17,18 +17,20 @@ export default async function FocusPage() {
   const agendaText = await generateDailyAgendaText(facts, localAi);
 
   const scheduled = await prisma.task.findMany({
-    where: { userId: user.id, event: { isNot: null }, parentId: null },
-    include: { event: true },
+    where: { userId: user.id, events: { some: {} }, parentId: null },
+    include: { events: true },
   });
+  // A chunked task's own chunks are ordered by the earliest one — that's
+  // the next slot actually coming up for it.
   const upcoming = scheduled
-    .filter((t) => t.event)
-    .sort((a, b) => a.event!.start.getTime() - b.event!.start.getTime());
+    .map((t) => ({ ...t, earliestEventStart: t.events.reduce((min, e) => (e.start < min ? e.start : min), t.events[0].start) }))
+    .sort((a, b) => a.earliestEventStart.getTime() - b.earliestEventStart.getTime());
 
   const todo = await prisma.task.findMany({
     where: {
       userId: user.id,
       status: { in: ["CREATED", "ONGOING"] },
-      event: { is: null },
+      events: { none: {} },
       parentId: null,
     },
     orderBy: [{ dueAt: { sort: "asc", nulls: "last" } }, { priority: "desc" }],
@@ -42,7 +44,7 @@ export default async function FocusPage() {
       priority: t.priority,
       energy: t.energy,
       dueAt: t.dueAt,
-      eventStart: t.event!.start,
+      eventStart: t.earliestEventStart,
     })),
     ...todo.map((t) => ({
       id: t.id,

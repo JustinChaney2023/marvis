@@ -82,7 +82,16 @@ export default async function Home(props: PageProps<"/tasks">) {
   // Postgres/MongoDB only) — filtering client-side in JS after fetch
   // sidesteps the case-sensitivity gotcha entirely, and is plenty fast at
   // personal-task-list scale.
-  const allOpenTasks = await prisma.task.findMany({
+  // TaskRow displays one representative "is this scheduled" slot per
+  // task (the earliest chunk, for a chunked one) plus how many chunks
+  // there are in total — it doesn't need the full per-chunk list.
+  const withPrimaryEvent = <T extends { events: { start: Date; end: Date }[] }>(t: T) => ({
+    ...t,
+    event: t.events.length > 0 ? t.events.reduce((min, e) => (e.start < min.start ? e : min)) : null,
+    eventCount: t.events.length,
+  });
+
+  const allOpenTasksRaw = await prisma.task.findMany({
     where: {
       userId: user.id,
       status: { not: "DONE" },
@@ -91,12 +100,13 @@ export default async function Home(props: PageProps<"/tasks">) {
     },
     orderBy: [{ dueAt: "asc" }, { priority: "desc" }],
     include: {
-      event: true,
+      events: true,
       project: true,
       assignee: true,
       subtasks: { orderBy: { createdAt: "asc" } },
     },
   });
+  const allOpenTasks = allOpenTasksRaw.map(withPrimaryEvent);
   const tasks = searchQuery
     ? allOpenTasks.filter((t) =>
         t.title.toLowerCase().includes(searchQuery.toLowerCase()),
@@ -105,17 +115,18 @@ export default async function Home(props: PageProps<"/tasks">) {
   const rawView = sp?.view;
   const view = (Array.isArray(rawView) ? rawView[0] : rawView) === "board" ? "board" : "list";
 
-  const done = await prisma.task.findMany({
+  const doneRaw = await prisma.task.findMany({
     where: { userId: user.id, status: "DONE" },
     orderBy: { updatedAt: "desc" },
     take: 10,
     include: {
-      event: true,
+      events: true,
       project: true,
       assignee: true,
       subtasks: { orderBy: { createdAt: "asc" } },
     },
   });
+  const done = doneRaw.map(withPrimaryEvent);
 
   const viewParams = (v: string) => {
     const params = new URLSearchParams();

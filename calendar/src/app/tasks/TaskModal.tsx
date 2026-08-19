@@ -36,6 +36,7 @@ export type TaskModalTask = {
   recurrenceRule: string | null;
   color: string | null;
   hardDeadline: boolean;
+  chunkMin: number | null;
 };
 
 type Props = {
@@ -93,6 +94,7 @@ export default function TaskModal({
   // then a text field appears" — the preset dropdown is just a quick-fill
   // shortcut into the same field, not a separate mode.
   const [durationValue, setDurationValue] = useState(String(initialDuration));
+  const [chunkMinValue, setChunkMinValue] = useState(task?.chunkMin ? String(task.chunkMin) : "");
 
   const toggleDay = (code: WeekdayCode) => {
     setCustomDays((prev) =>
@@ -211,6 +213,26 @@ export default function TaskModal({
               </select>
             </label>
           </div>
+
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="text-zinc-500">Min chunk</span>
+            <div className="flex items-center gap-1.5">
+              <input
+                type="number"
+                name="chunkMin"
+                value={chunkMinValue}
+                onChange={(e) => setChunkMinValue(e.target.value)}
+                min={1}
+                step={1}
+                placeholder="No chunking"
+                aria-label="Split into chunks of this many minutes"
+                className={`${inputClass} max-w-[8rem]`}
+              />
+              <span className="text-xs text-zinc-400">
+                min — splits the task into pieces this long, with breaks between
+              </span>
+            </div>
+          </label>
 
           <div className="grid grid-cols-2 gap-3">
             <label className="flex flex-col gap-1 text-sm">

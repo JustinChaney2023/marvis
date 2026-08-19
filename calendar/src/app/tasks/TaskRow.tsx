@@ -42,9 +42,13 @@ export type TaskRowData = {
   timeSlotId: string | null;
   color: string | null;
   hardDeadline: boolean;
+  chunkMin: number | null;
   project: { name: string; color: string } | null;
   assignee: { name: string; type: "HUMAN" | "AI" } | null;
+  // The earliest chunk, for a chunked task — see withPrimaryEvent in
+  // tasks/page.tsx. eventCount > 1 means it's split into that many.
   event: { start: Date } | null;
+  eventCount: number;
   subtasks: Subtask[];
 };
 
@@ -159,6 +163,7 @@ export default function TaskRow({
     recurrenceRule: task.recurrenceRule,
     color: task.color,
     hardDeadline: task.hardDeadline,
+    chunkMin: task.chunkMin,
   };
 
   const handleAddSubtask = async (e: React.FormEvent) => {
@@ -325,7 +330,14 @@ export default function TaskRow({
                 <RepeatIcon /> repeats
               </span>
             )}
-            {task.event && <span>· scheduled {formatDueDateTime(task.event.start)}</span>}
+            {task.event && (
+              <span>
+                · scheduled {formatDueDateTime(task.event.start)}
+                {task.eventCount > 1 && (
+                  <span className="text-zinc-400"> (1 of {task.eventCount} chunks)</span>
+                )}
+              </span>
+            )}
           </div>
         </button>
         {task.status === "CREATED" && (

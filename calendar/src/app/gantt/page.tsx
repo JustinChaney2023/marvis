@@ -58,7 +58,7 @@ export default async function GanttPage() {
     include: {
       tasks: {
         where: { status: { not: "DONE" }, parentId: null },
-        include: { event: true },
+        include: { events: true },
         orderBy: [{ dueAt: { sort: "asc", nulls: "last" } }],
       },
     },
@@ -72,10 +72,16 @@ export default async function GanttPage() {
       color: p.color,
       bars: p.tasks
         .map((t) => {
-          // Prefer the actual scheduled slot; otherwise a span from the
-          // task's start date (or creation date, if it has none) to due
-          // date.
-          if (t.event) return { taskId: t.id, title: t.title, start: t.event.start, end: t.event.end };
+          // Prefer the actual scheduled slot(s); otherwise a span from
+          // the task's start date (or creation date, if it has none) to
+          // due date. A chunked task's bar spans its earliest chunk's
+          // start to its latest chunk's end — one bar per task, not one
+          // per chunk, same as a Gantt bar always has been here.
+          if (t.events.length > 0) {
+            const start = t.events.reduce((min, e) => (e.start < min ? e.start : min), t.events[0].start);
+            const end = t.events.reduce((max, e) => (e.end > max ? e.end : max), t.events[0].end);
+            return { taskId: t.id, title: t.title, start, end };
+          }
           if (!t.dueAt) return null;
           const inferredStart = t.startAt ?? t.createdAt;
           const start = inferredStart < t.dueAt ? inferredStart : new Date(t.dueAt.getTime() - DAY_MS);

@@ -104,6 +104,8 @@ function taskFieldsFromFormData(formData: FormData) {
   const assigneeId = String(formData.get("assigneeId") ?? "").trim() || null;
   const timeSlotId = String(formData.get("timeSlotId") ?? "").trim() || null;
   const color = String(formData.get("color") ?? "").trim() || null;
+  const chunkMinRaw = String(formData.get("chunkMin") ?? "").trim();
+  const chunkMin = chunkMinRaw ? Math.max(1, Number(chunkMinRaw)) : null;
   // A recurrence rule with no due date has nothing to anchor to (no
   // DTSTART equivalent) — silently drop it rather than create a task
   // that can never compute a next occurrence.
@@ -126,6 +128,7 @@ function taskFieldsFromFormData(formData: FormData) {
     assigneeId,
     timeSlotId,
     color,
+    chunkMin,
     recurrenceRule,
     hardDeadline,
   };

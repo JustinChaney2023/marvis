@@ -32,7 +32,7 @@ async function buildScheduleContext(userId: string): Promise<string> {
   const tasks = await prisma.task.findMany({
     where: { userId, status: { not: "DONE" }, parentId: null },
     orderBy: [{ dueAt: { sort: "asc", nulls: "last" } }, { priority: "desc" }],
-    include: { project: true, event: true },
+    include: { project: true, events: true },
     take: MAX_CONTEXT_ITEMS,
   });
 
@@ -43,7 +43,7 @@ async function buildScheduleContext(userId: string): Promise<string> {
   const taskLines = tasks.map((t) => {
     const parts = [t.title];
     if (t.project) parts.push(`[${t.project.name}]`);
-    parts.push(`(${t.status.toLowerCase()}${t.event ? ", scheduled" : ", unscheduled"}${t.dueAt ? `, due ${fmt(t.dueAt)}` : ""})`);
+    parts.push(`(${t.status.toLowerCase()}${t.events.length > 0 ? ", scheduled" : ", unscheduled"}${t.dueAt ? `, due ${fmt(t.dueAt)}` : ""})`);
     return `- ${parts.join(" ")}`;
   });
 

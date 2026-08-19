@@ -36,7 +36,7 @@ export async function buildShutdownSummary(userId: string): Promise<ShutdownSumm
       status: { in: ["CREATED", "ONGOING"] },
       OR: [
         { dueAt: { gte: dayStart, lt: dayEnd } },
-        { event: { start: { gte: dayStart, lt: dayEnd } } },
+        { events: { some: { start: { gte: dayStart, lt: dayEnd } } } },
       ],
     },
     orderBy: { dueAt: "asc" },

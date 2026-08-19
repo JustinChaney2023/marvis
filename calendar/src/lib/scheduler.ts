@@ -305,6 +305,22 @@ export async function fetchBusyIntervals(userId: string, now: Date, horizonEnd: 
     .sort((a, b) => a.start.getTime() - b.start.getTime());
 }
 
+// Splits a task's total duration into ~chunkMin-sized pieces (the last
+// piece gets whatever's left over, so a 3h20m task with a 1h chunkMin is
+// 1h/1h/1h/20m, not 1h/1h/1h + a dropped 20m). No chunking (chunkMin
+// unset, or >= the total) is just "one chunk," the previous behavior.
+export function splitIntoChunks(durationMin: number, chunkMin: number | null): number[] {
+  if (!chunkMin || chunkMin <= 0 || chunkMin >= durationMin) return [durationMin];
+  const chunks: number[] = [];
+  let remaining = durationMin;
+  while (remaining > 0) {
+    const size = Math.min(chunkMin, remaining);
+    chunks.push(size);
+    remaining -= size;
+  }
+  return chunks;
+}
+
 export async function scheduleTask(userId: string, taskId: string) {
   const task = await prisma.task.findFirstOrThrow({
     where: { id: taskId, userId },
@@ -319,7 +335,7 @@ export async function scheduleTask(userId: string, taskId: string) {
   const searchFrom = task.startAt && task.startAt > now ? task.startAt : now;
   const horizonEnd = new Date(now.getTime() + HORIZON_DAYS * 86_400_000);
   const settings = await getAppSettings(userId);
-  const busy = applyDailyCap(
+  let busy = applyDailyCap(
     padForBuffer(await fetchBusyIntervals(userId, now, horizonEnd), settings.bufferMin),
     now,
     horizonEnd,
@@ -333,28 +349,54 @@ export async function scheduleTask(userId: string, taskId: string) {
     horizonEnd,
   );
 
-  const slot = findBestSlot(task, busy, horizonEnd, searchFrom, projectScheduledDays, getWindow);
-  if (!slot) return null;
+  // Each chunk is searched in turn, folding the just-placed chunk (plus
+  // the user's own bufferMin as breathing room — reusing that existing
+  // setting rather than a second "gap between chunks" knob) into `busy`
+  // before searching for the next one, so chunks of the same task never
+  // land back-to-back with no gap or overlap each other. All-or-nothing:
+  // if any chunk can't find a slot, the task stays unscheduled rather
+  // than placing only some of its chunks — same as the unchunked case
+  // returning null when nothing fits.
+  const slots: { start: Date; end: Date }[] = [];
+  let cursor = searchFrom;
+  for (const chunkDuration of splitIntoChunks(task.durationMin, task.chunkMin)) {
+    const slot = findBestSlot(
+      { ...task, durationMin: chunkDuration },
+      busy,
+      horizonEnd,
+      cursor,
+      projectScheduledDays,
+      getWindow,
+    );
+    if (!slot) return null;
+    slots.push(slot);
+    busy = [...busy, ...padForBuffer([slot], settings.bufferMin)].sort(
+      (a, b) => a.start.getTime() - b.start.getTime(),
+    );
+    cursor = slot.end;
+  }
 
-  const event = await prisma.event.upsert({
-    where: { taskId },
-    create: {
+  // Not an upsert — a chunked reschedule can produce a different number
+  // of rows than last time (a shorter chunkMin now, say), so the old set
+  // is cleared and replaced wholesale rather than trying to reconcile.
+  await prisma.event.deleteMany({ where: { taskId } });
+  await prisma.event.createMany({
+    data: slots.map((slot) => ({
       userId,
       title: task.title,
       start: slot.start,
       end: slot.end,
       taskId: task.id,
       localDirty: true,
-    },
-    update: { start: slot.start, end: slot.end, title: task.title, localDirty: true },
+    })),
   });
   // Scheduling doesn't change the task's lifecycle status — having a
-  // calendar slot (this Event row existing) is tracked independently of
-  // CREATED/ONGOING/DELAYED/DONE. A task can be "ongoing" whether or not
-  // it has a slot, and a scheduled task is still just "created" until
-  // marked otherwise.
+  // calendar slot (these Event rows existing) is tracked independently
+  // of CREATED/ONGOING/DELAYED/DONE. A task can be "ongoing" whether or
+  // not it has a slot, and a scheduled task is still just "created"
+  // until marked otherwise.
 
-  return event;
+  return prisma.event.findMany({ where: { taskId }, orderBy: { start: "asc" } });
 }
 
 /**
@@ -373,18 +415,22 @@ export async function rescheduleConflictsWith(
   excludeEventId?: string,
 ): Promise<number> {
   const scheduledTasks = await prisma.task.findMany({
-    where: { userId, event: { isNot: null } },
-    include: { event: true },
+    where: { userId, events: { some: {} } },
+    include: { events: true },
   });
 
   let count = 0;
   for (const task of scheduledTasks) {
-    const event = task.event;
-    if (!event || event.locked || event.id === excludeEventId) continue;
-    // A scheduled task's own event is always a single occurrence (the
-    // scheduler creates one per task, never a recurring one), so a plain
-    // interval check is enough — no need to expand recurrence here.
-    const conflict = event.start < end && event.end > start;
+    // A chunked task's chunks (task.events, plural) are still always
+    // one-off, never recurring, so a plain interval check per chunk is
+    // enough. Any locked chunk exempts the whole task, same "don't touch
+    // it" contract as an unchunked locked event — rescheduling would
+    // otherwise wipe that locked chunk along with the rest via
+    // unscheduleTask's delete-all-events-for-this-task.
+    if (task.events.some((e) => e.locked)) continue;
+    const conflict = task.events.some(
+      (event) => event.id !== excludeEventId && event.start < end && event.end > start,
+    );
     if (conflict) {
       await unscheduleTask(userId, task.id);
       await scheduleTask(userId, task.id);
@@ -405,26 +451,29 @@ export async function rescheduleConflictsWith(
 export async function rescheduleStaleTasks(userId: string) {
   const now = new Date();
   const scheduledTasks = await prisma.task.findMany({
-    where: { userId, event: { isNot: null } },
-    include: { event: true },
+    where: { userId, events: { some: {} } },
+    include: { events: true },
   });
   const allEvents = await prisma.event.findMany({ where: { userId } });
 
   let count = 0;
   for (const task of scheduledTasks) {
-    const event = task.event;
-    if (!event || event.locked) continue;
+    // Any locked chunk exempts the whole task — see rescheduleConflictsWith.
+    if (task.events.some((e) => e.locked)) continue;
 
-    const isPast = event.end <= now;
-    const windowStart = new Date(event.start.getTime() - 86_400_000);
-    const windowEnd = new Date(event.end.getTime() + 86_400_000);
-    const others = allEvents.filter((e) => e.id !== event.id);
-    const nearbyOccurrences = expandEvents(others, windowStart, windowEnd);
-    const conflict = nearbyOccurrences.some(
-      (o) => o.start < event.end && o.end > event.start,
-    );
+    const isStale = task.events.some((event) => {
+      const isPast = event.end <= now;
+      const windowStart = new Date(event.start.getTime() - 86_400_000);
+      const windowEnd = new Date(event.end.getTime() + 86_400_000);
+      const others = allEvents.filter((e) => e.id !== event.id);
+      const nearbyOccurrences = expandEvents(others, windowStart, windowEnd);
+      const conflict = nearbyOccurrences.some(
+        (o) => o.start < event.end && o.end > event.start,
+      );
+      return isPast || conflict;
+    });
 
-    if (isPast || conflict) {
+    if (isStale) {
       await unscheduleTask(userId, task.id);
       await scheduleTask(userId, task.id);
       count++;
@@ -450,7 +499,7 @@ export async function scheduleAllPendingTasks(userId: string) {
     where: {
       userId,
       status: { in: ["CREATED", "ONGOING"] },
-      event: { is: null },
+      events: { none: {} },
       parentId: null,
     },
     // Hard deadlines get first claim on open slots as a whole tier,
@@ -468,8 +517,8 @@ export async function scheduleAllPendingTasks(userId: string) {
 
   const results: { taskId: string; scheduled: boolean }[] = [];
   for (const task of tasks) {
-    const event = await scheduleTask(userId, task.id);
-    results.push({ taskId: task.id, scheduled: event !== null });
+    const events = await scheduleTask(userId, task.id);
+    results.push({ taskId: task.id, scheduled: events !== null });
   }
   return results;
 }
@@ -486,11 +535,11 @@ export async function scheduleAllPendingTasks(userId: string) {
  */
 export async function rescheduleAll(userId: string) {
   const scheduledTasks = await prisma.task.findMany({
-    where: { userId, event: { isNot: null } },
-    include: { event: true },
+    where: { userId, events: { some: {} } },
+    include: { events: true },
   });
   for (const task of scheduledTasks) {
-    if (task.event?.locked) continue;
+    if (task.events.some((e) => e.locked)) continue;
     await unscheduleTask(userId, task.id);
   }
   return scheduleAllPendingTasks(userId);

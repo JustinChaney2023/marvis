@@ -60,7 +60,7 @@ export async function buildTodayFacts(userId: string): Promise<DailyAgendaFacts>
         userId,
         parentId: null,
         status: { in: ["CREATED", "ONGOING", "DELAYED"] },
-        event: { is: null },
+        events: { none: {} },
         dueAt: { gte: dayStart },
       },
       orderBy: { dueAt: "asc" },

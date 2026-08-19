@@ -23,14 +23,18 @@ export default async function TeamPage() {
     where: {
       userId: user.id,
       assigneeId: { not: null },
-      event: { start: { gte: weekStart, lt: weekEnd } },
+      events: { some: { start: { gte: weekStart, lt: weekEnd } } },
     },
-    include: { event: true },
+    include: { events: true },
   });
   const minutesByAssignee = new Map<string, number>();
   for (const t of weekTasks) {
-    if (!t.event || !t.assigneeId) continue;
-    const minutes = (t.event.end.getTime() - t.event.start.getTime()) / 60_000;
+    if (!t.assigneeId) continue;
+    // Sum every chunk that falls in this week, not just one — a chunked
+    // task's workload is the total of its chunks, same as any other.
+    const minutes = t.events
+      .filter((e) => e.start >= weekStart && e.start < weekEnd)
+      .reduce((sum, e) => sum + (e.end.getTime() - e.start.getTime()) / 60_000, 0);
     minutesByAssignee.set(t.assigneeId, (minutesByAssignee.get(t.assigneeId) ?? 0) + minutes);
   }
 

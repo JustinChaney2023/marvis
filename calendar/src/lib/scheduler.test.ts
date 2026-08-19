@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { dateKey, findBestSlot, findEarliestSlot } from "./scheduler";
+import { dateKey, findBestSlot, findEarliestSlot, splitIntoChunks } from "./scheduler";
 
 // Monday 2026-08-17 09:00 local
 const from = new Date(2026, 7, 17, 9, 0);
@@ -167,6 +167,21 @@ const horizon = new Date(2026, 7, 31, 0, 0);
   );
   assert.ok(slot);
   assert.equal(slot.start.getTime(), tuesday1pm.getTime());
+}
+
+// splitIntoChunks
+{
+  // no chunking: unset, zero/negative, or >= total all mean "one chunk"
+  assert.deepEqual(splitIntoChunks(90, null), [90]);
+  assert.deepEqual(splitIntoChunks(90, 0), [90]);
+  assert.deepEqual(splitIntoChunks(90, 120), [90]);
+  assert.deepEqual(splitIntoChunks(90, 90), [90]);
+
+  // even split
+  assert.deepEqual(splitIntoChunks(90, 30), [30, 30, 30]);
+
+  // remainder goes to the last chunk, not dropped
+  assert.deepEqual(splitIntoChunks(200, 60), [60, 60, 60, 20]);
 }
 
 console.log("scheduler.test.ts: all checks passed");

@@ -81,7 +81,10 @@ model Event {
   // Excluded from auto-rescheduling (src/lib/scheduler.ts's stale-task
   // sweep never moves a locked event, even if its slot looks stale).
   locked          Boolean     @default(false)
-  taskId          String?     @unique
+  // Not unique — a chunked task (Task.chunkMin set) places 2+ Event rows
+  // sharing one taskId, same "occurrences share a parent id" shape as
+  // Habit below. An unchunked task still has at most one.
+  taskId          String?
   task            Task?       @relation(fields: [taskId], references: [id])
   // A Habit occurrence, unlike a Task's slot, isn't 1:1 — a habit with
   // timesPerWeek: 3 has 3 Event rows sharing the same habitId each week,
@@ -209,6 +212,13 @@ model Task {
   priority       Int        @default(0) // 0 = low .. 3 = urgent
   energy         TaskEnergy @default(MEDIUM)
   durationMin    Int        @default(30) // the estimate
+  // Splits durationMin into ~chunkMin-sized Event rows instead of one
+  // block (e.g. a 3h task with chunkMin=60 -> three 1h chunks), each
+  // separated by at least the user's own bufferMin setting — reusing
+  // that existing knob rather than adding a second "gap between chunks"
+  // setting nobody's asked for yet. Null/unset, or >= durationMin, means
+  // no chunking (one block, same as before this field existed).
+  chunkMin       Int?
   // Actual time tracked, accumulated across every ONGOING session (not
   // just the current one) — see finalizeTaskTimer in src/app/actions.ts.
   trackedMinutes Int        @default(0)
@@ -250,7 +260,11 @@ model Task {
   // instead of the default 9-6 weekday work window. Null = default.
   timeSlotId     String?
   timeSlot       TimeSlot?  @relation(fields: [timeSlotId], references: [id], onDelete: SetNull)
-  event          Event?
+  // Plural since a chunked task (chunkMin set) has 2+ rows — one per
+  // chunk, all sharing this taskId. An unchunked task still has at most
+  // one. Ordered by start wherever "the next chunk"/"is it scheduled"
+  // matters — see scheduler.ts and TaskRow.tsx.
+  events         Event[]
   // One level of subtasks (a subtask can't itself have subtasks — this
   // app doesn't enforce that in the schema, but nothing in the UI ever
   // creates a subtask of a subtask). Deleting the parent deletes its

@@ -140,7 +140,7 @@ export default async function Page(props: PageProps<"/">) {
       userId: user.id,
       parentId: null,
       status: { in: ["CREATED", "ONGOING"] },
-      event: { is: null },
+      events: { none: {} },
       dueAt: { lt: soonThreshold },
     },
     orderBy: { dueAt: "asc" },
