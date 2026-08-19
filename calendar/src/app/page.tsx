@@ -98,7 +98,9 @@ export default async function Page(props: PageProps<"/">) {
   const ruleByMasterId = new Map(rows.map((r) => [r.id, r.recurrenceRule]));
   const lockedByMasterId = new Map(rows.map((r) => [r.id, r.locked]));
   const allDayByMasterId = new Map(rows.map((r) => [r.id, r.allDay]));
-  const colorByMasterId = new Map(rows.map((r) => [r.id, r.task?.project?.color ?? null]));
+  const colorByMasterId = new Map(
+    rows.map((r) => [r.id, r.color ?? r.task?.color ?? r.task?.project?.color ?? null]),
+  );
   const priorityByMasterId = new Map(rows.map((r) => [r.id, r.task?.priority ?? null]));
   const meetingUrlByMasterId = new Map(rows.map((r) => [r.id, r.meetingUrl]));
   const events: CalendarEvent[] = expandEvents(rows, from, to)
@@ -170,7 +172,7 @@ export default async function Page(props: PageProps<"/">) {
   }
 
   return (
-    <main className="mx-auto w-full max-w-[96rem] flex-1 px-6 py-12">
+    <main className="mx-auto w-full max-w-[96rem] flex-1 px-6 pb-12 pt-4">
       <header className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <nav className="flex flex-wrap items-center gap-1">

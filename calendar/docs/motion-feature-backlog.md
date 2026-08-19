@@ -304,3 +304,111 @@ forgot-password — the last real gap before this is public; (2)
 AI-assisted task creation with generated subtasks — needs a design pass
 on scope/context first; (3) mini month-picker + click-drag multi-select/
 bulk-move on the calendar.
+
+## Competitor research session (2026-08-19, third pass)
+Triggered by the user sharing real Motion screenshots (task detail panel,
+date-picker popup, list view, project page) mid-session while several
+concrete asks from those screenshots were already being implemented in
+parallel: drag-to-create popup (task vs. event choice) with a lock icon
+for manually-placed blocks, event/task left-border-only color styling,
+moving the "now" line, a day-list sidebar on the calendar page, task
+hard-vs-soft deadline (hard default), and duration chunking into
+sub-blocks with gaps. None of those are re-proposed below — this session
+looked for what's still missing beyond them.
+
+Confirmed via Motion's own help docs (not just review-site paraphrase):
+Motion's scheduling engine has a documented priority order — **ASAP
+tasks, then hard deadlines, then soft deadlines, then priority, then
+duration, then chunking rules**. This app is adding hard-vs-soft deadline
+as a field, but the scheduler itself (`src/lib/scheduler.ts`) only scores
+by priority + due date today, with no explicit hard/soft precedence tier.
+- [ ] **Scheduler precedence for hard vs. soft deadlines** — once the
+      field exists, a hard-deadline task should bump ahead of a
+      higher-priority soft-deadline task if the soft one still has slack
+      before its own due date and the hard one doesn't. Worth stating
+      explicitly now since it's the actual point of adding the field —
+      a hard/soft toggle that doesn't change scheduling order is just a
+      label.
+- [ ] **Chunking confirmed mechanics** (for whoever builds it): Duration
+      = total estimate, Min chunk = size per block, Motion auto-splits
+      into N blocks that still finish before the deadline if hard. This
+      app's existing per-user `bufferMin` already inserts breathing room
+      between *any* two scheduled items — worth checking whether that's
+      reused as the inter-chunk gap or whether chunked blocks need their
+      own (probably larger) gap knob, since "gap between two unrelated
+      tasks" and "gap between two chunks of the same task" aren't
+      obviously the same number.
+
+Genuinely new, not yet tracked:
+- [ ] **Task dependencies (Blocked By / Blocking)** — visible on Motion's
+      own task panel in the screenshots ("Blocked By: None / Blocking:
+      None"). Nothing like this exists in `Task` today beyond the
+      one-level parent/subtask checklist relation. Real scheduler
+      implication, not just a UI field: a blocked task shouldn't be
+      auto-scheduled until its blockers are Done. Medium effort — a
+      self-referential many-to-many on Task, plus one guard in the
+      scheduler's sweep.
+- [ ] **Labels (tags)** on tasks — Motion's panel shows "Labels: None."
+      A lightweight many-to-many tag, not a full custom-field builder —
+      Motion also offers "+ Add custom field" but a generic custom-field
+      system for a personal/small-group app is speculative flexibility
+      nobody's asked for yet; skip that part, labels alone cover most of
+      the real want (quick visual grouping cross-cutting projects).
+- [ ] **Dense table list view** (Deadline/Status/Priority/Duration/
+      Assignee columns, grouped by Project → Status, per Motion's list
+      view screenshot) — this app's existing Tasks page already has
+      List/Board(Kanban) view toggles, but "List" today is the same
+      card-row `TaskRow` layout as the default view, not a dense
+      multi-column table. A real information-density gap for anyone
+      managing more than a handful of tasks at once.
+- [ ] **"No-meeting day" toggle on booking links** — confirmed as a real
+      Reclaim.ai feature (declines booking attempts on designated days),
+      Sunsama doesn't have it. Small, concrete: exclude specific
+      weekdays from a `BookingLink`'s computed availability. Could reuse
+      the existing `TimeSlot.daysOfWeek` string pattern rather than
+      inventing a new format.
+- [ ] **"Auto-scheduled on {date}" badge copy** — Motion's panel
+      explicitly labels a slot as auto-scheduled vs. not. Not a new
+      feature on its own, but pairs directly with the lock icon already
+      being built this session: once a block can be locked (manual) or
+      unlocked (scheduler-owned), showing *when* the scheduler placed it
+      is the natural companion — flag for whoever does that UI so the
+      copy isn't an afterthought.
+- [ ] **AI-generated project from one prompt** — Motion: write one
+      prompt, get a full project + task breakdown. This app already has
+      the two halves separately (AI syllabus import parses text into a
+      reviewable task list; AI subtask generation breaks one task into
+      subtasks) and the same `callAiForJson` infra both already use —
+      a "describe a project, get a reviewable list of tasks under a new
+      Project" feature is a natural third mode on that same pipeline,
+      not a new subsystem. Medium effort, high fit.
+
+Looked at and deliberately not proposing:
+- **Workspaces above Projects** (Motion: Workspace > Project > Task,
+  this app: flat Project > Task) — a second hierarchy level is
+  speculative structure for a "you + a few friends" self-hosted app
+  unless there's an actual want to separate genuinely distinct contexts
+  (e.g. personal vs. one specific client's work). Existing per-project
+  color-coding already gives visual grouping. Add only if a real need
+  shows up, not because Motion has the layer.
+- **Fine-grained buffer types** (Reclaim: separate travel-time-by-
+  location, post-meeting decompression time, task/habit breaks, vs. this
+  app's one global `bufferMin`) — real distinction, but three new knobs
+  for a personal app is over-fit; the one global buffer already covers
+  the common case. Revisit only if a specific buffer type is actually
+  missed in practice.
+- **Team capacity/workload views, custom-field builder** — same
+  reasoning as the existing "Explicitly out of scope" section
+  (enterprise/team surface, speculative flexibility) — not revisited.
+
+**Top 5, most impactful/feasible first:**
+1. Scheduler precedence for hard vs. soft deadlines — makes the
+   in-progress deadline field actually change behavior, not just labels.
+2. Task dependencies (Blocked By/Blocking) — the biggest genuinely
+   missing structural feature Motion's own UI highlights.
+3. Dense table list view — real information-density gap, no new data
+   model needed (all the columns already exist on Task).
+4. AI-generated project from one prompt — high leverage, reuses existing
+   AI infra almost entirely.
+5. Labels (tags) — small, cheap, cross-cutting grouping Motion users
+   clearly rely on ("Labels: None" is a first-class field on every task).

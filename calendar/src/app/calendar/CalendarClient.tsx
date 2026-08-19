@@ -24,6 +24,7 @@ import {
 import EventModal, { type EventModalEvent } from "./EventModal";
 import { LockIcon, FlagIcon } from "../icons";
 import { moveEvent, deleteEvent } from "../actions";
+import { PROJECT_EVENT_COLORS, DEFAULT_EVENT_COLOR } from "@/lib/eventColors";
 
 export type CalendarEvent = {
   id: string;
@@ -36,9 +37,10 @@ export type CalendarEvent = {
   locked: boolean;
   allDay: boolean;
   meetingUrl: string | null;
-  // The project's Tailwind color family (e.g. "indigo") via task.project,
-  // or null for a manually-created event with no task/project — see
-  // PROJECT_EVENT_COLORS below for the class lookup.
+  // Resolved Tailwind color family (e.g. "indigo") — the event's own
+  // explicit override, else its task's, else its task's project's, else
+  // null for the default — see PROJECT_EVENT_COLORS below for the class
+  // lookup. Despite the name, not only ever a project's color anymore.
   projectColor: string | null;
   // The linked task's priority (0=Low..3=Urgent), or null for a manual
   // event with no task. Only High/Urgent get a visible flag — see
@@ -47,22 +49,9 @@ export type CalendarEvent = {
   taskPriority: number | null;
 };
 
-// Full literal class strings, same reasoning as tasks/page.tsx's
-// PROJECT_COLOR_BADGE — Tailwind's JIT scanner can't see `bg-${color}-500`.
-export const PROJECT_EVENT_COLORS: Record<
-  string,
-  { bar: string; bg: string; text: string }
-> = {
-  zinc: { bar: "border-l-zinc-500", bg: "bg-zinc-50 dark:bg-zinc-700/40", text: "text-zinc-900 dark:text-zinc-100" },
-  red: { bar: "border-l-red-500", bg: "bg-red-50 dark:bg-red-950/30", text: "text-red-900 dark:text-red-100" },
-  amber: { bar: "border-l-amber-500", bg: "bg-amber-50 dark:bg-amber-950/30", text: "text-amber-900 dark:text-amber-100" },
-  green: { bar: "border-l-green-500", bg: "bg-green-50 dark:bg-green-950/30", text: "text-green-900 dark:text-green-100" },
-  blue: { bar: "border-l-blue-500", bg: "bg-blue-50 dark:bg-blue-950/30", text: "text-blue-900 dark:text-blue-100" },
-  indigo: { bar: "border-l-indigo-500", bg: "bg-indigo-50 dark:bg-indigo-950/30", text: "text-indigo-900 dark:text-indigo-100" },
-  violet: { bar: "border-l-violet-500", bg: "bg-violet-50 dark:bg-violet-950/30", text: "text-violet-900 dark:text-violet-100" },
-  pink: { bar: "border-l-pink-500", bg: "bg-pink-50 dark:bg-pink-950/30", text: "text-pink-900 dark:text-pink-100" },
-};
-const DEFAULT_EVENT_COLOR = PROJECT_EVENT_COLORS.indigo;
+// PROJECT_EVENT_COLORS/DEFAULT_EVENT_COLOR now live in @/lib/eventColors
+// — EventModal/TaskModal need the option list too, and importing it from
+// here would be circular (this file imports EventModal to render it).
 
 type Props = {
   view: CalendarView;
@@ -285,6 +274,7 @@ export default function CalendarClient({
         recurrenceRule: event.recurrenceRule,
         locked: event.locked,
         meetingUrl: event.meetingUrl,
+        color: event.projectColor,
       },
     });
   };
@@ -592,6 +582,9 @@ function HourGrid({
   selectedEventIds: Set<string>;
   onToggleSelect: (id: string) => void;
 }) {
+  // Recomputed each render, not just on mount, same reasoning as the
+  // day-column's own now-line — see the comment there.
+  const now = new Date();
   const gridStyle = {
     gridTemplateColumns: `repeat(${days.length}, minmax(0, 1fr))`,
   };
@@ -689,7 +682,7 @@ function HourGrid({
           ref={scrollRef}
           className="calendar-scroll flex max-h-[70vh] overflow-y-auto"
         >
-          <div className="w-16 flex-shrink-0">
+          <div className="relative w-16 flex-shrink-0">
             {HOURS.map((h) => (
               <div
                 key={h}
@@ -699,6 +692,16 @@ function HourGrid({
                 {formatHourLabel(h)}
               </div>
             ))}
+            {days.some((day) => isSameDay(day, today)) && (
+              <div
+                className="pointer-events-none absolute right-2 z-10 -translate-y-1/2 text-[10px] font-semibold text-red-500"
+                style={{
+                  top: `${((now.getHours() * 60 + now.getMinutes() - HOUR_START * 60) / 60) * HOUR_HEIGHT}px`,
+                }}
+              >
+                {formatTime(now)}
+              </div>
+            )}
           </div>
           <div className="flex-1 grid" style={gridStyle}>
             {days.map((day) => (
@@ -859,13 +862,12 @@ function DayColumn({
         />
       ))}
       {nowTop !== null && (
+        // The current-time label lives in the gutter on the left
+        // (HourGrid) now — this is just the line across the day itself.
         <div
-          className="pointer-events-none absolute left-0 right-0 z-10 flex items-center"
+          className="pointer-events-none absolute left-0 right-0 z-10 h-px bg-red-500"
           style={{ top: `${nowTop}px` }}
-        >
-          <div className="-ml-1 h-2 w-2 flex-shrink-0 rounded-full bg-red-500" />
-          <div className="h-px flex-1 bg-red-500" />
-        </div>
+        />
       )}
       <div
         className="absolute inset-0"
@@ -1017,7 +1019,7 @@ function EventBlock({
       }}
       type="button"
       title="Shift/Cmd/Ctrl-click to select multiple events"
-      className={`group absolute overflow-hidden rounded-lg border-y border-r border-zinc-200/40 border-l-2 p-1.5 text-left shadow-sm transition-all hover:shadow-md hover:brightness-95 dark:border-zinc-600/60 dark:hover:brightness-110 ${color.bar} ${color.bg} ${color.text} ${
+      className={`group absolute overflow-hidden rounded-lg border-y border-r border-zinc-200 border-l-4 bg-white p-1.5 text-left text-zinc-900 shadow-sm transition-all hover:shadow-md hover:brightness-95 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:brightness-110 ${color.bar} ${
         isDragging ? "opacity-40" : ""
       } ${selected ? "ring-2 ring-indigo-500 ring-offset-1 dark:ring-offset-zinc-900" : ""}`}
       style={{

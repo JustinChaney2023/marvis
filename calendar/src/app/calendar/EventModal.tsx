@@ -12,6 +12,7 @@ import {
   parseCustomWeeklyDays,
   type WeekdayCode,
 } from "@/lib/recurrence";
+import { PROJECT_EVENT_COLORS } from "@/lib/eventColors";
 
 export type EventModalEvent = {
   id: string;
@@ -21,7 +22,15 @@ export type EventModalEvent = {
   recurrenceRule: string | null;
   locked: boolean;
   meetingUrl: string | null;
+  // The event's currently-*resolved* color (its own override, else its
+  // task's, else its task's project's) — not necessarily an explicit
+  // override already stored on this row. Saving without touching the
+  // Color field re-pins whatever's showing as this event's own explicit
+  // color, same as any other field in this form.
+  color: string | null;
 };
+
+const EVENT_COLOR_OPTIONS = Object.keys(PROJECT_EVENT_COLORS);
 
 type Props = {
   mode: "create" | "edit";
@@ -235,6 +244,22 @@ export default function EventModal({
               defaultValue={mode === "edit" ? (event?.meetingUrl ?? "") : ""}
               className={inputClass}
             />
+          </label>
+
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="text-zinc-500">Color</span>
+            <select
+              name="color"
+              defaultValue={(mode === "edit" ? event?.color : null) ?? ""}
+              className={inputClass}
+            >
+              <option value="">Default</option>
+              {EVENT_COLOR_OPTIONS.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
           </label>
 
           <label className="flex flex-col gap-1 text-sm">

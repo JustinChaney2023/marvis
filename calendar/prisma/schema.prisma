@@ -67,6 +67,12 @@ model Event {
   end             DateTime
   allDay          Boolean     @default(false)
   notes           String?
+  // Explicit override of the Tailwind color family this event's block
+  // renders in (see PROJECT_EVENT_COLORS in CalendarClient.tsx). Null =
+  // fall back to the linked task's own color, then its project's, then
+  // the default indigo — same resolution page.tsx already does for
+  // projectColor.
+  color           String?
   // RRULE string (no DTSTART line — `start` above is the recurrence's
   // DTSTART), e.g. "FREQ=WEEKLY;BYDAY=MO,WE,FR". Null = a one-off event.
   // Occurrences are computed on the fly (src/lib/recurrence.ts), never
@@ -223,6 +229,10 @@ model Task {
   // per-instance mutable state (status, its own scheduled event) that
   // doesn't fit the "compute on the fly" model Events use.
   recurrenceRule String?
+  // Explicit override of the Tailwind color family this task (and its
+  // scheduled Event block, if any) renders in. Null = fall back to the
+  // project's color, then the default indigo.
+  color          String?
   projectId      String?
   project        Project?   @relation(fields: [projectId], references: [id], onDelete: SetNull)
   assigneeId     String?

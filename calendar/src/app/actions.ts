@@ -102,6 +102,7 @@ function taskFieldsFromFormData(formData: FormData) {
   const projectId = String(formData.get("projectId") ?? "").trim() || null;
   const assigneeId = String(formData.get("assigneeId") ?? "").trim() || null;
   const timeSlotId = String(formData.get("timeSlotId") ?? "").trim() || null;
+  const color = String(formData.get("color") ?? "").trim() || null;
   // A recurrence rule with no due date has nothing to anchor to (no
   // DTSTART equivalent) — silently drop it rather than create a task
   // that can never compute a next occurrence.
@@ -118,6 +119,7 @@ function taskFieldsFromFormData(formData: FormData) {
     projectId,
     assigneeId,
     timeSlotId,
+    color,
     recurrenceRule,
   };
 }
@@ -536,6 +538,7 @@ export async function createEvent(formData: FormData) {
   const end = new Date(endRaw);
   const recurrenceRule = recurrenceRuleFromFormData(formData);
   const meetingUrl = String(formData.get("meetingUrl") ?? "").trim() || null;
+  const color = String(formData.get("color") ?? "").trim() || null;
 
   await prisma.event.create({
     data: {
@@ -545,6 +548,7 @@ export async function createEvent(formData: FormData) {
       end,
       recurrenceRule,
       meetingUrl,
+      color,
       locked: lockedFromFormData(formData),
       localDirty: true,
     },
@@ -567,6 +571,7 @@ export async function updateEvent(eventId: string, formData: FormData) {
   const end = new Date(endRaw);
   const recurrenceRule = recurrenceRuleFromFormData(formData);
   const meetingUrl = String(formData.get("meetingUrl") ?? "").trim() || null;
+  const color = String(formData.get("color") ?? "").trim() || null;
 
   const { count } = await prisma.event.updateMany({
     where: { id: eventId, userId: user.id },
@@ -576,6 +581,7 @@ export async function updateEvent(eventId: string, formData: FormData) {
       end,
       recurrenceRule,
       meetingUrl,
+      color,
       locked: lockedFromFormData(formData),
       localDirty: true,
     },

@@ -38,6 +38,7 @@ export type TaskRowData = {
   projectId: string | null;
   assigneeId: string | null;
   timeSlotId: string | null;
+  color: string | null;
   project: { name: string; color: string } | null;
   assignee: { name: string; type: "HUMAN" | "AI" } | null;
   event: { start: Date } | null;
@@ -152,6 +153,7 @@ export default function TaskRow({
     startAt: task.startAt,
     dueAt: task.dueAt,
     recurrenceRule: task.recurrenceRule,
+    color: task.color,
   };
 
   const handleAddSubtask = async (e: React.FormEvent) => {
@@ -260,7 +262,7 @@ export default function TaskRow({
             </span>
             {task.project && (
               <span
-                className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${PROJECT_COLOR_BADGE[task.project.color] ?? PROJECT_COLOR_BADGE.zinc}`}
+                className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${PROJECT_COLOR_BADGE[task.color ?? task.project.color] ?? PROJECT_COLOR_BADGE.zinc}`}
               >
                 {task.project.name}
               </span>

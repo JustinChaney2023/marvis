@@ -12,6 +12,9 @@ import {
   parseCustomWeeklyDays,
   type WeekdayCode,
 } from "@/lib/recurrence";
+import { PROJECT_EVENT_COLORS } from "@/lib/eventColors";
+
+const TASK_COLOR_OPTIONS = Object.keys(PROJECT_EVENT_COLORS);
 
 type Project = { id: string; name: string };
 type Assignee = { id: string; name: string; type: "HUMAN" | "AI" };
@@ -28,6 +31,7 @@ export type TaskModalTask = {
   startAt: Date | null;
   dueAt: Date | null;
   recurrenceRule: string | null;
+  color: string | null;
 };
 
 type Props = {
@@ -205,6 +209,18 @@ export default function TaskModal({ mode, task, projects, assignees, timeSlots, 
               </select>
             </label>
           </div>
+
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="text-zinc-500">Color</span>
+            <select name="color" defaultValue={task?.color ?? ""} className={inputClass}>
+              <option value="">Use project color</option>
+              {TASK_COLOR_OPTIONS.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </label>
 
           {timeSlots.length > 0 && (
             <label className="flex flex-col gap-1 text-sm">
