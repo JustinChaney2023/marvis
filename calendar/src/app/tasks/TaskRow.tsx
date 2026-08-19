@@ -28,6 +28,7 @@ type Subtask = { id: string; title: string; status: TaskStatus };
 export type TaskRowData = {
   id: string;
   title: string;
+  notes: string | null;
   status: TaskStatus;
   priority: number;
   durationMin: number;
@@ -147,6 +148,7 @@ export default function TaskRow({
   const modalTask: TaskModalTask = {
     id: task.id,
     title: task.title,
+    notes: task.notes,
     priority: task.priority,
     durationMin: task.durationMin,
     projectId: task.projectId,

@@ -26,7 +26,12 @@ const securityHeaders = [
       "default-src 'self'",
       `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
       "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data:",
+      // https: (any host) so task notes can embed an externally-hosted
+      // image link, not just ones uploaded through this app — the
+      // realistic risk (an image src leaking a viewer's IP to a third
+      // party) is the same one every note-taking/chat app with linked
+      // images accepts; it's read-only, no script execution.
+      "img-src 'self' data: https:",
       "connect-src 'self'",
       "frame-ancestors 'none'",
       "base-uri 'self'",

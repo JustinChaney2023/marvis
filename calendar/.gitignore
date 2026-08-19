@@ -37,6 +37,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# user-uploaded content (task note images) — real user data, not app code
+/public/uploads
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

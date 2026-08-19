@@ -92,6 +92,7 @@ function energyFromFormData(formData: FormData): "LOW" | "MEDIUM" | "HIGH" {
 
 function taskFieldsFromFormData(formData: FormData) {
   const title = String(formData.get("title") ?? "").trim();
+  const notes = String(formData.get("notes") ?? "").trim() || null;
   const priority = Number(formData.get("priority") ?? 0);
   const durationMin = Number(formData.get("durationMin") ?? 30);
   const startAtRaw = String(formData.get("startAt") ?? "");
@@ -115,6 +116,7 @@ function taskFieldsFromFormData(formData: FormData) {
   const hardDeadline = dueAt ? formData.get("hardDeadline") === "on" : true;
   return {
     title,
+    notes,
     priority,
     durationMin,
     energy: energyFromFormData(formData),

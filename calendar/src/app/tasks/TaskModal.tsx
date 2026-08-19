@@ -14,6 +14,7 @@ import {
 } from "@/lib/recurrence";
 import { PROJECT_EVENT_COLORS } from "@/lib/eventColors";
 import DatePicker from "../ui/DatePicker";
+import NotesEditor from "../ui/NotesEditor";
 
 const TASK_COLOR_OPTIONS = Object.keys(PROJECT_EVENT_COLORS);
 
@@ -24,6 +25,7 @@ type TimeSlot = { id: string; name: string };
 export type TaskModalTask = {
   id: string;
   title: string;
+  notes: string | null;
   priority: number;
   durationMin: number;
   projectId: string | null;
@@ -135,7 +137,7 @@ export default function TaskModal({
       role="dialog"
       aria-modal="true"
     >
-      <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-6 shadow-2xl ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
+      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-6 shadow-2xl ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold tracking-tight">
             {mode === "edit" ? "Edit task" : "New task"}
@@ -162,6 +164,11 @@ export default function TaskModal({
               className={inputClass}
             />
           </label>
+
+          <div className="flex flex-col gap-1 text-sm">
+            <span className="text-zinc-500">Notes</span>
+            <NotesEditor name="notes" defaultValue={task?.notes ?? ""} />
+          </div>
 
           <div className="grid grid-cols-2 gap-3">
             <label className="flex flex-col gap-1 text-sm">
