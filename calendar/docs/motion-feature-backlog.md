@@ -1,5 +1,162 @@
 # Motion replica — feature backlog
 
+## Issue backlog clear-out session (2026-08-20, headless)
+Worked every open GitHub issue in one pass: 15 closed, 2 correctly
+identified as already-shipped-but-uncommitted and just needed
+committing (#3, #44's month-view gap), 4 left deliberately open (below).
+
+Shipped this session — #3 (bulk move via multi-select, found already
+built, just closed with an explanation), #32 (ICS subscriptions), #33
+(ICS import/export), #34 (event guests + RSVP), #35 (working hours
+setting), #36 (out-of-office/focus-time event types), #37 (world
+clock), #38 (natural-language quick-add for events), #39 (search
+across calendar events), #40 (recurring event exceptions — edit/delete
+a single occurrence), #41 (keyboard shortcuts help overlay), #42
+(snooze a notification), #43 (print view), #44 (calendar sharing —
+closed the month-view gap the prior session's v1 left open), #45
+(group scheduling — confirmed v1 already complete, closed).
+
+**Left open, deliberately:**
+- **#46 Multi-timezone support** — a real architecture change (every
+  event time is currently a single machine-local Date; needs either
+  UTC-storage-plus-display-timezone or true per-user timezone-aware
+  storage, touching google-sync.ts, the hour-grid, and every
+  `formatTime`-family call). Bigger than a slot in this pass; the two
+  small timezone features that *don't* need it (#37 world clock, #35
+  working hours) are done. Next session should scope this on its own.
+- **#31 Task attachments + activity/comment log** — genuinely new
+  subsystems (file storage beyond the existing image-upload route;
+  a comment/activity table + UI), not a slot-in addition to something
+  that already exists. Needs its own scoping pass.
+- **#20 Broader native integrations (Zoom/Slack/Gmail)** — still
+  blocked on OAuth app registrations only the account owner can create.
+- **#16 AI meeting notetaker** — still needs a real audio/transcription
+  pipeline, not just a Claude API call; lower priority than everything
+  else on this list per its own issue text.
+
+Also renamed `GoogleSyncWatcher.tsx` -> `SyncWatcher.tsx` once it
+started polling ICS subscriptions too, not just Google.
+
+## "Complete calendar replacement" audit + group features session (2026-08-20)
+Goal: (1) verify optimization, (2) audit against Google Calendar feature-
+by-feature and file real gaps as GitHub issues so nothing gets lost
+across sessions, (3) build the group-collaboration features explicitly
+asked for (calendar sharing, group scheduling). Three research passes,
+then implementation.
+
+**Issue triage**: closed #1 (forgot password — done 2026-08-19). Narrowed
+#31 to just "task attachments + activity log" — the other four things it
+listed were all already done (auto-scheduled indicator, hard deadline,
+duration chunks, rich-text notes).
+
+**Optimization audit** — one real finding, fixed: `fetchBusyIntervals`
+(src/lib/scheduler.ts, the hottest function in the scheduler — called on
+every schedule/reschedule) had an unbounded lower bound on its one-off
+event query, fetching *every event the account has ever had* instead of
+just ones overlapping the search window. Fixed to a proper interval-
+overlap check, same pattern `page.tsx`'s own event query already used
+correctly. Also added `@@index([userId, start])` on `Event` and
+`@@index([userId, status])`/`@@index([userId, dueAt])` on `Task` —
+free, zero-risk, ahead of rows accumulating over months. Everything else
+checked out clean (no N+1s, no unscoped queries, no bundle warnings).
+
+**Google Calendar parity audit** — filed issues #32–#43 for genuine gaps:
+subscribing to external/ICS calendars (#32), ICS import/export (#33),
+event guests + RSVP (#34), explicit working-hours setting (#35),
+out-of-office/focus-time event types (#36), world clock (#37), natural-
+language quick-add for events (#38), search across calendar events (#39),
+recurring event exceptions — edit/delete a single occurrence (#40,
+flagged **large** and central to any "complete" claim — this is one of
+the most common real-world recurring-event actions), keyboard shortcuts
+help overlay (#41), notification snooze (#42), print view (#43, low
+value, filed for completeness only). Confirmed NOT gaps: booking/
+appointment scheduling already matches or exceeds Google's own
+Appointment Schedules; a separate Google-Tasks-style sidebar is moot
+given this app's own richer Task system; birthdays/contacts integration
+is noise for a personal self-hosted app.
+
+**Group scheduling research + shipped v1**: real accounts already exist
+(no per-teammate calendar data on `Assignee`, which is just a label under
+the owning account — only `User` accounts have real busy-time). Filed
+#46 (multi-timezone support, a real prerequisite once "group" can mean
+different timezones) as a separate follow-up. Then shipped:
+- [x] **Calendar sharing** (#44 in progress, v1 shipped) — new
+      `CalendarShare` model (owner/sharedWith/permission: BUSY_ONLY or
+      FULL_DETAILS), Settings → Calendars → "Calendar sharing" to grant/
+      revoke by email, and a read-only diagonal-stripe overlay on the
+      week/day grid. BUSY_ONLY never sends the real title to the browser
+      at all, not just hides it client-side. No edit permission in v1 —
+      that means rethinking every server action's ownership check, the
+      exact bug class the 2026-08-19/20 security audits fixed. Month
+      view doesn't show the overlay yet.
+- [x] **Group scheduling — "find the best time for everyone"** (#45 in
+      progress, v1 shipped) — `findGroupSlot` in scheduler.ts reuses the
+      existing `fetchBusyIntervals`/`findEarliestSlot` primitives (union
+      every participant's busy intervals, run the same earliest-slot
+      search) — no new scheduling algorithm needed. New `/meet` page:
+      pick participants from people who've shared their calendar with
+      you (doubles as both authorization and the guarantee that real
+      busy-time exists to intersect), pick a duration, get the earliest
+      mutual slot, create it as a locked event. v1 scope: only real
+      accounts (not Assignees), event lands on the requester's own
+      calendar only (`Event.userId` is still singular), no timezone
+      awareness yet (#46).
+
+## Backlog catch-up session (2026-08-19, fourth pass)
+Went through every open item in this doc against the actual codebase —
+several sessions had shipped things (duration chunking, hard/soft
+deadline precedence, drag-to-create, day-list sidebar, markdown notes,
+video-call banner, multiple booking links, AI subtask generation, Apple
+sync, invite-code gating) without this doc ever being updated to check
+them off. Checkboxes below are now corrected to match reality. Then
+implemented the remaining genuinely-open items:
+- [x] **Task dependencies (Blocked By/Blocking)** — self-referential
+      many-to-many on `Task` (`blockedBy`/`blocking`). A task with an
+      unfinished blocker is skipped by the scheduler (`scheduleTask` in
+      `src/lib/scheduler.ts` returns null, same signal as "no slot
+      fits") — every caller (Schedule all, the per-task Schedule button,
+      reschedule sweeps) routes through that one function. TaskModal
+      gets a "Blocked by" picker; TaskRow shows a "Blocked" badge.
+- [x] **Labels (tags)** — new `Label` model, many-to-many on `Task`.
+      Manage them from Tasks page → "Manage labels" (same pattern as
+      "Manage projects"); pick them per-task in TaskModal; shown as
+      colored chips on TaskRow.
+- [x] **Dense table list view** (`TaskTable.tsx`) — third view toggle
+      (List/Board/Table) on the Tasks page. Grouped by Project, columns
+      Title/Deadline/Status/Priority/Duration/Assignee, click a title to
+      open the same edit modal as the other views.
+- [x] **AI-generated project from one prompt** (`/tasks/generate-project`)
+      — third mode on the existing `callAiForJson` pipeline (alongside
+      syllabus import and AI subtasks). One-line prompt → project name +
+      reviewable task list → creates the project and tasks on confirm.
+- [x] **"No-meeting day" toggle on booking links** — `BookingLink.excludeDays`,
+      same "SU,MO,..." format as `TimeSlot.daysOfWeek`. New
+      `excludeDaysWindowFn` in scheduler.ts wraps the work-hours window;
+      wired into both slot listing and the create-booking re-validation.
+      Weekday toggle buttons in Settings → Booking links.
+- [x] **"Auto-scheduled" badge copy** — TaskRow's "scheduled {date}" text
+      now reads "auto-scheduled" vs "scheduled" based on `Event.locked`
+      (a field that already existed for the lock icon).
+- [x] **Real "forgot password" via emailed link** — the biggest flagged
+      gap before public DNS. Generic SMTP (`src/lib/email.ts`, new
+      `nodemailer` dependency) rather than picking one vendor — works
+      with a Gmail app password, Postmark, Resend, or self-hosted Postfix
+      via the same four env vars (`SMTP_HOST`/`PORT`/`USER`/`PASS`,
+      see `.env.example`). `PasswordResetToken` model, 1-hour expiry,
+      one-time use (every outstanding token for the user is invalidated
+      once one is used), resets revoke all existing sessions same as a
+      manual password change. Unset `SMTP_HOST` = the forgot-password
+      page shows a setup message instead of erroring, same contract as
+      the AI/local-AI features. New pages `/forgot-password`,
+      `/reset-password`; "Forgot password?" link added to `/login`.
+
+Not done, and deliberately left open (see reasoning already on file
+below): Outlook calendar overlay (Apple already works via
+`src/lib/apple-sync.ts`; Outlook needs its own OAuth app registration,
+same blocker as issue #20's Zoom/Slack/Gmail), and the two items already
+flagged "explicitly out of scope" (autonomous AI employees, enterprise
+billing).
+
 Working list of what Motion actually does. Check marks = already in this
 app. Open items are also tracked as GitHub issues under
 [JustinChaney2023/marvis](https://github.com/JustinChaney2023/marvis),
@@ -78,12 +235,13 @@ don't second-guess this app's existing direction there.
 - [x] Change password (Settings → Account) for a signed-in user
 - [x] Login rate limiting (8 attempts / 15 min per IP, same pattern as
       the booking page's limiter)
-- [ ] "Forgot password" reset via emailed link — needs an email
-      provider (SMTP/Postmark/Resend/etc.) picked and configured first;
-      change-password above covers "I'm logged in and want a new
-      password", not "I'm locked out"
-- [ ] Real invite flow / access control beyond "anyone can sign up" —
-      fine while this isn't public; revisit before sharing the DNS
+- [x] "Forgot password" reset via emailed link — SMTP-based, see the
+      2026-08-19 fourth-pass session above.
+- [x] Invite-gated signup — `SIGNUP_INVITE_CODE` env var, unset = open
+      signup (today's default while this isn't shared beyond friends).
+      Not full RBAC/access-control (still just "anyone with the code can
+      make a full account"), but covers the "don't let a stranger who
+      finds the URL sign up" gap.
 
 ## Calendar view
 - [x] Week/day/month views, keyboard nav (j/k, d/w/m, t)
@@ -167,14 +325,14 @@ don't second-guess this app's existing direction there.
       model name; falls back to Claude if left blank. Response parsing
       tolerates a local model wrapping its JSON in prose or a ```` ```
       ```` fence, since not all of them honor `response_format` reliably.
-- [ ] **AI-assisted task creation with generated subtasks** — type
-      something like "work on OmneHosting" and have the AI break it into
-      real subtasks using whatever context it has access to. Bigger than
-      syllabus import (needs a UI for reviewing/editing AI-proposed
-      subtasks before they're created, similar to the syllabus review
-      step, plus deciding what "context it has access to" concretely
-      means — your other tasks? project notes? nothing yet beyond the
-      prompt?). Flagged for a future pass, not started.
+- [x] **AI-assisted task creation with generated subtasks** —
+      `src/lib/subtaskGenerate.ts`, wired to TaskRow's "Generate subtasks
+      with AI" button. Context is deliberately scoped to just the task's
+      own title/notes/project, not the whole task list — kept the
+      privacy/scope story simple until there's a real reason to widen it.
+      (The wider "one prompt → a whole new project" version is the
+      separate `/tasks/generate-project` feature from the 2026-08-19
+      fourth-pass session above.)
 - [x] Sub-tasks — one level of checklist items under a parent task
       (`Task.parentId`, self-relation, cascades on delete). Expand a task
       on the Tasks page to see "N/M subtasks", check them off, add new
@@ -192,11 +350,14 @@ don't second-guess this app's existing direction there.
 ## Booking / scheduling links
 - [x] Public booking page (`/book/<slug>`), now resolves the owning
       account from the slug so it works per-user, not just for one owner
-- [ ] Multiple booking link types (different durations/slugs per user)
+- [x] Multiple booking link types (different durations/slugs per user)
+      — `BookingLinksManager` in Settings manages any number of links.
 - [x] "Share availability" quick-copy message — Settings → Booking page
       → "Copy available times" copies a plain-text list of your next
       open slots to the clipboard, for pasting into an email/DM instead
       of sending the link.
+- [x] "No-meeting day" toggle per booking link — see the 2026-08-19
+      fourth-pass session above.
 
 ## Feedback
 - [x] In-app feedback button (bottom-right, every page except
@@ -224,8 +385,13 @@ don't second-guess this app's existing direction there.
       dashes around it).
 
 ## Meetings / integrations
-- [ ] Video-call join banner ("Standup — starting in 1 min — Join call")
-- [ ] External calendar overlay beyond Google (Outlook, Apple)
+- [x] Video-call join banner ("Standup — starting in 1 min — Join call")
+      — `MeetingBanner.tsx`, polls every 30s, shown on every page except
+      the pre-auth ones.
+- [x] Apple Calendar sync (`src/lib/apple-sync.ts`, wired in `actions.ts`)
+- [ ] Outlook calendar overlay — needs its own OAuth app registration,
+      same blocker as issue #20's Zoom/Slack/Gmail (only the account
+      owner can create one).
 
 ## Security deep-dive (2026-08-18)
 Full pass over auth, authorization, and the public surfaces. Fixed:
@@ -277,9 +443,58 @@ Reviewed and judged acceptable as-is for this app's scale/trust model
       device with a live session, marks "This device", lets you revoke
       one specific session or "Log out everywhere else" in one click.
 
-Still open — the biggest gap before this goes on public DNS:
-- [ ] Real "forgot password" (needs an email provider chosen first —
-      not something to wire up speculatively without picking one).
+- [x] Real "forgot password" — see the 2026-08-19 fourth-pass session
+      above. This was the last flagged gap in this section.
+
+## Server-action ownership re-audit (2026-08-19, fifth pass)
+The fresh adversarial review this doc had been flagging as the last real
+gap before public DNS — every exported function across the four
+`"use server"` files (`actions.ts`, `authActions.ts`, `syllabusActions.ts`,
+`projectActions.ts`) checked for the exact bug class the 2026-08-18 audit
+found in `unscheduleTask`: a client-supplied id used to read/write a row
+without actually scoping the query to the signed-in user.
+
+Found and fixed — a real, previously-unfixed IDOR, not a false alarm:
+- [x] **`createTask`/`updateTask` trusted `projectId`/`assigneeId`/
+      `timeSlotId` straight from client FormData with no ownership
+      check** — unlike `labelIds`/`blockedByIds` (added this session,
+      which do verify), these three went in unverified back when the
+      form only ever *sent* your own ids. Since they're plain cuids, not
+      secret, a request crafted outside the UI could attach your own
+      task to another user's real Project/Assignee/TimeSlot id, and that
+      row's name/color would then render on your own task via
+      `include: { project: true }` etc. — a real cross-tenant data leak,
+      same shape as the unscheduleTask bug, just via a foreign-id field
+      instead of a target-row id. Fixed with `verifyOwnedId()` in
+      `actions.ts`: each id is confirmed to belong to the current user
+      before being used, and silently dropped (not errored) if not —
+      same "drop invalid state quietly" convention already used
+      elsewhere in `taskFieldsFromFormData`.
+- [x] Same bug, same fix, in `importSyllabusTasksAction`
+      (`syllabusActions.ts`, `projectId`/`assigneeId`) and
+      `createProjectFromPlanAction` (`projectActions.ts`,
+      `assigneeId` — its `projectId` is the row just created, not
+      client-supplied, so that one didn't need it).
+
+Reviewed and judged not a real issue:
+- `createAutomationRuleAction`'s `projectId` is also unverified, but
+  automation rules only ever evaluate the *current* user's own task
+  status changes against `rule.projectId` — a foreign project id just
+  never matches any of the attacker's own tasks, so the rule is inert,
+  not a leak. Left as-is rather than adding a check with no exploitable
+  behavior behind it.
+- `forgotPasswordAction`/`resetPasswordAction` (added this session):
+  no user-enumeration oracle (same response either way), reset token is
+  an unguessable 32-byte random value looked up by itself (not by a
+  client-supplied user id), and is single-use (every outstanding token
+  for the user is deleted once one succeeds). No issue found.
+- Every other exported action in all four files was already scoping its
+  `where` by `userId: user.id` (or, for the two genuinely public
+  endpoints — `createBookingAction`/booking-page lookups — resolving the
+  target row server-side from a slug, never trusting a client-supplied
+  row id). Nothing else to fix.
+
+`npx tsc --noEmit`, `npm test`, and `npm run build` all pass after the fix.
 
 ## Explicitly out of scope for now
 - Autonomous AI employees actually doing tasks (needs a real design
@@ -290,16 +505,15 @@ Still open — the biggest gap before this goes on public DNS:
 
 ---
 ## Before the public DNS / sharing with friends
-Login rate limiting and change-password now exist, but a full security
-pass on the account system hasn't happened yet — same category of gap
-the overnight session found and fixed for the booking page (rate limits,
-slot re-validation) deserves a repeat pass here before this is actually
-public: a real "forgot password" flow (needs picking an email provider),
-session revocation UX (e.g. "log out everywhere"), and a fresh
-adversarial review of every server action's ownership checks. Flag this
-explicitly before sharing the link, not after.
+Login rate limiting, change-password, session revocation UX, real
+forgot-password, and a fresh adversarial ownership-check review (2026-08-19,
+fifth pass above — found and fixed one real IDOR) all now exist. What's
+left before this is actually public: deciding whether invite-code-gated
+signup is enough access control or whether real per-account roles are
+needed. Flag this explicitly before sharing the link, not after.
 
-**Proposed next 3:** (1) pick an email provider and build real
+**Proposed next 3 (superseded by the 2026-08-19 fourth-pass session
+above, which built all three):** (1) pick an email provider and build real
 forgot-password — the last real gap before this is public; (2)
 AI-assisted task creation with generated subtasks — needs a design pass
 on scope/context first; (3) mini month-picker + click-drag multi-select/
@@ -322,14 +536,14 @@ tasks, then hard deadlines, then soft deadlines, then priority, then
 duration, then chunking rules**. This app is adding hard-vs-soft deadline
 as a field, but the scheduler itself (`src/lib/scheduler.ts`) only scores
 by priority + due date today, with no explicit hard/soft precedence tier.
-- [ ] **Scheduler precedence for hard vs. soft deadlines** — once the
+- [x] **Scheduler precedence for hard vs. soft deadlines** — once the
       field exists, a hard-deadline task should bump ahead of a
       higher-priority soft-deadline task if the soft one still has slack
       before its own due date and the hard one doesn't. Worth stating
       explicitly now since it's the actual point of adding the field —
       a hard/soft toggle that doesn't change scheduling order is just a
       label.
-- [ ] **Chunking confirmed mechanics** (for whoever builds it): Duration
+- [x] **Chunking confirmed mechanics** (for whoever builds it): Duration
       = total estimate, Min chunk = size per block, Motion auto-splits
       into N blocks that still finish before the deadline if hard. This
       app's existing per-user `bufferMin` already inserts breathing room
@@ -340,7 +554,7 @@ by priority + due date today, with no explicit hard/soft precedence tier.
       obviously the same number.
 
 Genuinely new, not yet tracked:
-- [ ] **Task dependencies (Blocked By / Blocking)** — visible on Motion's
+- [x] **Task dependencies (Blocked By / Blocking)** — visible on Motion's
       own task panel in the screenshots ("Blocked By: None / Blocking:
       None"). Nothing like this exists in `Task` today beyond the
       one-level parent/subtask checklist relation. Real scheduler
@@ -348,33 +562,33 @@ Genuinely new, not yet tracked:
       auto-scheduled until its blockers are Done. Medium effort — a
       self-referential many-to-many on Task, plus one guard in the
       scheduler's sweep.
-- [ ] **Labels (tags)** on tasks — Motion's panel shows "Labels: None."
+- [x] **Labels (tags)** on tasks — Motion's panel shows "Labels: None."
       A lightweight many-to-many tag, not a full custom-field builder —
       Motion also offers "+ Add custom field" but a generic custom-field
       system for a personal/small-group app is speculative flexibility
       nobody's asked for yet; skip that part, labels alone cover most of
       the real want (quick visual grouping cross-cutting projects).
-- [ ] **Dense table list view** (Deadline/Status/Priority/Duration/
+- [x] **Dense table list view** (Deadline/Status/Priority/Duration/
       Assignee columns, grouped by Project → Status, per Motion's list
       view screenshot) — this app's existing Tasks page already has
       List/Board(Kanban) view toggles, but "List" today is the same
       card-row `TaskRow` layout as the default view, not a dense
       multi-column table. A real information-density gap for anyone
       managing more than a handful of tasks at once.
-- [ ] **"No-meeting day" toggle on booking links** — confirmed as a real
+- [x] **"No-meeting day" toggle on booking links** — confirmed as a real
       Reclaim.ai feature (declines booking attempts on designated days),
       Sunsama doesn't have it. Small, concrete: exclude specific
       weekdays from a `BookingLink`'s computed availability. Could reuse
       the existing `TimeSlot.daysOfWeek` string pattern rather than
       inventing a new format.
-- [ ] **"Auto-scheduled on {date}" badge copy** — Motion's panel
+- [x] **"Auto-scheduled on {date}" badge copy** — Motion's panel
       explicitly labels a slot as auto-scheduled vs. not. Not a new
       feature on its own, but pairs directly with the lock icon already
       being built this session: once a block can be locked (manual) or
       unlocked (scheduler-owned), showing *when* the scheduler placed it
       is the natural companion — flag for whoever does that UI so the
       copy isn't an afterthought.
-- [ ] **AI-generated project from one prompt** — Motion: write one
+- [x] **AI-generated project from one prompt** — Motion: write one
       prompt, get a full project + task breakdown. This app already has
       the two halves separately (AI syllabus import parses text into a
       reviewable task list; AI subtask generation breaks one task into
@@ -401,14 +615,11 @@ Looked at and deliberately not proposing:
   reasoning as the existing "Explicitly out of scope" section
   (enterprise/team surface, speculative flexibility) — not revisited.
 
-**Top 5, most impactful/feasible first:**
-1. Scheduler precedence for hard vs. soft deadlines — makes the
-   in-progress deadline field actually change behavior, not just labels.
-2. Task dependencies (Blocked By/Blocking) — the biggest genuinely
-   missing structural feature Motion's own UI highlights.
-3. Dense table list view — real information-density gap, no new data
-   model needed (all the columns already exist on Task).
-4. AI-generated project from one prompt — high leverage, reuses existing
-   AI infra almost entirely.
-5. Labels (tags) — small, cheap, cross-cutting grouping Motion users
-   clearly rely on ("Labels: None" is a first-class field on every task).
+**Top 5, most impactful/feasible first — all five now shipped, see the
+2026-08-19 fourth-pass session at the top of this doc:**
+1. ~~Scheduler precedence for hard vs. soft deadlines~~ — done in an
+   earlier same-day session (`442e5c1`).
+2. ~~Task dependencies (Blocked By/Blocking)~~ — done.
+3. ~~Dense table list view~~ — done.
+4. ~~AI-generated project from one prompt~~ — done.
+5. ~~Labels (tags)~~ — done.
