@@ -14,6 +14,7 @@ import AppleSyncButton from "./AppleSyncButton";
 import ShareAvailabilityButton from "./ShareAvailabilityButton";
 import BookingLinksManager from "./BookingLinksManager";
 import CalendarSharingManager from "./CalendarSharingManager";
+import IcsImportForm from "./IcsImportForm";
 import AutomationRulesManager from "./AutomationRulesManager";
 import HabitsManager from "./HabitsManager";
 import TimeSlotsManager from "./TimeSlotsManager";
@@ -356,6 +357,24 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
             Copies a plain-text list of your open times — for pasting into
             an email or DM instead of sending a link.
           </p>
+        </div>
+      </section>
+
+      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
+        <h2 className="text-lg font-semibold">Import / export (.ics)</h2>
+        <p className="mt-1 text-xs text-zinc-400">
+          Export your whole calendar as a standard .ics file, or import one
+          from another app. Imported events are plain local events — not a
+          two-way sync like Google/Apple.
+        </p>
+        <div className="mt-3 flex flex-wrap items-center gap-4">
+          <a
+            href="/api/ics/export"
+            className="inline-flex rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 shadow-sm transition-colors hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-200 dark:hover:bg-zinc-700"
+          >
+            Export calendar (.ics)
+          </a>
+          <IcsImportForm />
         </div>
       </section>
 

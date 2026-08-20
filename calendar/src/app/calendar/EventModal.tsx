@@ -380,9 +380,17 @@ export default function EventModal({
           <div className="mt-2 flex items-center justify-between gap-2">
             {mode === "edit" ? (
               <div className="flex flex-col gap-1">
-                <Button type="button" variant="danger" onClick={handleDelete} disabled={isSubmitting}>
-                  Delete
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button type="button" variant="danger" onClick={handleDelete} disabled={isSubmitting}>
+                    Delete
+                  </Button>
+                  <a
+                    href={`/api/ics/export?eventId=${event?.id}`}
+                    className="text-xs text-zinc-500 underline hover:text-zinc-700 dark:hover:text-zinc-300"
+                  >
+                    Export .ics
+                  </a>
+                </div>
                 {isEditingRecurring && (
                   <span className="text-xs text-zinc-500">
                     Deletes the whole series.

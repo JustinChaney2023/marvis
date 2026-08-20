@@ -1348,3 +1348,48 @@ export async function searchEventsAction(query: string) {
 
   return events.map((e) => ({ id: e.id, title: e.title, startYMD: formatYMD(e.start) }));
 }
+
+const MAX_ICS_IMPORT_EVENTS = 1000;
+
+/**
+ * ICS import (#33) — creates a plain one-off (or, if the file's VEVENT
+ * carries an RRULE, recurring) Event per parsed entry. Not a two-way
+ * sync like Google/Apple — imported rows are ordinary LOCAL events the
+ * user can edit or delete like anything else.
+ */
+export async function importIcsAction(
+  formData: FormData,
+): Promise<{ ok: true; imported: number } | { ok: false; error: string }> {
+  const user = await requireUser();
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) {
+    return { ok: false, error: "No file selected." };
+  }
+
+  let parsed;
+  try {
+    const { parseIcsEvents } = await import("@/lib/ics");
+    parsed = parseIcsEvents(await file.text());
+  } catch {
+    return { ok: false, error: "Couldn't parse that file — is it a valid .ics?" };
+  }
+  if (parsed.length === 0) {
+    return { ok: false, error: "No events found in that file." };
+  }
+
+  const toImport = parsed.slice(0, MAX_ICS_IMPORT_EVENTS);
+  await prisma.event.createMany({
+    data: toImport.map((e) => ({
+      userId: user.id,
+      title: e.title,
+      start: e.start,
+      end: e.end,
+      allDay: e.allDay,
+      recurrenceRule: e.recurrenceRule,
+      notes: e.notes,
+    })),
+  });
+
+  revalidatePath("/");
+  return { ok: true, imported: toImport.length };
+}
