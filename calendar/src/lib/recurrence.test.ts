@@ -86,6 +86,27 @@ import {
   assert.ok(occ.some((o) => o.start.getDate() === 17 && o.end.getDate() === 18));
 }
 
+// excludeDates (#40) suppresses just the matching occurrence, others unaffected
+{
+  const start = new Date(2026, 7, 17, 9, 0); // Monday
+  const secondOccurrenceStart = new Date(2026, 7, 24, 9, 0);
+  const occ = expandEventOccurrences(
+    {
+      id: "m1",
+      title: "Standup",
+      start,
+      end: new Date(2026, 7, 17, 9, 30),
+      recurrenceRule: "FREQ=WEEKLY",
+      allDay: false,
+      excludeDates: secondOccurrenceStart.toISOString(),
+    },
+    new Date(2026, 7, 17, 0, 0),
+    new Date(2026, 8, 7, 0, 0), // 3 weeks later
+  );
+  const days = occ.map((o) => o.start.getDate());
+  assert.deepEqual(days, [17, 31]);
+}
+
 // buildCustomWeeklyRule: canonical Sun-Sat order regardless of input order
 {
   assert.equal(buildCustomWeeklyRule(["FR", "MO", "WE"]), "FREQ=WEEKLY;BYDAY=MO,WE,FR");

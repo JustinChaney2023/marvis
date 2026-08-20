@@ -821,6 +821,81 @@ export async function updateEvent(eventId: string, formData: FormData) {
   revalidatePath("/");
 }
 
+function withExcludedStart(excludeDates: string | null, startIso: string): string {
+  const existing = excludeDates ? excludeDates.split(",").filter(Boolean) : [];
+  if (existing.includes(startIso)) return excludeDates as string;
+  return [...existing, startIso].join(",");
+}
+
+/**
+ * Recurring event exceptions (#40) — "edit just this occurrence" of a
+ * recurring series. Creates a plain one-off Event with the form's
+ * values (no recurrenceRule of its own — editable/deletable afterward
+ * through the normal single-event flow, same as any other event) and
+ * marks `originalStartIso` excluded on the master so the raw recurring
+ * occurrence at that slot stops appearing (recurrence.ts filters it
+ * centrally, so every caller benefits with no other code changes).
+ */
+export async function updateEventOccurrence(
+  masterId: string,
+  originalStartIso: string,
+  formData: FormData,
+) {
+  const user = await requireUser();
+  const master = await prisma.event.findFirst({
+    where: { id: masterId, userId: user.id, recurrenceRule: { not: null } },
+  });
+  if (!master) return;
+
+  const title = String(formData.get("title") ?? "").trim();
+  const startRaw = String(formData.get("start") ?? "");
+  const endRaw = String(formData.get("end") ?? "");
+  if (!title || !startRaw || !endRaw) return;
+
+  const start = new Date(startRaw);
+  const end = new Date(endRaw);
+  const meetingUrl = String(formData.get("meetingUrl") ?? "").trim() || null;
+  const color = String(formData.get("color") ?? "").trim() || null;
+
+  await prisma.$transaction([
+    prisma.event.create({
+      data: {
+        userId: user.id,
+        title,
+        start,
+        end,
+        meetingUrl,
+        color,
+        locked: lockedFromFormData(formData),
+        recurrenceExceptionOfId: masterId,
+        recurrenceOriginalStart: new Date(originalStartIso),
+        localDirty: true,
+      },
+    }),
+    prisma.event.update({
+      where: { id: masterId },
+      data: { excludeDates: withExcludedStart(master.excludeDates, originalStartIso) },
+    }),
+  ]);
+
+  revalidatePath("/");
+}
+
+/** Delete just one occurrence of a recurring series — a pure EXDATE, no override row. */
+export async function deleteEventOccurrence(masterId: string, originalStartIso: string) {
+  const user = await requireUser();
+  const master = await prisma.event.findFirst({
+    where: { id: masterId, userId: user.id, recurrenceRule: { not: null } },
+  });
+  if (!master) return;
+
+  await prisma.event.update({
+    where: { id: masterId },
+    data: { excludeDates: withExcludedStart(master.excludeDates, originalStartIso) },
+  });
+  revalidatePath("/");
+}
+
 export async function moveEvent(eventId: string, startIso: string, endIso: string) {
   const user = await requireUser();
   const start = new Date(startIso);

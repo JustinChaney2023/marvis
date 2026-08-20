@@ -1,7 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { createEvent, deleteEvent, updateEvent } from "../actions";
+import {
+  createEvent,
+  deleteEvent,
+  updateEvent,
+  updateEventOccurrence,
+  deleteEventOccurrence,
+} from "../actions";
 import { toLocalInputValue } from "@/lib/calendar-dates";
 import { CloseIcon } from "../icons";
 import Button from "../ui/Button";
@@ -101,6 +107,11 @@ export default function EventModal({
     return event.recurrenceRule;
   });
   const [repeatTouched, setRepeatTouched] = useState(false);
+  // "This event" vs "All events" (#40) — only meaningful while editing a
+  // raw recurring occurrence (isEditingRecurring below). Defaults to the
+  // series-wide behavior this app already had, so it's opt-in rather
+  // than a surprise change to existing muscle memory.
+  const [editScope, setEditScope] = useState<"series" | "occurrence">("series");
 
   const titleInputRef = useRef<HTMLInputElement>(null);
   const startDateRef = useRef<HTMLInputElement>(null);
@@ -154,7 +165,11 @@ export default function EventModal({
       if (mode === "create") {
         await createEvent(formData);
       } else if (event) {
-        await updateEvent(event.id, formData);
+        if (isEditingRecurring && editScope === "occurrence") {
+          await updateEventOccurrence(event.id, event.start.toISOString(), formData);
+        } else {
+          await updateEvent(event.id, formData);
+        }
       }
       onClose();
     } catch (err) {
@@ -168,7 +183,11 @@ export default function EventModal({
     if (!event || isSubmitting) return;
     setIsSubmitting(true);
     try {
-      await deleteEvent(event.id);
+      if (isEditingRecurring && editScope === "occurrence") {
+        await deleteEventOccurrence(event.id, event.start.toISOString());
+      } else {
+        await deleteEvent(event.id);
+      }
       onClose();
     } catch (err) {
       console.error(err);
@@ -303,6 +322,30 @@ export default function EventModal({
           </label>
 
           <div className="border-t border-zinc-200 pt-4 dark:border-zinc-700">
+            {isEditingRecurring && (
+              <div className="mb-3 inline-flex items-center gap-1 rounded-full bg-zinc-100 p-1 text-xs dark:bg-zinc-700">
+                {(["occurrence", "series"] as const).map((scope) => (
+                  <button
+                    key={scope}
+                    type="button"
+                    onClick={() => setEditScope(scope)}
+                    className={
+                      editScope === scope
+                        ? "rounded-full bg-white px-3 py-1 font-medium text-zinc-900 shadow-sm dark:bg-zinc-600 dark:text-zinc-50"
+                        : "rounded-full px-3 py-1 text-zinc-500 dark:text-zinc-400"
+                    }
+                  >
+                    {scope === "occurrence" ? "This event" : "All events"}
+                  </button>
+                ))}
+              </div>
+            )}
+            {isEditingRecurring && editScope === "occurrence" ? (
+              <p className="text-xs text-zinc-500">
+                Saves just this one occurrence as its own event — the rest
+                of the series is unaffected.
+              </p>
+            ) : (
             <label className="flex flex-col gap-1 text-sm">
               <span className="text-zinc-500">Repeat</span>
               <select
@@ -350,12 +393,8 @@ export default function EventModal({
                   unless you change Repeat below.
                 </span>
               )}
-              {isEditingRecurring && (
-                <span className="text-xs text-zinc-500">
-                  Editing the whole series.
-                </span>
-              )}
             </label>
+            )}
           </div>
 
           <label className="flex cursor-pointer items-center justify-between gap-3 border-t border-zinc-200 pt-4 text-sm dark:border-zinc-700">
@@ -393,7 +432,7 @@ export default function EventModal({
                 </div>
                 {isEditingRecurring && (
                   <span className="text-xs text-zinc-500">
-                    Deletes the whole series.
+                    {editScope === "occurrence" ? "Deletes just this event." : "Deletes the whole series."}
                   </span>
                 )}
               </div>

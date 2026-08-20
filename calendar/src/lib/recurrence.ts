@@ -61,7 +61,22 @@ export type RecurringEventSource = {
   end: Date;
   recurrenceRule: string | null;
   allDay: boolean;
+  // Comma-joined ISO timestamps (#40) — occurrence starts to suppress,
+  // whether deleted outright or replaced by a separate override Event
+  // (which shows up on its own as an ordinary one-off row wherever
+  // `events` gets queried — no splicing needed here, just exclusion).
+  excludeDates?: string | null;
 };
+
+function parseExcludedStarts(excludeDates: string | null | undefined): Set<number> {
+  if (!excludeDates) return new Set();
+  return new Set(
+    excludeDates
+      .split(",")
+      .filter(Boolean)
+      .map((iso) => new Date(iso).getTime()),
+  );
+}
 
 export type Occurrence = {
   // Non-recurring: same as masterId. Recurring: `${masterId}::${startISO}`,
@@ -113,8 +128,10 @@ export function expandEventOccurrences(
     true,
   );
   const starts = fakeStarts.map(fromFakeUTC);
+  const excluded = parseExcludedStarts(event.excludeDates);
 
   return starts
+    .filter((s) => !excluded.has(s.getTime()))
     .map((s) => ({
       id: `${event.id}::${s.toISOString()}`,
       masterId: event.id,

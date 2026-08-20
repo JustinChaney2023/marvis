@@ -120,6 +120,25 @@ model Event {
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 
+  // Recurring event exceptions (#40) — comma-joined ISO timestamps of
+  // this series' own occurrence starts that no longer show as regular
+  // occurrences (RFC 5545 EXDATE, as a plain string instead of a second
+  // RRULE-family field). Filtered centrally in recurrence.ts's
+  // expandEventOccurrences, so every caller (scheduler, agenda,
+  // notifications, the main grid) gets the exclusion for free with no
+  // per-caller plumbing.
+  excludeDates    String?
+  // Set on the override row itself (not the master) when this event
+  // replaces one occurrence of another recurring event's series — a
+  // plain one-off Event otherwise, editable/deletable through the
+  // normal single-event flow with no series concept. Deleting the
+  // master cascades to its overrides too (a deleted series shouldn't
+  // leave edited-occurrence orphans behind).
+  recurrenceExceptionOfId     String?
+  recurrenceExceptionOf       Event?   @relation("RecurrenceExceptions", fields: [recurrenceExceptionOfId], references: [id], onDelete: Cascade)
+  recurrenceExceptionOverrides Event[] @relation("RecurrenceExceptions")
+  recurrenceOriginalStart      DateTime?
+
   // Every calendar-range query (the main grid, fetchBusyIntervals,
   // "Upcoming") filters by userId + an overlap on start/end — a plain
   // foreign-key index on userId alone doesn't help an ORDER/range scan
