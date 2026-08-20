@@ -1,8 +1,10 @@
 import { prisma } from "@/lib/prisma";
 import {
+  excludeDaysWindowFn,
   fetchBusyIntervals,
   findEarliestSlot,
   padForBuffer,
+  windowFnForWorkingHours,
 } from "@/lib/scheduler";
 import { getAppSettings } from "@/lib/settings";
 
@@ -22,6 +24,7 @@ const MAX_NOTES_LEN = 2000;
 export async function getAvailableBookingSlots(
   ownerUserId: string,
   durationMin: number,
+  excludeDays: string | null = null,
 ): Promise<{ day: string; slots: Date[] }[]> {
   const settings = await getAppSettings(ownerUserId);
   const now = new Date();
@@ -31,6 +34,7 @@ export async function getAvailableBookingSlots(
     await fetchBusyIntervals(ownerUserId, now, horizonEnd),
     settings.bufferMin,
   );
+  const getWindow = excludeDaysWindowFn(excludeDays, windowFnForWorkingHours(settings));
 
   const byDay = new Map<string, Date[]>();
   let cursor = now;
@@ -40,6 +44,7 @@ export async function getAvailableBookingSlots(
       durationMin,
       busy,
       horizonEnd,
+      getWindow,
     );
     if (!slot) break;
 
@@ -125,6 +130,7 @@ export async function createBooking(
       link.durationMin,
       busy,
       horizonEnd,
+      excludeDaysWindowFn(link.excludeDays, windowFnForWorkingHours(settings)),
     );
     if (!derived || derived.start.getTime() !== start.getTime()) {
       return { ok: false, error: "That slot isn't available — please pick another." };

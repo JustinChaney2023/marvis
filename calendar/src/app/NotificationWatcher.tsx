@@ -5,6 +5,26 @@ import { getUpcomingEventReminders, getPendingAutomationNotificationsAction } fr
 
 const POLL_MS = 60_000;
 const NOTIFY_WITHIN_MIN = 10;
+const SNOOZE_MS = 5 * 60_000;
+
+// ponytail: plain `new Notification()` has no action buttons — those
+// need a Service Worker's showNotification({ actions }), a much bigger
+// addition than a "snooze" this app doesn't otherwise need one for.
+// Clicking the notification snoozes it (closes + re-fires in 5 min)
+// instead of just focusing the tab; add a real Snooze button if a
+// service worker ever gets added for other reasons.
+function showReminderNotification(title: string, minutesAway: number) {
+  const notification = new Notification(title, {
+    body:
+      minutesAway <= 0.5
+        ? "Starting now — click to snooze 5 min"
+        : `Starts in ${Math.round(minutesAway)} min — click to snooze 5 min`,
+  });
+  notification.onclick = () => {
+    notification.close();
+    setTimeout(() => showReminderNotification(title, 0), SNOOZE_MS);
+  };
+}
 
 // Notification.permission has no change event worth subscribing to (it
 // only ever changes via our own requestPermission() call below, which
@@ -50,12 +70,7 @@ export default function NotificationWatcher() {
           const minutesAway = (startMs - now) / 60_000;
           if (minutesAway <= NOTIFY_WITHIN_MIN) {
             notifiedIds.current.add(occ.id);
-            new Notification(occ.title, {
-              body:
-                minutesAway <= 0.5
-                  ? "Starting now"
-                  : `Starts in ${Math.round(minutesAway)} min`,
-            });
+            showReminderNotification(occ.title, minutesAway);
           }
         }
 
@@ -85,7 +100,7 @@ export default function NotificationWatcher() {
         await Notification.requestPermission();
         forceRecheck();
       }}
-      className="fixed bottom-4 right-4 z-40 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 shadow-sm ring-1 ring-black/5 transition-all hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700/60"
+      className="fixed bottom-4 right-4 z-40 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 shadow-sm ring-1 ring-black/5 transition-all hover:bg-zinc-50 print:hidden dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700/60"
     >
       Enable reminders
     </button>

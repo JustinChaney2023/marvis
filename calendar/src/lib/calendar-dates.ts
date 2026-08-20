@@ -14,7 +14,17 @@ export function startOfDay(d: Date): Date {
   return x;
 }
 
-export function startOfWeekMonday(d: Date): Date {
+export function startOfWeek(d: Date): Date {
+  const sunday = startOfDay(d);
+  sunday.setDate(sunday.getDate() - d.getDay());
+  return sunday;
+}
+
+// Work-week Monday (independent of startOfWeek's display convention
+// above) — only used by fridayOfWeek below, whose "This week"/"Next
+// week" quick-picks mean "by end of the Mon-Fri work week" regardless of
+// which day the calendar itself starts its columns on.
+function mondayOfWorkWeek(d: Date): Date {
   const offset = (d.getDay() + 6) % 7;
   const monday = startOfDay(d);
   monday.setDate(monday.getDate() - offset);
@@ -88,7 +98,7 @@ export function buildMonthGrid(monthDate: Date): (Date | null)[] {
 export type QuickPickOption = { label: string; date: Date };
 
 function fridayOfWeek(d: Date): Date {
-  return addDays(startOfWeekMonday(d), 4);
+  return addDays(mondayOfWorkWeek(d), 4);
 }
 
 function lastDayOfMonth(d: Date): Date {
@@ -129,6 +139,26 @@ export function formatHourLabel(hour24: number): string {
   const period = hour24 >= 12 ? "PM" : "AM";
   const h12 = hour24 % 12 === 0 ? 12 : hour24 % 12;
   return `${h12} ${period}`;
+}
+
+/**
+ * Renders `hour24` on `day` (this app's implicit local timezone) as a
+ * time-of-day string in `timeZone` instead — the world-clock second
+ * gutter column (#37). Uses `day` as the reference date for the
+ * conversion, so it's correctly DST-aware for that specific date even
+ * though the hour grid's ticks themselves are date-independent.
+ */
+export function formatHourLabelInZone(day: Date, hour24: number, timeZone: string): string {
+  const reference = new Date(day);
+  reference.setHours(hour24, 0, 0, 0);
+  // Always includes minutes (not just on the hour) since some zones sit
+  // at a half/quarter-hour offset (e.g. India, +5:30) from this app's
+  // local time.
+  return new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone,
+  }).format(reference);
 }
 
 export function formatDayLabel(d: Date): string {
@@ -227,15 +257,15 @@ export function computeRange(view: CalendarView, start: Date): {
     return { from, to, days: [from] };
   }
   if (view === "week") {
-    const from = startOfWeekMonday(start);
+    const from = startOfWeek(start);
     const to = addDays(from, 7);
     const days = Array.from({ length: 7 }, (_, i) => addDays(from, i));
     return { from, to, days };
   }
   const monthStart = new Date(start.getFullYear(), start.getMonth(), 1);
   const monthEnd = addDays(new Date(start.getFullYear(), start.getMonth() + 1, 1), -1);
-  const from = startOfWeekMonday(monthStart);
-  const to = addDays(startOfWeekMonday(monthEnd), 7);
+  const from = startOfWeek(monthStart);
+  const to = addDays(startOfWeek(monthEnd), 7);
   const days: Date[] = [];
   for (let d = new Date(from); d < to; d = addDays(d, 1)) {
     days.push(new Date(d));
@@ -243,8 +273,8 @@ export function computeRange(view: CalendarView, start: Date): {
   return { from, to, days };
 }
 
-export const WEEKDAY_LABELS_MON_FIRST = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+export const WEEKDAY_LABELS_SUN_FIRST = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 export function dayWeekdayLabel(d: Date): string {
-  return WEEKDAY_LABELS_MON_FIRST[(d.getDay() + 6) % 7];
+  return WEEKDAY_LABELS_SUN_FIRST[d.getDay()];
 }

@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth";
 import { createRateLimiter, requestIp } from "@/lib/rateLimit";
 import {
+  findGroupSlot,
   rescheduleAll,
   rescheduleConflictsWith,
   scheduleAllPendingTasks,
@@ -18,7 +19,7 @@ import { expandEvents } from "@/lib/recurrence";
 import { syncGoogleCalendar, deleteFromGoogle } from "@/lib/google-sync";
 import { importFromApple } from "@/lib/apple-sync";
 import { encryptSecret } from "@/lib/tokenCrypto";
-import { getAppSettings, updateAppSettings } from "@/lib/settings";
+import { aiConfigFromSettings, getAppSettings, updateAppSettings } from "@/lib/settings";
 import { createBooking, getAvailableBookingSlots } from "@/lib/booking";
 import { nextTaskOccurrence } from "@/lib/taskRecurrence";
 import { generateSubtasks, type GenerateSubtasksResult } from "@/lib/subtaskGenerate";
@@ -28,6 +29,7 @@ import { buildShutdownSummary, type ShutdownSummary } from "@/lib/shutdown";
 import { runAutomationsForStatusChange } from "@/lib/automations";
 import { askScheduleChat, type ChatMessage, type ChatResult } from "@/lib/scheduleChat";
 import { scheduleHabitsForWeek, rescheduleConflictedHabits } from "@/lib/habits";
+import { formatYMD } from "@/lib/calendar-dates";
 
 const REMINDER_WINDOW_MIN = 15;
 
@@ -90,7 +92,29 @@ function energyFromFormData(formData: FormData): "LOW" | "MEDIUM" | "HIGH" {
   return value === "LOW" || value === "HIGH" ? value : "MEDIUM";
 }
 
-function taskFieldsFromFormData(formData: FormData) {
+// projectId/assigneeId/timeSlotId come straight from client-submitted
+// FormData — without this, a task could be attached to another user's
+// Project/Assignee/TimeSlot row by id (they're not secret, just cuids),
+// and that row's name/color would then leak to the attacker via their
+// own task's `include: { project: true }` etc. Same bug class the prior
+// audit found in unscheduleTask; unverified ids just silently drop.
+async function verifyOwnedId(
+  model: "project" | "assignee" | "timeSlot",
+  id: string | null,
+  userId: string,
+): Promise<string | null> {
+  if (!id) return null;
+  const where = { id, userId };
+  const row =
+    model === "project"
+      ? await prisma.project.findFirst({ where, select: { id: true } })
+      : model === "assignee"
+        ? await prisma.assignee.findFirst({ where, select: { id: true } })
+        : await prisma.timeSlot.findFirst({ where, select: { id: true } });
+  return row ? id : null;
+}
+
+async function taskFieldsFromFormData(formData: FormData, userId: string) {
   const title = String(formData.get("title") ?? "").trim();
   const notes = String(formData.get("notes") ?? "").trim() || null;
   const priority = Number(formData.get("priority") ?? 0);
@@ -100,9 +124,11 @@ function taskFieldsFromFormData(formData: FormData) {
   const dueAtDateRaw = String(formData.get("dueAtDate") ?? "");
   const dueAtTimeRaw = String(formData.get("dueAtTime") ?? "") || "17:00";
   const dueAt = dueAtDateRaw ? new Date(`${dueAtDateRaw}T${dueAtTimeRaw}`) : null;
-  const projectId = String(formData.get("projectId") ?? "").trim() || null;
-  const assigneeId = String(formData.get("assigneeId") ?? "").trim() || null;
-  const timeSlotId = String(formData.get("timeSlotId") ?? "").trim() || null;
+  const [projectId, assigneeId, timeSlotId] = await Promise.all([
+    verifyOwnedId("project", String(formData.get("projectId") ?? "").trim() || null, userId),
+    verifyOwnedId("assignee", String(formData.get("assigneeId") ?? "").trim() || null, userId),
+    verifyOwnedId("timeSlot", String(formData.get("timeSlotId") ?? "").trim() || null, userId),
+  ]);
   const color = String(formData.get("color") ?? "").trim() || null;
   const chunkMinRaw = String(formData.get("chunkMin") ?? "").trim();
   const chunkMin = chunkMinRaw ? Math.max(1, Number(chunkMinRaw)) : null;
@@ -134,14 +160,62 @@ function taskFieldsFromFormData(formData: FormData) {
   };
 }
 
+// Parsed out of taskFieldsFromFormData's plain-scalar `fields` object since
+// prisma.task.updateMany (used by updateTask, since it's also an ownership
+// filter) can't write relations at all — both callers apply this
+// separately via a second prisma.task.update once they know the row exists
+// and is actually owned by this user.
+function labelIdsFromFormData(formData: FormData): string[] {
+  return String(formData.get("labelIds") ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+async function setTaskLabels(userId: string, taskId: string, labelIds: string[]) {
+  if (labelIds.length === 0) {
+    await prisma.task.update({ where: { id: taskId }, data: { labels: { set: [] } } });
+    return;
+  }
+  const labels = await prisma.label.findMany({ where: { id: { in: labelIds }, userId } });
+  await prisma.task.update({
+    where: { id: taskId },
+    data: { labels: { set: labels.map((l) => ({ id: l.id })) } },
+  });
+}
+
+function blockedByIdsFromFormData(formData: FormData): string[] {
+  return String(formData.get("blockedByIds") ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+// A task can't depend on itself — filtered out here rather than in the UI,
+// since the UI's own task list already includes the task being edited.
+async function setTaskBlockedBy(userId: string, taskId: string, blockedByIds: string[]) {
+  const ids = blockedByIds.filter((id) => id !== taskId);
+  if (ids.length === 0) {
+    await prisma.task.update({ where: { id: taskId }, data: { blockedBy: { set: [] } } });
+    return;
+  }
+  const blockers = await prisma.task.findMany({ where: { id: { in: ids }, userId } });
+  await prisma.task.update({
+    where: { id: taskId },
+    data: { blockedBy: { set: blockers.map((t) => ({ id: t.id })) } },
+  });
+}
+
 export async function createTask(formData: FormData) {
   const user = await requireUser();
-  const fields = taskFieldsFromFormData(formData);
+  const fields = await taskFieldsFromFormData(formData, user.id);
   if (!fields.title) return;
 
-  await prisma.task.create({
+  const task = await prisma.task.create({
     data: { userId: user.id, ...fields },
   });
+  await setTaskLabels(user.id, task.id, labelIdsFromFormData(formData));
+  await setTaskBlockedBy(user.id, task.id, blockedByIdsFromFormData(formData));
 
   // Remembered so the add-task form defaults to your last-used project
   // instead of "No project" every time — re-picking the same course/
@@ -159,7 +233,7 @@ export async function createTask(formData: FormData) {
 
 export async function updateTask(taskId: string, formData: FormData) {
   const user = await requireUser();
-  const fields = taskFieldsFromFormData(formData);
+  const fields = await taskFieldsFromFormData(formData, user.id);
   if (!fields.title) return;
 
   const { count } = await prisma.task.updateMany({
@@ -167,6 +241,8 @@ export async function updateTask(taskId: string, formData: FormData) {
     data: fields,
   });
   if (count === 0) return;
+  await setTaskLabels(user.id, taskId, labelIdsFromFormData(formData));
+  await setTaskBlockedBy(user.id, taskId, blockedByIdsFromFormData(formData));
 
   // A scheduled task's placement (energy/due date/duration/project) may
   // no longer fit wherever it currently sits — the next "Schedule all" or
@@ -216,12 +292,8 @@ export async function generateSubtasksAction(taskId: string): Promise<GenerateSu
   });
   if (!task) return { ok: false, error: "Task not found." };
 
-  const settings = await getAppSettings(user.id);
-  const localAi =
-    settings.localAiUrl && settings.localAiModel
-      ? { url: settings.localAiUrl, model: settings.localAiModel }
-      : null;
-  return generateSubtasks(task.title, task.notes, task.project?.name ?? null, localAi);
+  const { localAi, anthropicApiKey } = aiConfigFromSettings(await getAppSettings(user.id));
+  return generateSubtasks(task.title, task.notes, task.project?.name ?? null, localAi, anthropicApiKey);
 }
 
 export async function draftTaskEmailAction(taskId: string): Promise<DraftEmailResult> {
@@ -232,12 +304,8 @@ export async function draftTaskEmailAction(taskId: string): Promise<DraftEmailRe
   });
   if (!task) return { ok: false, error: "Task not found." };
 
-  const settings = await getAppSettings(user.id);
-  const localAi =
-    settings.localAiUrl && settings.localAiModel
-      ? { url: settings.localAiUrl, model: settings.localAiModel }
-      : null;
-  return generateEmailDraft(task.title, task.notes, task.project?.name ?? null, task.dueAt, localAi);
+  const { localAi, anthropicApiKey } = aiConfigFromSettings(await getAppSettings(user.id));
+  return generateEmailDraft(task.title, task.notes, task.project?.name ?? null, task.dueAt, localAi, anthropicApiKey);
 }
 
 export async function draftTaskDocAction(taskId: string): Promise<DraftDocResult> {
@@ -248,17 +316,14 @@ export async function draftTaskDocAction(taskId: string): Promise<DraftDocResult
   });
   if (!task) return { ok: false, error: "Task not found." };
 
-  const settings = await getAppSettings(user.id);
-  const localAi =
-    settings.localAiUrl && settings.localAiModel
-      ? { url: settings.localAiUrl, model: settings.localAiModel }
-      : null;
+  const { localAi, anthropicApiKey } = aiConfigFromSettings(await getAppSettings(user.id));
   return generateTaskDoc(
     task.title,
     task.notes,
     task.project?.name ?? null,
     task.subtasks.map((s) => s.title),
     localAi,
+    anthropicApiKey,
   );
 }
 
@@ -287,12 +352,8 @@ export async function pushLeftoversToTomorrowAction(taskIds: string[]) {
 
 export async function askScheduleChatAction(messages: ChatMessage[]): Promise<ChatResult> {
   const user = await requireUser();
-  const settings = await getAppSettings(user.id);
-  const localAi =
-    settings.localAiUrl && settings.localAiModel
-      ? { url: settings.localAiUrl, model: settings.localAiModel }
-      : null;
-  return askScheduleChat(user.id, messages, localAi);
+  const { localAi, anthropicApiKey } = aiConfigFromSettings(await getAppSettings(user.id));
+  return askScheduleChat(user.id, messages, localAi, anthropicApiKey);
 }
 
 export async function deleteTaskAction(taskId: string) {
@@ -340,6 +401,137 @@ export async function deleteProject(projectId: string) {
   const user = await requireUser();
   await prisma.project.deleteMany({ where: { id: projectId, userId: user.id } });
   revalidatePath("/tasks");
+}
+
+export async function createLabel(formData: FormData) {
+  const user = await requireUser();
+  const name = String(formData.get("name") ?? "").trim();
+  if (!name) return;
+  const color = String(formData.get("color") ?? "zinc").trim() || "zinc";
+
+  try {
+    await prisma.label.create({ data: { userId: user.id, name, color } });
+  } catch {
+    // Unique constraint on (userId, name) — already have one by this name.
+  }
+  revalidatePath("/tasks");
+}
+
+export async function deleteLabel(labelId: string) {
+  const user = await requireUser();
+  await prisma.label.deleteMany({ where: { id: labelId, userId: user.id } });
+  revalidatePath("/tasks");
+}
+
+export async function createCalendarShareAction(formData: FormData) {
+  const user = await requireUser();
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const permission = formData.get("permission") === "FULL_DETAILS" ? "FULL_DETAILS" : "BUSY_ONLY";
+  if (!email) return;
+
+  const target = await prisma.user.findUnique({ where: { email }, select: { id: true } });
+  // Silently no-ops on a nonexistent email or sharing with yourself — no
+  // error message either way, so this can't be used to enumerate which
+  // emails have accounts on this instance.
+  if (!target || target.id === user.id) return;
+
+  await prisma.calendarShare.upsert({
+    where: { ownerId_sharedWithId: { ownerId: user.id, sharedWithId: target.id } },
+    create: { ownerId: user.id, sharedWithId: target.id, permission },
+    update: { permission },
+  });
+  revalidatePath("/settings");
+  revalidatePath("/");
+}
+
+export async function deleteCalendarShareAction(shareId: string) {
+  const user = await requireUser();
+  // Scoped to ownerId — only the person who granted a share can revoke
+  // it, not the recipient.
+  await prisma.calendarShare.deleteMany({ where: { id: shareId, ownerId: user.id } });
+  revalidatePath("/settings");
+  revalidatePath("/");
+}
+
+const GROUP_MEETING_HORIZON_DAYS = 14;
+
+export type GroupSlotResult =
+  | { ok: true; startIso: string; endIso: string }
+  | { ok: false; error: string };
+
+/**
+ * Only people who've shared their calendar with the requester can be
+ * included — that single check both authorizes the request (can you see
+ * this person's calendar at all) and guarantees busy-time actually
+ * exists to intersect against, since sharing requires a real User
+ * account (an Assignee that isn't also a User has no Events of its own).
+ */
+export async function findGroupMeetingSlotAction(
+  participantUserIds: string[],
+  durationMin: number,
+): Promise<GroupSlotResult> {
+  const user = await requireUser();
+  const visibleShares = await prisma.calendarShare.findMany({
+    where: { sharedWithId: user.id, ownerId: { in: participantUserIds } },
+    select: { ownerId: true },
+  });
+  const visibleIds = new Set(visibleShares.map((s) => s.ownerId));
+  const participants = participantUserIds.filter((id) => visibleIds.has(id));
+  if (participants.length === 0) {
+    return { ok: false, error: "Pick at least one person who's shared their calendar with you." };
+  }
+
+  const settings = await getAppSettings(user.id);
+  const now = new Date();
+  const horizonEnd = new Date(now.getTime() + GROUP_MEETING_HORIZON_DAYS * 86_400_000);
+  const slot = await findGroupSlot(
+    [user.id, ...participants],
+    durationMin,
+    now,
+    horizonEnd,
+    settings.bufferMin,
+  );
+  if (!slot) {
+    return { ok: false, error: "No open slot found for everyone in the next two weeks." };
+  }
+  return { ok: true, startIso: slot.start.toISOString(), endIso: slot.end.toISOString() };
+}
+
+/**
+ * Creates the meeting as a locked event on the requester's own calendar
+ * only (v1 scope — Event.userId is singular today, participants don't
+ * get their own copy). Re-verifies visibility the same way
+ * findGroupMeetingSlotAction did, since this is a separate call a client
+ * could otherwise pass arbitrary ids to.
+ */
+export async function createGroupMeetingAction(
+  participantUserIds: string[],
+  title: string,
+  startIso: string,
+  endIso: string,
+): Promise<{ ok: boolean }> {
+  const user = await requireUser();
+  const trimmed = title.trim() || "Group meeting";
+  const visibleShares = await prisma.calendarShare.findMany({
+    where: { sharedWithId: user.id, ownerId: { in: participantUserIds } },
+    include: { owner: { select: { name: true, email: true } } },
+  });
+  if (visibleShares.length === 0) return { ok: false };
+
+  const names = visibleShares.map((s) => s.owner.name ?? s.owner.email).join(", ");
+  await prisma.event.create({
+    data: {
+      userId: user.id,
+      title: trimmed,
+      start: new Date(startIso),
+      end: new Date(endIso),
+      locked: true,
+      notes: `With: ${names}`,
+      localDirty: true,
+    },
+  });
+  revalidatePath("/");
+  return { ok: true };
 }
 
 export async function createAssignee(formData: FormData) {
@@ -705,6 +897,29 @@ export async function syncGoogleCalendarAction() {
   return result;
 }
 
+// Google sync previously only ran when someone remembered to click
+// "Sync" in Settings — a real gap (the whole point of connecting Google
+// is that changes there show up here without a manual step). Polled by
+// GoogleSyncWatcher.tsx from every page instead, gated by this interval
+// so it isn't hammering the Google API on every poll tick.
+const GOOGLE_AUTO_SYNC_INTERVAL_MS = 10 * 60 * 1000;
+
+export async function syncGoogleCalendarIfDueAction(): Promise<{ synced: boolean }> {
+  const user = await requireUser();
+  const account = await prisma.googleAccount.findUnique({ where: { userId: user.id } });
+  if (!account) return { synced: false };
+  const due =
+    !account.lastSyncedAt ||
+    Date.now() - account.lastSyncedAt.getTime() > GOOGLE_AUTO_SYNC_INTERVAL_MS;
+  if (!due) return { synced: false };
+
+  await syncGoogleCalendar(user.id);
+  revalidatePath("/");
+  revalidatePath("/tasks");
+  revalidatePath("/settings");
+  return { synced: true };
+}
+
 export async function disconnectGoogleAction() {
   const user = await requireUser();
   await prisma.googleAccount.deleteMany({ where: { userId: user.id } });
@@ -769,15 +984,70 @@ export async function updateSchedulingSettingsAction(formData: FormData) {
     dailyCapMin = parsed;
   }
 
-  await updateAppSettings(user.id, { bufferMin, dailyCapMin });
+  const timeInputToMinutes = (raw: FormDataEntryValue | null) => {
+    const match = /^(\d{1,2}):(\d{2})$/.exec(String(raw ?? ""));
+    if (!match) return NaN;
+    return Number(match[1]) * 60 + Number(match[2]);
+  };
+  const workDays = formData.getAll("workDays").map(String).join(",");
+  const workStartMin = timeInputToMinutes(formData.get("workStartMin"));
+  const workEndMin = timeInputToMinutes(formData.get("workEndMin"));
+  if (
+    !workDays ||
+    !Number.isFinite(workStartMin) ||
+    !Number.isFinite(workEndMin) ||
+    workStartMin < 0 ||
+    workEndMin > 1440 ||
+    workStartMin >= workEndMin
+  ) {
+    return;
+  }
+
+  const secondaryTimezone = String(formData.get("secondaryTimezone") ?? "").trim() || null;
+  if (secondaryTimezone) {
+    try {
+      Intl.DateTimeFormat(undefined, { timeZone: secondaryTimezone });
+    } catch {
+      return;
+    }
+  }
+
+  await updateAppSettings(user.id, {
+    bufferMin,
+    dailyCapMin,
+    workDays,
+    workStartMin,
+    workEndMin,
+    secondaryTimezone,
+  });
   revalidatePath("/settings");
+  revalidatePath("/");
+}
+
+// Secret fields (localAiApiKey, anthropicApiKey) are never redisplayed
+// once saved — the form just shows "a key is saved" — so a blank
+// submission means "leave it as-is," not "clear it." An explicit
+// "Clear ... key" checkbox is the only way to actually remove one.
+function updatedSecret(
+  formData: FormData,
+  fieldName: string,
+  clearFieldName: string,
+): string | null | undefined {
+  if (formData.get(clearFieldName) === "on") return null;
+  const raw = String(formData.get(fieldName) ?? "").trim();
+  return raw ? encryptSecret(raw) : undefined;
 }
 
 export async function updateAiSettingsAction(formData: FormData) {
   const user = await requireUser();
   const localAiUrl = String(formData.get("localAiUrl") ?? "").trim() || null;
   const localAiModel = String(formData.get("localAiModel") ?? "").trim() || null;
-  await updateAppSettings(user.id, { localAiUrl, localAiModel });
+  await updateAppSettings(user.id, {
+    localAiUrl,
+    localAiModel,
+    localAiApiKey: updatedSecret(formData, "localAiApiKey", "clearLocalAiApiKey"),
+    anthropicApiKey: updatedSecret(formData, "anthropicApiKey", "clearAnthropicApiKey"),
+  });
   revalidatePath("/settings");
 }
 
@@ -826,17 +1096,18 @@ function parseBookingLinkForm(formData: FormData) {
   const durationMin = Number(formData.get("durationMin") ?? 30);
   const rawSlug = String(formData.get("slug") ?? "").trim();
   const slug = rawSlug ? slugify(rawSlug) : "";
-  return { title, durationMin, slug };
+  const excludeDays = String(formData.get("excludeDays") ?? "").trim() || null;
+  return { title, durationMin, slug, excludeDays };
 }
 
 export async function createBookingLinkAction(formData: FormData) {
   const user = await requireUser();
-  const { title, durationMin, slug } = parseBookingLinkForm(formData);
+  const { title, durationMin, slug, excludeDays } = parseBookingLinkForm(formData);
   if (!slug || !Number.isFinite(durationMin) || durationMin < 5 || durationMin > 240) return;
 
   try {
     await prisma.bookingLink.create({
-      data: { userId: user.id, slug, title, durationMin, enabled: true },
+      data: { userId: user.id, slug, title, durationMin, excludeDays, enabled: true },
     });
   } catch {
     // Unique constraint on slug — already taken (by this user or another).
@@ -846,13 +1117,13 @@ export async function createBookingLinkAction(formData: FormData) {
 
 export async function updateBookingLinkAction(linkId: string, formData: FormData) {
   const user = await requireUser();
-  const { title, durationMin, slug } = parseBookingLinkForm(formData);
+  const { title, durationMin, slug, excludeDays } = parseBookingLinkForm(formData);
   if (!slug || !Number.isFinite(durationMin) || durationMin < 5 || durationMin > 240) return;
 
   try {
     await prisma.bookingLink.updateMany({
       where: { id: linkId, userId: user.id },
-      data: { title, durationMin, slug },
+      data: { title, durationMin, slug, excludeDays },
     });
   } catch {
     // Unique constraint on slug — already taken by another link.
@@ -1051,4 +1322,29 @@ export async function submitFeedbackAction(formData: FormData) {
   await prisma.feedback.create({
     data: { userId: user.id, message, category, page },
   });
+}
+
+const SEARCH_RESULT_LIMIT = 10;
+
+/**
+ * Title-substring search across a user's own events, for the calendar
+ * header's search box (#39) — jumps straight to a match the same way a
+ * notification click already does, via CalendarClient's `?edit=<id>`
+ * modal-open mechanism, so no new "jump to event" plumbing was needed.
+ * Matches a recurring series' one stored row (its first occurrence), not
+ * a specific future occurrence.
+ */
+export async function searchEventsAction(query: string) {
+  const user = await requireUser();
+  const trimmed = query.trim();
+  if (!trimmed) return [];
+
+  const events = await prisma.event.findMany({
+    where: { userId: user.id, title: { contains: trimmed } },
+    orderBy: { start: "asc" },
+    take: SEARCH_RESULT_LIMIT,
+    select: { id: true, title: true, start: true },
+  });
+
+  return events.map((e) => ({ id: e.id, title: e.title, startYMD: formatYMD(e.start) }));
 }

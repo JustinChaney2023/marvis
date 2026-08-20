@@ -220,6 +220,15 @@ export function FlagIcon({ className = "h-3 w-3" }: IconProps) {
   );
 }
 
+export function SearchIcon({ className = "h-4 w-4" }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className={className} aria-hidden="true">
+      <circle cx="10.5" cy="10.5" r="6.5" />
+      <path strokeLinecap="round" d="M20 20l-4.5-4.5" />
+    </svg>
+  );
+}
+
 export function UsersIcon({ className = "h-4 w-4" }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className={className} aria-hidden="true">

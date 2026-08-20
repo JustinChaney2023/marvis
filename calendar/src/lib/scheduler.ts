@@ -63,6 +63,20 @@ function defaultWindowFn(date: Date): DayWindow | null {
   return isWorkDay(date) ? workWindowFor(date) : null;
 }
 
+const WEEKDAY_CODE_FOR_DAY = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"];
+
+/**
+ * Wraps a WindowFn to also reject any weekday in `excludeDays` (same
+ * "SU,MO,TU,..." format as TimeSlot.daysOfWeek) — used by a booking
+ * link's "no-meeting day" toggle to decline slots on chosen days without
+ * touching the owner's own work-hours window.
+ */
+export function excludeDaysWindowFn(excludeDays: string | null, base: WindowFn = defaultWindowFn): WindowFn {
+  if (!excludeDays) return base;
+  const excluded = new Set(excludeDays.split(",").filter(Boolean));
+  return (date: Date) => (excluded.has(WEEKDAY_CODE_FOR_DAY[date.getDay()]) ? null : base(date));
+}
+
 export function findEarliestSlot(
   from: Date,
   durationMin: number,
@@ -114,24 +128,40 @@ export function findEarliestSlot(
   return null;
 }
 
+/** Builds a WindowFn from a "SU,MO,..." day list + minutes-since-midnight range. */
+function windowFnFor(days: string, startMin: number, endMin: number): WindowFn {
+  const dayCodes = new Set(days.split(","));
+  return (date: Date) => {
+    if (!dayCodes.has(WEEKDAY_CODE_FOR_DAY[date.getDay()])) return null;
+    const start = new Date(date);
+    start.setHours(0, 0, 0, 0);
+    start.setMinutes(startMin);
+    const end = new Date(date);
+    end.setHours(0, 0, 0, 0);
+    end.setMinutes(endMin);
+    return { start, end };
+  };
+}
+
 /** Builds a WindowFn from a user-configured TimeSlot (Settings/TimeSlotsManager). */
 export function windowFnForTimeSlot(slot: {
   daysOfWeek: string;
   startMin: number;
   endMin: number;
 }): WindowFn {
-  const days = new Set(slot.daysOfWeek.split(","));
-  const codeForDay = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"];
-  return (date: Date) => {
-    if (!days.has(codeForDay[date.getDay()])) return null;
-    const start = new Date(date);
-    start.setHours(0, 0, 0, 0);
-    start.setMinutes(slot.startMin);
-    const end = new Date(date);
-    end.setHours(0, 0, 0, 0);
-    end.setMinutes(slot.endMin);
-    return { start, end };
-  };
+  return windowFnFor(slot.daysOfWeek, slot.startMin, slot.endMin);
+}
+
+/**
+ * Builds a WindowFn from a user's "working hours" AppSettings fields (#35)
+ * — the real per-user replacement for the hardcoded 9-6 weekday default.
+ */
+export function windowFnForWorkingHours(settings: {
+  workDays: string;
+  workStartMin: number;
+  workEndMin: number;
+}): WindowFn {
+  return windowFnFor(settings.workDays, settings.workStartMin, settings.workEndMin);
 }
 
 export function padForBuffer(
@@ -294,15 +324,49 @@ export async function fetchBusyIntervals(userId: string, now: Date, horizonEnd: 
   // Recurring masters may have started long before `now` and still recur
   // into the horizon, so they can't be filtered by `start` — fetch them
   // unconditionally and expand into occurrences alongside one-off events.
+  // The one-off branch needs a proper interval-overlap check (also
+  // bounded below by `now`), not just `start < horizonEnd` — an unbounded
+  // lower end means this pulls in literally every one-off event the
+  // account has ever had, including ones from a year ago, to answer "is
+  // this the next 60 days busy." Same pattern page.tsx's own event query
+  // already uses correctly.
   const existing = await prisma.event.findMany({
     where: {
       userId,
-      OR: [{ start: { lt: horizonEnd } }, { recurrenceRule: { not: null } }],
+      OR: [
+        { start: { lt: horizonEnd }, end: { gt: now } },
+        { recurrenceRule: { not: null } },
+      ],
     },
   });
   return expandEvents(existing, now, horizonEnd)
     .map((o) => ({ start: o.start, end: o.end }))
     .sort((a, b) => a.start.getTime() - b.start.getTime());
+}
+
+/**
+ * Group scheduling v1 — no new algorithm, just fetchBusyIntervals for
+ * each participant unioned into one combined busy list, then the same
+ * findEarliestSlot every solo schedule already uses. Only works for real
+ * User accounts (each needs its own Event rows to compute busy time from
+ * — an Assignee that isn't also a User has none). Authorization (who's
+ * allowed to be included) is the caller's job, not this function's — see
+ * findGroupMeetingSlotAction in actions.ts.
+ */
+export async function findGroupSlot(
+  userIds: string[],
+  durationMin: number,
+  now: Date,
+  horizonEnd: Date,
+  bufferMin: number,
+): Promise<{ start: Date; end: Date } | null> {
+  const perUserBusy = await Promise.all(
+    userIds.map((id) => fetchBusyIntervals(id, now, horizonEnd)),
+  );
+  const combinedBusy = padForBuffer(perUserBusy.flat(), bufferMin).sort(
+    (a, b) => a.start.getTime() - b.start.getTime(),
+  );
+  return findEarliestSlot(now, durationMin, combinedBusy, horizonEnd);
 }
 
 // Splits a task's total duration into ~chunkMin-sized pieces (the last
@@ -324,9 +388,14 @@ export function splitIntoChunks(durationMin: number, chunkMin: number | null): n
 export async function scheduleTask(userId: string, taskId: string) {
   const task = await prisma.task.findFirstOrThrow({
     where: { id: taskId, userId },
-    include: { timeSlot: true },
+    include: { timeSlot: true, blockedBy: { select: { status: true } } },
   });
-  const getWindow = task.timeSlot ? windowFnForTimeSlot(task.timeSlot) : undefined;
+  // A task blocked by an unfinished dependency doesn't get a slot at
+  // all — same "couldn't place it" signal (null) as no slot fitting in
+  // the horizon. Every caller (scheduleAllPendingTasks, the per-task
+  // "Schedule" button, reschedule sweeps) routes through here, so this
+  // is the one place the guard needs to live.
+  if (task.blockedBy.some((b) => b.status !== "DONE")) return null;
 
   const now = new Date();
   // startAt is a lower bound on when the scheduler may place this task,
@@ -335,6 +404,9 @@ export async function scheduleTask(userId: string, taskId: string) {
   const searchFrom = task.startAt && task.startAt > now ? task.startAt : now;
   const horizonEnd = new Date(now.getTime() + HORIZON_DAYS * 86_400_000);
   const settings = await getAppSettings(userId);
+  const getWindow = task.timeSlot
+    ? windowFnForTimeSlot(task.timeSlot)
+    : windowFnForWorkingHours(settings);
   let busy = applyDailyCap(
     padForBuffer(await fetchBusyIntervals(userId, now, horizonEnd), settings.bufferMin),
     now,

@@ -13,6 +13,7 @@ import SyncButton from "./SyncButton";
 import AppleSyncButton from "./AppleSyncButton";
 import ShareAvailabilityButton from "./ShareAvailabilityButton";
 import BookingLinksManager from "./BookingLinksManager";
+import CalendarSharingManager from "./CalendarSharingManager";
 import AutomationRulesManager from "./AutomationRulesManager";
 import HabitsManager from "./HabitsManager";
 import TimeSlotsManager from "./TimeSlotsManager";
@@ -24,6 +25,14 @@ import {
   revokeOtherSessionsAction,
   revokeSessionAction,
 } from "../authActions";
+
+function minutesToTimeInput(min: number) {
+  const h = Math.floor(min / 60)
+    .toString()
+    .padStart(2, "0");
+  const m = (min % 60).toString().padStart(2, "0");
+  return `${h}:${m}`;
+}
 
 export default async function SettingsPage(props: PageProps<"/settings">) {
   const user = await requireUser();
@@ -55,6 +64,16 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
   });
   const projects = await prisma.project.findMany({
     where: { userId: user.id },
+    orderBy: { createdAt: "asc" },
+  });
+  const sharesGiven = await prisma.calendarShare.findMany({
+    where: { ownerId: user.id },
+    include: { sharedWith: { select: { email: true, name: true } } },
+    orderBy: { createdAt: "asc" },
+  });
+  const sharesReceived = await prisma.calendarShare.findMany({
+    where: { sharedWithId: user.id },
+    include: { owner: { select: { email: true, name: true } } },
     orderBy: { createdAt: "asc" },
   });
   const currentSessionId = await getCurrentSessionId();
@@ -97,8 +116,58 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
         <h2 className="text-lg font-semibold">Scheduling</h2>
         <form
           action={updateSchedulingSettingsAction}
-          className="mt-3 flex items-end gap-3"
+          className="mt-3 flex flex-wrap items-end gap-3"
         >
+          <div className="flex flex-col gap-1 text-sm">
+            <span className="text-zinc-500">Working hours</span>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {["SU", "MO", "TU", "WE", "TH", "FR", "SA"].map((code) => (
+                <label
+                  key={code}
+                  className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-zinc-200 text-xs font-semibold text-zinc-600 transition-colors has-checked:border-indigo-600 has-checked:bg-indigo-600 has-checked:text-white dark:border-zinc-600 dark:text-zinc-400"
+                >
+                  <input
+                    type="checkbox"
+                    name="workDays"
+                    value={code}
+                    defaultChecked={settings.workDays.split(",").includes(code)}
+                    className="sr-only"
+                  />
+                  {code[0]}
+                  {code[1].toLowerCase()}
+                </label>
+              ))}
+              <input
+                type="time"
+                name="workStartMin"
+                defaultValue={minutesToTimeInput(settings.workStartMin)}
+                className="ml-2 rounded-lg border border-zinc-200 bg-white px-2 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800"
+              />
+              <span className="text-zinc-500">to</span>
+              <input
+                type="time"
+                name="workEndMin"
+                defaultValue={minutesToTimeInput(settings.workEndMin)}
+                className="rounded-lg border border-zinc-200 bg-white px-2 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800"
+              />
+            </div>
+          </div>
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="text-zinc-500">World clock</span>
+            <input
+              type="text"
+              name="secondaryTimezone"
+              list="timezones"
+              defaultValue={settings.secondaryTimezone ?? ""}
+              placeholder="None"
+              className="w-44 rounded-lg border border-zinc-200 bg-white px-2 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800"
+            />
+            <datalist id="timezones">
+              {Intl.supportedValuesOf("timeZone").map((tz) => (
+                <option key={tz} value={tz} />
+              ))}
+            </datalist>
+          </label>
           <label className="flex flex-col gap-1 text-sm">
             <span className="text-zinc-500">Buffer between events</span>
             <div className="flex items-center gap-2">
@@ -145,26 +214,27 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
         <h2 className="text-lg font-semibold">AI / local model</h2>
         <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
           <Link href="/tasks/import" className="text-indigo-600 dark:text-indigo-400">
-            Syllabus import
+            Import
           </Link>{" "}
-          uses Claude by default. Point it at a self-hosted model instead
-          — e.g. Ollama running on a desktop, reachable from your other
-          devices over Tailscale — and it stops depending on a cloud
-          subscription entirely.
+          uses Claude by default. Point it at any OpenAI-compatible
+          endpoint instead — a self-hosted model (Ollama on a desktop,
+          reachable over Tailscale) or a hosted API like MiniMax — and it
+          stops depending on a Claude subscription entirely.
         </p>
         <form action={updateAiSettingsAction} className="mt-3 flex flex-col gap-3">
           <label className="flex flex-col gap-1 text-sm">
-            <span className="text-zinc-500">Local AI URL</span>
+            <span className="text-zinc-500">Local/hosted AI URL</span>
             <input
               type="url"
               name="localAiUrl"
               defaultValue={settings.localAiUrl ?? ""}
-              placeholder="http://100.x.x.x:11434/v1"
+              placeholder="http://100.x.x.x:11434/v1 or https://api.minimax.io/v1"
               className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800"
             />
             <span className="text-xs text-zinc-400">
               The OpenAI-compatible base URL — Ollama serves this at{" "}
-              <code className="rounded bg-zinc-100 px-1 py-0.5 dark:bg-zinc-700">/v1</code>.
+              <code className="rounded bg-zinc-100 px-1 py-0.5 dark:bg-zinc-700">/v1</code>;
+              MiniMax&apos;s is <code className="rounded bg-zinc-100 px-1 py-0.5 dark:bg-zinc-700">https://api.minimax.io/v1</code>.
             </span>
           </label>
           <label className="flex flex-col gap-1 text-sm">
@@ -173,17 +243,56 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
               type="text"
               name="localAiModel"
               defaultValue={settings.localAiModel ?? ""}
-              placeholder="llama3.1"
+              placeholder="llama3.1 or MiniMax-M1"
               className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800"
             />
           </label>
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="text-zinc-500">
+              API key <span className="text-zinc-400">(only needed for a hosted API like MiniMax — leave blank for an unauthenticated local Ollama/LM Studio)</span>
+            </span>
+            <input
+              type="password"
+              name="localAiApiKey"
+              placeholder={settings.localAiApiKey ? "•••••••• (saved — leave blank to keep)" : "sk-..."}
+              autoComplete="off"
+              className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800"
+            />
+            {settings.localAiApiKey && (
+              <label className="flex items-center gap-1.5 text-xs text-zinc-500">
+                <input type="checkbox" name="clearLocalAiApiKey" />
+                Clear saved key
+              </label>
+            )}
+          </label>
+          <div className="border-t border-zinc-200 pt-3 dark:border-zinc-700">
+            <label className="flex flex-col gap-1 text-sm">
+              <span className="text-zinc-500">
+                Claude API key <span className="text-zinc-400">(overrides the server&apos;s <code>ANTHROPIC_API_KEY</code> for your account — no .env edit needed)</span>
+              </span>
+              <input
+                type="password"
+                name="anthropicApiKey"
+                placeholder={settings.anthropicApiKey ? "•••••••• (saved — leave blank to keep)" : "sk-ant-..."}
+                autoComplete="off"
+                className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800"
+              />
+              {settings.anthropicApiKey && (
+                <label className="flex items-center gap-1.5 text-xs text-zinc-500">
+                  <input type="checkbox" name="clearAnthropicApiKey" />
+                  Clear saved key
+                </label>
+              )}
+            </label>
+          </div>
           <div>
             <Button type="submit">Save</Button>
           </div>
         </form>
         <p className="mt-2 text-xs text-zinc-400">
-          Leave both blank to use Claude (needs <code>ANTHROPIC_API_KEY</code> in
-          your server&apos;s <code>.env</code>).
+          Leave the URL/model blank to use Claude. Without a Claude API
+          key saved here, it falls back to <code>ANTHROPIC_API_KEY</code> in
+          your server&apos;s <code>.env</code>.
         </p>
       </section>
 
@@ -357,6 +466,30 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
             </form>
           </div>
         )}
+      </section>
+
+      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
+        <h2 className="text-lg font-semibold">Calendar sharing</h2>
+        <p className="mt-1 text-xs text-zinc-400">
+          Share your calendar with another account on this instance — they
+          see it overlaid on their own calendar. View-only; they can&apos;t
+          edit anything on it.
+        </p>
+        <div className="mt-3">
+          <CalendarSharingManager
+            given={sharesGiven.map((s) => ({
+              id: s.id,
+              sharedWithEmail: s.sharedWith.email,
+              sharedWithName: s.sharedWith.name,
+              permission: s.permission,
+            }))}
+            received={sharesReceived.map((s) => ({
+              ownerEmail: s.owner.email,
+              ownerName: s.owner.name,
+              permission: s.permission,
+            }))}
+          />
+        </div>
       </section>
               </>
             ),

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth";
 import MiniMonthPicker from "./MiniMonthPicker";
+import CalendarSearch from "./calendar/CalendarSearch";
 import {
   addDays,
   addMonths,
@@ -13,12 +14,13 @@ import {
   isSameDay,
   parseStartParam,
   parseViewParam,
-  startOfWeekMonday,
+  startOfWeek,
   type CalendarView,
 } from "@/lib/calendar-dates";
 import { expandEvents } from "@/lib/recurrence";
 import { getAppSettings } from "@/lib/settings";
-import CalendarClient, { type CalendarEvent } from "./calendar/CalendarClient";
+import CalendarClient, { type CalendarEvent, type SharedEvent } from "./calendar/CalendarClient";
+import { NowProvider } from "./calendar/NowContext";
 import CalendarSidebarLeft from "./calendar/CalendarSidebarLeft";
 import CalendarSidebarRight, {
   type AttentionTask,
@@ -31,7 +33,7 @@ function viewSwitchTargets(
   start: Date,
 ): Record<CalendarView, string> {
   const dayStart = formatYMD(start);
-  const weekStart = formatYMD(startOfWeekMonday(start));
+  const weekStart = formatYMD(startOfWeek(start));
   const monthStart = formatYMD(new Date(start.getFullYear(), start.getMonth(), 1));
   return {
     day: dayStart,
@@ -53,7 +55,7 @@ function navTargets(view: CalendarView, start: Date): {
     };
   }
   if (view === "week") {
-    const ws = startOfWeekMonday(start);
+    const ws = startOfWeek(start);
     const we = addDays(ws, 6);
     return {
       prev: formatYMD(addDays(ws, -7)),
@@ -125,6 +127,41 @@ export default async function Page(props: PageProps<"/">) {
     }))
     .sort((a, b) => a.start.getTime() - b.start.getTime());
 
+  // Calendars shared with me (view-only overlay) — same visible range as
+  // my own events above. BUSY_ONLY drops the title/notes entirely rather
+  // than filtering client-side, so a real title never even reaches the
+  // browser for a calendar that's only supposed to show as "Busy".
+  const shares = await prisma.calendarShare.findMany({
+    where: { sharedWithId: user.id },
+    include: { owner: { select: { id: true, name: true, email: true } } },
+  });
+  const sharedEvents: SharedEvent[] = shares.length
+    ? (
+        await Promise.all(
+          shares.map(async (share) => {
+            const ownerRows = await prisma.event.findMany({
+              where: {
+                userId: share.ownerId,
+                OR: [
+                  { start: { lt: to }, end: { gt: from } },
+                  { recurrenceRule: { not: null } },
+                ],
+              },
+            });
+            const ownerLabel = share.owner.name ?? share.owner.email;
+            return expandEvents(ownerRows, from, to).map((o) => ({
+              id: `${share.ownerId}:${o.id}`,
+              start: o.start,
+              end: o.end,
+              allDay: ownerRows.find((r) => r.id === o.masterId)?.allDay ?? false,
+              title: share.permission === "FULL_DETAILS" ? o.title : "Busy",
+              ownerLabel,
+            }));
+          }),
+        )
+      ).flat()
+    : [];
+
   const today = new Date();
   const todayISO = formatYMD(today);
   const startYMD = formatYMD(start);
@@ -163,6 +200,9 @@ export default async function Page(props: PageProps<"/">) {
   // the main grid is currently showing (day/week/month), always "the
   // next UPCOMING_AGENDA_DAYS days" so it's a stable place to glance at
   // what's coming up regardless of which view you're browsing.
+  // A full week — CalendarSidebarRight now lets each day collapse
+  // (all but today start collapsed), so a longer window no longer
+  // forces the sidebar taller than the calendar next to it.
   const UPCOMING_AGENDA_DAYS = 7;
   const agendaStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const agendaEnd = new Date(agendaStart.getTime() + UPCOMING_AGENDA_DAYS * 86_400_000);
@@ -177,18 +217,24 @@ export default async function Page(props: PageProps<"/">) {
     include: { task: { select: { id: true } } },
     orderBy: { start: "asc" },
   });
-  const taskByMasterId = new Map(upcomingRows.map((r) => [r.id, Boolean(r.task)]));
+  const taskIdByMasterId = new Map(upcomingRows.map((r) => [r.id, r.task?.id ?? null]));
   const lockedByUpcomingMasterId = new Map(upcomingRows.map((r) => [r.id, r.locked]));
   const upcomingByDay = new Map<string, UpcomingItem[]>();
   for (const o of expandEvents(upcomingRows, agendaStart, agendaEnd)) {
     const dayKey = formatYMD(o.start);
     const list = upcomingByDay.get(dayKey) ?? [];
+    const taskId = taskIdByMasterId.get(o.masterId) ?? null;
     list.push({
       id: o.id,
+      // The real DB event row id — o.id is synthetic for a recurring
+      // occurrence (`${masterId}::${iso}`), but editing always acts on
+      // the series/row itself.
+      eventId: o.masterId,
       title: o.title,
       startIso: o.start.toISOString(),
       endIso: o.end.toISOString(),
-      isTask: taskByMasterId.get(o.masterId) ?? false,
+      isTask: taskId !== null,
+      taskId,
       locked: lockedByUpcomingMasterId.get(o.masterId) ?? false,
     });
     upcomingByDay.set(dayKey, list);
@@ -225,7 +271,8 @@ export default async function Page(props: PageProps<"/">) {
   return (
     <main className="mx-auto w-full max-w-[96rem] flex-1 px-6 pb-12 pt-4">
       <header className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="hidden text-lg font-semibold print:block">{nav.label}</p>
+        <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
           <nav className="flex flex-wrap items-center gap-1">
             <div className="inline-flex items-center gap-1 rounded-full bg-zinc-100 p-1 dark:bg-zinc-800">
               <Link
@@ -262,42 +309,48 @@ export default async function Page(props: PageProps<"/">) {
             </Link>
           </nav>
           <div className="flex items-center gap-1">
+            <CalendarSearch view={view} />
             <p className="text-sm text-zinc-500">{nav.label}</p>
             <MiniMonthPicker view={view} startYMD={startYMD} />
           </div>
         </div>
-        <p className="text-xs text-zinc-400">
+        <p className="text-xs text-zinc-400 print:hidden">
           Shortcuts: <kbd>j</kbd>/<kbd>k</kbd> prev/next, <kbd>d</kbd>/
-          <kbd>w</kbd>/<kbd>m</kbd> view, <kbd>t</kbd> today
+          <kbd>w</kbd>/<kbd>m</kbd> view, <kbd>t</kbd> today, <kbd>?</kbd> all
+          shortcuts
         </p>
       </header>
 
-      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[13rem_1fr_15rem]">
-        <aside className="hidden lg:block">
-          <CalendarSidebarLeft view={view} startYMD={startYMD} />
-        </aside>
+      <NowProvider>
+        <div className="mt-3 grid grid-cols-1 gap-6 print:block lg:grid-cols-[13rem_1fr_15rem]">
+          <aside className="hidden print:hidden lg:block">
+            <CalendarSidebarLeft view={view} startYMD={startYMD} />
+          </aside>
 
-        <div className="min-w-0">
-          <CalendarClient
-            view={view}
-            startYMD={startYMD}
-            todayISO={todayISO}
-            events={events}
-          />
+          <div className="min-w-0">
+            <CalendarClient
+              view={view}
+              startYMD={startYMD}
+              todayISO={todayISO}
+              events={events}
+              sharedEvents={sharedEvents}
+              secondaryTimezone={settings.secondaryTimezone}
+            />
+          </div>
+
+          <aside className="hidden print:hidden lg:block">
+            <CalendarSidebarRight
+              tasks={attentionTasks}
+              upcomingDays={upcomingDays}
+              overcommitment={
+                settings.dailyCapMin && todayPlannedMinutes !== null
+                  ? { plannedMinutes: todayPlannedMinutes, capMinutes: settings.dailyCapMin }
+                  : null
+              }
+            />
+          </aside>
         </div>
-
-        <aside className="hidden lg:block">
-          <CalendarSidebarRight
-            tasks={attentionTasks}
-            upcomingDays={upcomingDays}
-            overcommitment={
-              settings.dailyCapMin && todayPlannedMinutes !== null
-                ? { plannedMinutes: todayPlannedMinutes, capMinutes: settings.dailyCapMin }
-                : null
-            }
-          />
-        </aside>
-      </div>
+      </NowProvider>
     </main>
   );
 }

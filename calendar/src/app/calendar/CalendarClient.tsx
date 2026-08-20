@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   addDays,
@@ -10,6 +10,7 @@ import {
   dayWeekdayLabel,
   defaultNewEventTimes,
   formatHourLabel,
+  formatHourLabelInZone,
   formatTime,
   formatYMD,
   HOUR_END,
@@ -17,11 +18,13 @@ import {
   isSameDay,
   overlapsDay,
   parseYMD,
-  startOfWeekMonday,
-  WEEKDAY_LABELS_MON_FIRST,
+  startOfDay,
+  startOfWeek,
+  WEEKDAY_LABELS_SUN_FIRST,
   type CalendarView,
 } from "@/lib/calendar-dates";
 import EventModal, { type EventModalEvent } from "./EventModal";
+import { useNowContext } from "./NowContext";
 import QuickCreatePopup from "./QuickCreatePopup";
 import { LockIcon, FlagIcon } from "../icons";
 import { moveEvent, deleteEvent } from "../actions";
@@ -54,14 +57,32 @@ export type CalendarEvent = {
 // — EventModal/TaskModal need the option list too, and importing it from
 // here would be circular (this file imports EventModal to render it).
 
+// A read-only event from a calendar someone else shared with you (see
+// CalendarShare in schema.prisma) — deliberately a much smaller shape
+// than CalendarEvent: no id-for-editing, no color/priority/lock, since
+// none of that ever renders interactively. `title` is already "Busy"
+// server-side for a BUSY_ONLY share — this component never sees the
+// real title in that case, not just hides it.
+export type SharedEvent = {
+  id: string;
+  start: Date;
+  end: Date;
+  allDay: boolean;
+  title: string;
+  ownerLabel: string;
+};
+
 type Props = {
   view: CalendarView;
   startYMD: string;
   todayISO: string;
   events: CalendarEvent[];
+  sharedEvents?: SharedEvent[];
+  secondaryTimezone?: string | null;
 };
 
 const HOUR_HEIGHT = 48;
+const ALL_DAY_ROW_HEIGHT = 22;
 const HOURS = Array.from(
   { length: HOUR_END - HOUR_START },
   (_, i) => HOUR_START + i,
@@ -122,6 +143,49 @@ export function layoutOverlappingEvents(events: CalendarEvent[]): PlacedEvent[] 
     }
   }
   return result;
+}
+
+export type AllDayPlacement = { event: CalendarEvent; col: number; span: number; track: number };
+
+/**
+ * A multi-day all-day event used to render as a separate, identical pill
+ * repeated in each day cell it touched — disconnected fragments instead
+ * of the one continuous bar Google Calendar (and most calendar UIs)
+ * draw across the days it actually spans. This computes that: which
+ * column it starts in and how many columns wide it is (clamped to the
+ * visible `days` window on either end), plus a vertical `track` so two
+ * overlapping multi-day events stack instead of colliding — same
+ * interval-packing idea as layoutOverlappingEvents above, just packing
+ * into horizontal tracks instead of columns.
+ */
+export function layoutAllDayEvents(events: CalendarEvent[], days: Date[]): AllDayPlacement[] {
+  if (days.length === 0) return [];
+  const rangeStart = startOfDay(days[0]).getTime();
+  const relevant = events
+    .filter((e) => e.allDay && days.some((day) => overlapsDay(e, day)))
+    .sort((a, b) => a.start.getTime() - b.start.getTime());
+
+  const trackEndCol: number[] = []; // exclusive end column currently occupied per track
+  const placements: AllDayPlacement[] = [];
+  for (const event of relevant) {
+    const startCol = Math.max(0, Math.floor((startOfDay(event.start).getTime() - rangeStart) / 86_400_000));
+    const endColExclusive = Math.min(days.length, Math.ceil((event.end.getTime() - rangeStart) / 86_400_000));
+    const span = Math.max(1, endColExclusive - startCol);
+
+    let track = trackEndCol.findIndex((end) => end <= startCol);
+    if (track === -1) {
+      track = trackEndCol.length;
+      trackEndCol.push(startCol + span);
+    } else {
+      trackEndCol[track] = startCol + span;
+    }
+    placements.push({ event, col: startCol, span, track });
+  }
+  return placements;
+}
+
+function computeNowTop(now: Date): number {
+  return ((now.getHours() * 60 + now.getMinutes() - HOUR_START * 60) / 60) * HOUR_HEIGHT;
 }
 
 function computeBlock(
@@ -196,8 +260,33 @@ export default function CalendarClient({
   startYMD,
   todayISO,
   events,
+  sharedEvents = [],
+  secondaryTimezone = null,
 }: Props) {
-  const [modalState, setModalState] = useState<ModalState | null>(null);
+  // "Upcoming" (right sidebar) links to a plain event as
+  // `/?view=day&start=...&edit=<eventId>` — open its editor immediately
+  // if that event is already in `events` (the day it was jumped to),
+  // computed as the initial state rather than set from an effect so it
+  // doesn't cost an extra render.
+  const searchParams = useSearchParams();
+  const [modalState, setModalState] = useState<ModalState | null>(() => {
+    const editEventId = searchParams.get("edit");
+    const match = editEventId ? events.find((e) => e.masterId === editEventId) : null;
+    if (!match) return null;
+    return {
+      mode: "edit",
+      event: {
+        id: match.masterId,
+        title: match.title,
+        start: match.start,
+        end: match.end,
+        recurrenceRule: match.recurrenceRule,
+        locked: match.locked,
+        meetingUrl: match.meetingUrl,
+        color: match.projectColor,
+      },
+    };
+  });
   const [draggingEvent, setDraggingEvent] = useState<DraggingEvent | null>(null);
   const [selectedEventIds, setSelectedEventIds] = useState<Set<string>>(new Set());
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
@@ -289,6 +378,14 @@ export default function CalendarClient({
   const closeModal = () => setModalState(null);
   const scrollToNowRef = useRef<(() => void) | null>(null);
 
+  // The "Now" button itself lives in the left sidebar now — register the
+  // scroll behavior so it can still trigger it (see NowContext.tsx).
+  const { register: registerNowScroll } = useNowContext();
+  useEffect(() => {
+    registerNowScroll(() => scrollToNowRef.current?.());
+    return () => registerNowScroll(null);
+  }, [registerNowScroll]);
+
   const router = useRouter();
   useEffect(() => {
     const isTypingTarget = (el: EventTarget | null) => {
@@ -316,7 +413,7 @@ export default function CalendarClient({
           nextView === "day"
             ? formatYMD(start)
             : nextView === "week"
-              ? formatYMD(startOfWeekMonday(start))
+              ? formatYMD(startOfWeek(start))
               : formatYMD(new Date(start.getFullYear(), start.getMonth(), 1));
         router.push(`/?view=${nextView}&start=${target}`);
         return;
@@ -349,22 +446,7 @@ export default function CalendarClient({
 
   return (
     <>
-      <div className="mt-4 flex justify-end gap-2">
-        {view !== "month" && (
-          <button
-            type="button"
-            onClick={() => {
-              if (formatYMD(start) === formatYMD(new Date())) {
-                scrollToNowRef.current?.();
-              } else {
-                router.push(`/?view=${view}&start=${formatYMD(new Date())}`);
-              }
-            }}
-            className="rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 shadow-sm transition-colors hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-200 dark:hover:bg-zinc-700"
-          >
-            Now
-          </button>
-        )}
+      <div className="flex justify-end gap-2 print:hidden">
         <button
           type="button"
           title="A locked block the auto-scheduler won't place tasks into"
@@ -388,7 +470,7 @@ export default function CalendarClient({
         </button>
       </div>
 
-      <div className="mt-6">
+      <div className="mt-2">
         {view === "month" ? (
           <MonthView
             days={range.days}
@@ -407,7 +489,9 @@ export default function CalendarClient({
               <HourGrid
                 days={range.days}
                 events={events}
+                sharedEvents={sharedEvents}
                 today={today}
+                secondaryTimezone={secondaryTimezone}
                 onEmptyClick={openQuickCreate}
                 onEventClick={openEdit}
                 draggingEvent={draggingEvent}
@@ -576,6 +660,7 @@ function AgendaView({
 function HourGrid({
   days,
   events,
+  sharedEvents,
   today,
   onEmptyClick,
   onEventClick,
@@ -585,9 +670,11 @@ function HourGrid({
   scrollToNowRef,
   selectedEventIds,
   onToggleSelect,
+  secondaryTimezone,
 }: {
   days: Date[];
   events: CalendarEvent[];
+  sharedEvents: SharedEvent[];
   today: Date;
   onEmptyClick: (start: Date, end: Date) => void;
   onEventClick: (event: CalendarEvent) => void;
@@ -597,6 +684,7 @@ function HourGrid({
   scrollToNowRef: React.MutableRefObject<(() => void) | null>;
   selectedEventIds: Set<string>;
   onToggleSelect: (id: string) => void;
+  secondaryTimezone?: string | null;
 }) {
   // Recomputed each render, not just on mount, same reasoning as the
   // day-column's own now-line — see the comment there.
@@ -608,6 +696,9 @@ function HourGrid({
   // (7 columns) needs — that would make single-day mobile use scroll for
   // no reason. Scale with column count instead of a single fixed value.
   const minWidthRem = Math.max(days.length * 5, 18);
+
+  const allDayPlacements = useMemo(() => layoutAllDayEvents(events, days), [events, days]);
+  const allDayTrackCount = allDayPlacements.reduce((max, p) => Math.max(max, p.track + 1), 0);
 
   // Full 24h grid (like Motion) doesn't fit on screen at once, so the
   // hour body scrolls independently of the day header — and starts
@@ -636,10 +727,28 @@ function HourGrid({
     };
   });
 
+  // Same direct-DOM-write reasoning as the day column's own now-line —
+  // written on nowLabelRef on a timer instead of through React state, so
+  // this label's tick doesn't reflow (and fight scroll anchoring on) the
+  // whole grid every 30s.
+  const nowLabelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const tick = () => {
+      const el = nowLabelRef.current;
+      if (!el) return;
+      const current = new Date();
+      el.style.top = `${computeNowTop(current)}px`;
+      el.textContent = formatTime(current);
+    };
+    const id = setInterval(tick, 30_000);
+    return () => clearInterval(id);
+  }, []);
+
   return (
     <div className="overflow-x-auto">
       <div style={{ minWidth: `${minWidthRem}rem` }}>
         <div className="flex">
+          {secondaryTimezone && <div className="w-14 flex-shrink-0" />}
           <div className="w-16 flex-shrink-0" />
           <div className="flex-1 grid" style={gridStyle}>
             {days.map((day) => {
@@ -666,29 +775,44 @@ function HourGrid({
             })}
           </div>
         </div>
-        {days.some((day) => events.some((e) => e.allDay && overlapsDay(e, day))) && (
+        {allDayPlacements.length > 0 && (
           <div className="flex border-b border-zinc-200 dark:border-zinc-700">
+            {secondaryTimezone && <div className="w-14 flex-shrink-0" />}
             <div className="flex w-16 flex-shrink-0 items-center justify-end pr-2 text-[10px] text-zinc-400">
               All day
             </div>
-            <div className="flex-1 grid gap-px py-1" style={gridStyle}>
-              {days.map((day) => {
-                const dayAllDay = events.filter(
-                  (e) => e.allDay && overlapsDay(e, day),
-                );
+            <div
+              className="relative flex-1 py-1"
+              style={{ height: `${allDayTrackCount * ALL_DAY_ROW_HEIGHT}px` }}
+            >
+              {allDayPlacements.map(({ event, col, span, track }) => {
+                // Rounded (and a continuation chevron) only on the edge
+                // that's the event's real start/end — a squared-off edge
+                // signals "this keeps going" the same way Google
+                // Calendar's bar does when it's clipped by the visible
+                // week, instead of every day's fragment looking identical.
+                const isRealStart = isSameDay(startOfDay(event.start), days[col]);
+                const isRealEnd = col + span - 1 < days.length && isSameDay(event.end, addDays(startOfDay(days[col + span - 1]), 1));
                 return (
-                  <div key={day.toISOString()} className="flex flex-col gap-0.5 px-0.5">
-                    {dayAllDay.map((e) => (
-                      <button
-                        key={e.id}
-                        type="button"
-                        onClick={() => onEventClick(e)}
-                        className="truncate rounded-md border-l-2 border-l-indigo-500 bg-indigo-50 px-1.5 py-0.5 text-left text-[11px] font-medium text-indigo-900 transition-colors hover:brightness-95 dark:bg-indigo-950/30 dark:text-indigo-100 dark:hover:brightness-110"
-                      >
-                        {e.title}
-                      </button>
-                    ))}
-                  </div>
+                  <button
+                    key={event.id}
+                    type="button"
+                    onClick={() => onEventClick(event)}
+                    title={event.title}
+                    className={`absolute flex items-center truncate border-l-2 border-l-indigo-500 bg-indigo-50 px-1.5 text-left text-[11px] font-medium text-indigo-900 transition-colors hover:brightness-95 dark:bg-indigo-950/30 dark:text-indigo-100 dark:hover:brightness-110 ${
+                      isRealStart ? "rounded-l-md" : ""
+                    } ${isRealEnd ? "rounded-r-md" : ""}`}
+                    style={{
+                      left: `calc(${(col / days.length) * 100}% + 1px)`,
+                      width: `calc(${(span / days.length) * 100}% - 2px)`,
+                      top: `${track * ALL_DAY_ROW_HEIGHT}px`,
+                      height: `${ALL_DAY_ROW_HEIGHT - 2}px`,
+                    }}
+                  >
+                    {!isRealStart && <span className="mr-1 flex-shrink-0">‹</span>}
+                    <span className="truncate">{event.title}</span>
+                    {!isRealEnd && <span className="ml-1 flex-shrink-0">›</span>}
+                  </button>
                 );
               })}
             </div>
@@ -698,6 +822,22 @@ function HourGrid({
           ref={scrollRef}
           className="calendar-scroll flex max-h-[70vh] overflow-y-auto"
         >
+          {secondaryTimezone && (
+            <div
+              className="w-14 flex-shrink-0 border-r border-zinc-100 dark:border-zinc-800"
+              title={secondaryTimezone}
+            >
+              {HOURS.map((h) => (
+                <div
+                  key={h}
+                  className="pr-1.5 text-right text-[10px] text-zinc-400"
+                  style={{ height: `${HOUR_HEIGHT}px` }}
+                >
+                  {formatHourLabelInZone(days[0] ?? today, h, secondaryTimezone)}
+                </div>
+              ))}
+            </div>
+          )}
           <div className="relative w-16 flex-shrink-0">
             {HOURS.map((h) => (
               <div
@@ -710,10 +850,9 @@ function HourGrid({
             ))}
             {days.some((day) => isSameDay(day, today)) && (
               <div
+                ref={nowLabelRef}
                 className="pointer-events-none absolute right-2 z-10 -translate-y-1/2 text-[10px] font-semibold text-red-500"
-                style={{
-                  top: `${((now.getHours() * 60 + now.getMinutes() - HOUR_START * 60) / 60) * HOUR_HEIGHT}px`,
-                }}
+                style={{ top: `${computeNowTop(now)}px` }}
               >
                 {formatTime(now)}
               </div>
@@ -726,6 +865,7 @@ function HourGrid({
                 day={day}
                 isToday={isSameDay(day, today)}
                 events={events}
+                sharedEvents={sharedEvents}
                 onEmptyClick={onEmptyClick}
                 onEventClick={onEventClick}
                 draggingEvent={draggingEvent}
@@ -746,6 +886,7 @@ function DayColumn({
   day,
   isToday,
   events,
+  sharedEvents,
   onEmptyClick,
   onEventClick,
   draggingEvent,
@@ -757,6 +898,7 @@ function DayColumn({
   day: Date;
   isToday: boolean;
   events: CalendarEvent[];
+  sharedEvents: SharedEvent[];
   onEmptyClick: (start: Date, end: Date) => void;
   onEventClick: (event: CalendarEvent) => void;
   draggingEvent: DraggingEvent | null;
@@ -765,17 +907,33 @@ function DayColumn({
   selectedEventIds: Set<string>;
   onToggleSelect: (id: string) => void;
 }) {
-  // Recomputed each render (not just on mount) so the line keeps pace
-  // while the tab stays open, same as the header's today highlight.
+  // Nothing else on this page re-renders on a timer, so without this the
+  // line would only move on the next unrelated re-render (a drag, a
+  // click, a navigation) — effectively "on refresh" from the user's
+  // perspective. Ticked via direct DOM writes on nowLineRef (see below)
+  // rather than React state, so it doesn't re-render/reflow the whole
+  // column every 30s.
+  const nowLineRef = useRef<HTMLDivElement>(null);
   const nowTop = isToday
-    ? ((new Date().getHours() * 60 + new Date().getMinutes() - HOUR_START * 60) / 60) *
-      HOUR_HEIGHT
+    ? computeNowTop(new Date())
     : null;
+  useEffect(() => {
+    if (!isToday) return;
+    const tick = () => {
+      if (nowLineRef.current) nowLineRef.current.style.top = `${computeNowTop(new Date())}px`;
+    };
+    const id = setInterval(tick, 30_000);
+    return () => clearInterval(id);
+  }, [isToday]);
   const dayEvents = useMemo(
     () => events.filter((e) => !e.allDay && isSameDay(e.start, day)),
     [events, day],
   );
   const layout = useMemo(() => layoutOverlappingEvents(dayEvents), [dayEvents]);
+  const daySharedEvents = useMemo(
+    () => sharedEvents.filter((e) => !e.allDay && isSameDay(e.start, day)),
+    [sharedEvents, day],
+  );
 
   const [createPreview, setCreatePreview] = useState<
     { lo: number; hi: number } | null
@@ -877,10 +1035,17 @@ function DayColumn({
           }}
         />
       ))}
-      {nowTop !== null && (
+      {isToday && (
         // The current-time label lives in the gutter on the left
         // (HourGrid) now — this is just the line across the day itself.
+        // Position is written directly to the DOM node on a timer (see
+        // the ref effect above) rather than through React state, so the
+        // tick doesn't re-render/reflow this column (and its event
+        // blocks) every 30s — that reflow was tripping the browser's
+        // scroll anchoring into "helpfully" dragging the scroll position
+        // down to keep the moving line in the same spot in the viewport.
         <div
+          ref={nowLineRef}
           className="pointer-events-none absolute left-0 right-0 z-10 h-px bg-red-500"
           style={{ top: `${nowTop}px` }}
         />
@@ -903,6 +1068,30 @@ function DayColumn({
           }}
         />
       )}
+      {daySharedEvents.map((event) => {
+        const block = computeBlock(event.start, event.end);
+        if (!block) return null;
+        return (
+          <div
+            key={event.id}
+            title={`${event.ownerLabel}: ${event.title}`}
+            // Read-only — no onClick, not draggable, deliberately not an
+            // EventBlock. Diagonal stripes (not a solid fill) so it never
+            // gets mistaken for one of your own events even at a glance.
+            className="pointer-events-none absolute overflow-hidden truncate rounded-md border border-zinc-400/60 px-1.5 py-0.5 text-[10px] text-zinc-600 dark:border-zinc-500/60 dark:text-zinc-300"
+            style={{
+              top: `${block.top}px`,
+              height: `${block.height}px`,
+              left: "1px",
+              right: "1px",
+              backgroundImage:
+                "repeating-linear-gradient(45deg, rgba(113,113,122,0.12), rgba(113,113,122,0.12) 4px, transparent 4px, transparent 8px)",
+            }}
+          >
+            <span className="font-medium">{event.ownerLabel}:</span> {event.title}
+          </div>
+        );
+      })}
       {layout.map(({ event, col, cols }) => {
         const block = computeBlock(event.start, event.end);
         if (!block) return null;
@@ -1039,7 +1228,7 @@ function EventBlock({
       }}
       type="button"
       title="Shift/Cmd/Ctrl-click to select multiple events"
-      className={`group absolute overflow-hidden rounded-lg border-y border-r border-zinc-200 border-l-4 bg-white p-1.5 text-left text-zinc-900 shadow-sm transition-all hover:shadow-md hover:brightness-95 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:brightness-110 ${color.bar} ${
+      className={`group absolute overflow-hidden rounded-lg border-y border-r border-zinc-200 border-l-4 bg-white/40 p-1.5 text-left text-zinc-900 shadow-sm transition-all hover:shadow-md hover:brightness-95 dark:border-zinc-600 dark:bg-zinc-100/10 dark:text-zinc-100 dark:hover:brightness-110 ${color.bar} ${
         isDragging ? "opacity-40" : ""
       } ${selected ? "ring-2 ring-indigo-500 ring-offset-1 dark:ring-offset-zinc-900" : ""}`}
       style={{
@@ -1129,7 +1318,7 @@ function MonthView({
 
   return (
     <div className="grid grid-cols-7 gap-px overflow-hidden rounded-xl border border-zinc-200 bg-zinc-200 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-700">
-      {WEEKDAY_LABELS_MON_FIRST.map((label) => (
+      {WEEKDAY_LABELS_SUN_FIRST.map((label) => (
         <div
           key={label}
           className="bg-white px-2 py-1.5 text-center text-xs font-medium text-zinc-500 dark:bg-zinc-800"

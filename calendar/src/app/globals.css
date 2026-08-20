@@ -26,6 +26,13 @@ body {
 .calendar-scroll {
   scrollbar-width: thin;
   scrollbar-color: rgb(212 212 216) transparent; /* zinc-300 */
+  /* The current-time line ticks its `top` every 30s (CalendarClient.tsx).
+     Browser scroll anchoring can pick that repositioned element as its
+     anchor and shift scrollTop to keep it visually fixed in place —
+     since the line is *supposed* to move, that reads as the view
+     dragging itself down to follow it. Anchoring is meant for
+     unintentional layout shifts, not an intentionally moving element. */
+  overflow-anchor: none;
 }
 .dark .calendar-scroll {
   scrollbar-color: rgb(63 63 70) transparent; /* zinc-700 */
@@ -55,4 +62,15 @@ body {
 .dark input[type="time"],
 .dark input[type="datetime-local"] {
   color-scheme: dark;
+}
+
+/* Print view (#43) — the hour grid otherwise clips to a 70vh scroll
+   container (calendar-scroll), which would print only whatever
+   happened to be scrolled into view. Printing needs the whole day
+   laid out on the page instead. */
+@media print {
+  .calendar-scroll {
+    max-height: none;
+    overflow: visible;
+  }
 }

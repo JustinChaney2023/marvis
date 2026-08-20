@@ -36,11 +36,15 @@ model User {
   assignees     Assignee[]
   feedback      Feedback[]
   bookingLinks  BookingLink[]
+  labels        Label[]
+  passwordResetTokens PasswordResetToken[]
   automationRules         AutomationRule[]
   automationNotifications AutomationNotification[]
   timeLogEntries          TimeLogEntry[]
   habits                  Habit[]
   timeSlots               TimeSlot[]
+  sharesGiven             CalendarShare[] @relation("SharesGiven")
+  sharesReceived          CalendarShare[] @relation("SharesReceived")
 }
 
 // DB-backed sessions (not signed/stateless JWTs) — lets a logout or a
@@ -107,6 +111,12 @@ model Event {
   appleEventUid   String?     @unique
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
+
+  // Every calendar-range query (the main grid, fetchBusyIntervals,
+  // "Upcoming") filters by userId + an overlap on start/end — a plain
+  // foreign-key index on userId alone doesn't help an ORDER/range scan
+  // on start. Free to add now, before rows accumulate over months.
+  @@index([userId, start])
 }
 
 enum EventSource {
@@ -273,8 +283,38 @@ model Task {
   parent         Task?      @relation("TaskSubtasks", fields: [parentId], references: [id], onDelete: Cascade)
   subtasks       Task[]     @relation("TaskSubtasks")
   timeLogEntries TimeLogEntry[]
+  // Cross-cutting tags (Motion's "Labels"), separate from Project — a
+  // task can carry several, unlike the one Project it belongs to.
+  labels         Label[]
+  // Self-referential many-to-many: a blocked task shouldn't be
+  // auto-scheduled until everything in `blockedBy` is DONE (see the
+  // sweep guard in scheduler.ts). `blocking` is just the inverse view,
+  // Prisma auto-derives both sides of one join table from a shared
+  // relation name.
+  blockedBy      Task[]     @relation("TaskDependency")
+  blocking       Task[]     @relation("TaskDependency")
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
+
+  // The Tasks page's own open-tasks query and the calendar sidebar's
+  // "Needs attention" query both filter by userId + status, ordering by
+  // dueAt — same reasoning as Event's (userId, start) index above.
+  @@index([userId, status])
+  @@index([userId, dueAt])
+}
+
+// Lightweight tag, not a full custom-field builder — quick visual
+// grouping cross-cutting projects (e.g. "urgent-client", "reading").
+model Label {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  color     String   @default("zinc")
+  tasks     Task[]
+  createdAt DateTime @default(now())
+
+  @@unique([userId, name])
 }
 
 // One row per timer stop (see stoppedTimerFields in actions.ts) — lets
@@ -302,6 +342,17 @@ model AppSettings {
   // that day and moves on to the next, leaving slack for unplanned work
   // instead of packing every open slot. Null = no cap (previous behavior).
   dailyCapMin        Int?
+  // The user-facing "these are my working hours" declaration (#35) —
+  // promotes the scheduler's old hardcoded 9-6 weekday default into a
+  // real per-user setting. Same "SU,MO,..." format as TimeSlot.daysOfWeek
+  // and minutes-since-midnight format as TimeSlot.startMin/endMin, so
+  // scheduler.ts can build a WindowFn from either with one helper.
+  workDays           String   @default("MO,TU,WE,TH,FR")
+  workStartMin       Int      @default(540)
+  workEndMin         Int      @default(1080)
+  // World clock (#37) — an IANA zone name (e.g. "Europe/London") shown as
+  // a second set of hour labels in the week/day grid gutter. Null = off.
+  secondaryTimezone  String?
   // Optional self-hosted model for /tasks/import (e.g. Ollama on a home
   // desktop, reachable at a Tailscale address from other devices) — an
   // OpenAI-compatible chat-completions endpoint. When set, syllabus
@@ -309,6 +360,18 @@ model AppSettings {
   // subscription-dependent. Null = use Claude (needs ANTHROPIC_API_KEY).
   localAiUrl         String?
   localAiModel       String?
+  // Encrypted the same way as Google/Apple credentials (tokenCrypto.ts)
+  // when TOKEN_ENCRYPTION_KEY is set — a Bearer token for a hosted
+  // OpenAI-compatible API (MiniMax, etc.), not just an unauthenticated
+  // local Ollama/LM Studio endpoint. Optional: local endpoints with no
+  // auth of their own leave this null.
+  localAiApiKey      String?
+  // Per-account override of the server's ANTHROPIC_API_KEY env var —
+  // lets a self-hosted instance's AI features work for a given user
+  // without the operator ever touching .env. Same encryption-at-rest
+  // treatment as localAiApiKey. Falls back to the env var when unset, so
+  // an existing single-key .env setup keeps working unchanged.
+  anthropicApiKey    String?
   updatedAt          DateTime @updatedAt
 }
 
@@ -356,8 +419,51 @@ model BookingLink {
   title       String
   durationMin Int
   enabled     Boolean  @default(true)
+  // Comma-separated weekday codes (same "SU,MO,TU,..." format as
+  // TimeSlot.daysOfWeek) that never offer a slot on this link, e.g.
+  // "SA,SU" to decline weekend bookings. Null/empty = every day the
+  // normal work-hours window already allows.
+  excludeDays String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+// One-time, short-lived token for the "forgot password" email link
+// (src/app/authActions.ts). Deliberately its own table rather than a
+// column on User — a used or expired token is just deleted, no need to
+// carry reset state on the account row itself.
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+// The owner directly grants access to a specific person — no
+// request/accept flow, since this is "you + friends you trust" sharing
+// with each other directly, not a public/discoverable thing. View-only:
+// BUSY_ONLY shows plain untitled "Busy" blocks on the viewer's calendar
+// (Google's own default privacy level), FULL_DETAILS shows the real
+// title/notes. Editing someone else's calendar isn't supported — that
+// would mean rethinking every server action's ownership check, the exact
+// bug class the 2026-08-19/20 security audits fixed.
+model CalendarShare {
+  id           String          @id @default(cuid())
+  ownerId      String
+  owner        User            @relation("SharesGiven", fields: [ownerId], references: [id], onDelete: Cascade)
+  sharedWithId String
+  sharedWith   User            @relation("SharesReceived", fields: [sharedWithId], references: [id], onDelete: Cascade)
+  permission   SharePermission @default(BUSY_ONLY)
+  createdAt    DateTime        @default(now())
+
+  @@unique([ownerId, sharedWithId])
+}
+
+enum SharePermission {
+  BUSY_ONLY
+  FULL_DETAILS
 }
 
 // Trigger = a task's status changing to `triggerStatus` (optionally

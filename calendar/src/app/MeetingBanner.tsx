@@ -10,7 +10,7 @@ const POLL_MS = 30_000;
 // Same public/pre-auth routes TopBar hides on — getUpcomingMeetingBannerAction
 // requires a signed-in user, so polling here on a page nobody's logged in on
 // would just redirect(/login) every 30s for nothing.
-const HIDDEN_PREFIXES = ["/login", "/signup", "/book/"];
+const HIDDEN_PREFIXES = ["/login", "/signup", "/forgot-password", "/reset-password", "/book/"];
 
 type Meeting = { id: string; title: string; startIso: string; meetingUrl: string | null };
 
@@ -60,7 +60,7 @@ export default function MeetingBanner() {
   );
 
   return (
-    <div className="flex shrink-0 items-center justify-between gap-3 border-b border-indigo-200 bg-indigo-50 px-4 py-2 text-sm dark:border-indigo-900 dark:bg-indigo-950/40">
+    <div className="flex shrink-0 items-center justify-between gap-3 border-b border-indigo-200 bg-indigo-50 px-4 py-2 text-sm print:hidden dark:border-indigo-900 dark:bg-indigo-950/40">
       <span className="min-w-0 truncate text-indigo-900 dark:text-indigo-200">
         <span className="font-medium">{next.title}</span> — {describeTiming(next.startIso, Date.now())}
       </span>

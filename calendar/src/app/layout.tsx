@@ -2,7 +2,9 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import QuickCapture from "./QuickCapture";
+import ShortcutsHelp from "./ShortcutsHelp";
 import NotificationWatcher from "./NotificationWatcher";
+import GoogleSyncWatcher from "./GoogleSyncWatcher";
 import MeetingBanner from "./MeetingBanner";
 import TopBar from "./TopBar";
 
@@ -50,7 +52,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <MeetingBanner />
         <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
         <QuickCapture />
+        <ShortcutsHelp />
         <NotificationWatcher />
+        <GoogleSyncWatcher />
       </body>
     </html>
   );
