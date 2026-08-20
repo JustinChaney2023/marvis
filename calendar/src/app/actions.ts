@@ -751,6 +751,16 @@ function lockedFromFormData(formData: FormData): boolean {
   return formData.get("locked") === "on";
 }
 
+// meetingUrl is rendered as a plain <a href> on the public /rsvp/[token]
+// page (and MeetingBanner) — a "javascript:" value would execute on
+// click for a guest who never signed in. <input type="url"> only
+// enforces this client-side; the server action is the real boundary.
+function meetingUrlFromFormData(formData: FormData): string | null {
+  const raw = String(formData.get("meetingUrl") ?? "").trim();
+  if (!raw) return null;
+  return /^https?:\/\//i.test(raw) ? raw : null;
+}
+
 const EVENT_TYPES = ["DEFAULT", "OUT_OF_OFFICE", "FOCUS_TIME"] as const;
 
 function eventTypeFromFormData(formData: FormData): (typeof EVENT_TYPES)[number] {
@@ -776,7 +786,7 @@ export async function createEvent(formData: FormData) {
   const start = new Date(startRaw);
   const end = new Date(endRaw);
   const recurrenceRule = recurrenceRuleFromFormData(formData);
-  const meetingUrl = String(formData.get("meetingUrl") ?? "").trim() || null;
+  const meetingUrl = meetingUrlFromFormData(formData);
   const color = String(formData.get("color") ?? "").trim() || null;
 
   await prisma.event.create({
@@ -800,18 +810,51 @@ export async function createEvent(formData: FormData) {
   revalidatePath("/");
 }
 
-export async function updateEvent(eventId: string, formData: FormData) {
+/**
+ * `originalOccurrenceStartIso`, when given, is the *displayed occurrence's*
+ * pre-edit start (not necessarily the master row's own `start` — could be
+ * any later occurrence someone opened and picked "All events" on). Without
+ * it, saving whatever occurrence happened to be open would silently drag
+ * the whole series' anchor date to that occurrence's date even if the user
+ * only retitled it — every earlier occurrence vanishes, since rrule
+ * expands forward from `start`. Passing it lets the series shift by the
+ * same delta the user actually made (0 if they didn't touch the time),
+ * preserving the series' real anchor otherwise.
+ */
+export async function updateEvent(
+  eventId: string,
+  formData: FormData,
+  originalOccurrenceStartIso?: string,
+) {
   const user = await requireUser();
   const title = String(formData.get("title") ?? "").trim();
   const startRaw = String(formData.get("start") ?? "");
   const endRaw = String(formData.get("end") ?? "");
   if (!title || !startRaw || !endRaw) return;
 
-  const start = new Date(startRaw);
-  const end = new Date(endRaw);
+  const formStart = new Date(startRaw);
+  const formEnd = new Date(endRaw);
   const recurrenceRule = recurrenceRuleFromFormData(formData);
-  const meetingUrl = String(formData.get("meetingUrl") ?? "").trim() || null;
+  const meetingUrl = meetingUrlFromFormData(formData);
   const color = String(formData.get("color") ?? "").trim() || null;
+
+  let start = formStart;
+  let end = formEnd;
+  const originalOccurrenceStart = originalOccurrenceStartIso
+    ? new Date(originalOccurrenceStartIso)
+    : null;
+  if (originalOccurrenceStart && !Number.isNaN(originalOccurrenceStart.getTime())) {
+    const existing = await prisma.event.findFirst({
+      where: { id: eventId, userId: user.id, recurrenceRule: { not: null } },
+      select: { start: true },
+    });
+    if (existing) {
+      const deltaMs = formStart.getTime() - originalOccurrenceStart.getTime();
+      const durationMs = formEnd.getTime() - formStart.getTime();
+      start = new Date(existing.start.getTime() + deltaMs);
+      end = new Date(start.getTime() + durationMs);
+    }
+  }
 
   const { count } = await prisma.event.updateMany({
     where: { id: eventId, userId: user.id },
@@ -834,10 +877,22 @@ export async function updateEvent(eventId: string, formData: FormData) {
   revalidatePath("/");
 }
 
-function withExcludedStart(excludeDates: string | null, startIso: string): string {
+// Normalizes through Date so a malformed/comma-bearing client-supplied
+// value can't corrupt the stored comma-joined list (a raw "a,b" would
+// otherwise inject a second, garbage exclusion entry) or fail as
+// Invalid Date deeper in recurrence.ts. Returns null for input that
+// isn't a real date at all — callers treat that as "nothing to exclude."
+function normalizeExcludedStart(startIso: string): string | null {
+  const time = new Date(startIso).getTime();
+  return Number.isNaN(time) ? null : new Date(time).toISOString();
+}
+
+function withExcludedStart(excludeDates: string | null, startIso: string): string | null {
+  const normalized = normalizeExcludedStart(startIso);
+  if (!normalized) return excludeDates;
   const existing = excludeDates ? excludeDates.split(",").filter(Boolean) : [];
-  if (existing.includes(startIso)) return excludeDates as string;
-  return [...existing, startIso].join(",");
+  if (existing.includes(normalized)) return excludeDates;
+  return [...existing, normalized].join(",");
 }
 
 /**
@@ -855,6 +910,8 @@ export async function updateEventOccurrence(
   formData: FormData,
 ) {
   const user = await requireUser();
+  const normalizedOriginalStart = normalizeExcludedStart(originalStartIso);
+  if (!normalizedOriginalStart) return;
   const master = await prisma.event.findFirst({
     where: { id: masterId, userId: user.id, recurrenceRule: { not: null } },
   });
@@ -867,7 +924,7 @@ export async function updateEventOccurrence(
 
   const start = new Date(startRaw);
   const end = new Date(endRaw);
-  const meetingUrl = String(formData.get("meetingUrl") ?? "").trim() || null;
+  const meetingUrl = meetingUrlFromFormData(formData);
   const color = String(formData.get("color") ?? "").trim() || null;
 
   await prisma.$transaction([
@@ -882,13 +939,13 @@ export async function updateEventOccurrence(
         locked: lockedFromFormData(formData),
         eventType: eventTypeFromFormData(formData),
         recurrenceExceptionOfId: masterId,
-        recurrenceOriginalStart: new Date(originalStartIso),
+        recurrenceOriginalStart: new Date(normalizedOriginalStart),
         localDirty: true,
       },
     }),
     prisma.event.update({
       where: { id: masterId },
-      data: { excludeDates: withExcludedStart(master.excludeDates, originalStartIso) },
+      data: { excludeDates: withExcludedStart(master.excludeDates, normalizedOriginalStart) },
     }),
   ]);
 
@@ -898,6 +955,8 @@ export async function updateEventOccurrence(
 /** Delete just one occurrence of a recurring series — a pure EXDATE, no override row. */
 export async function deleteEventOccurrence(masterId: string, originalStartIso: string) {
   const user = await requireUser();
+  const normalizedOriginalStart = normalizeExcludedStart(originalStartIso);
+  if (!normalizedOriginalStart) return;
   const master = await prisma.event.findFirst({
     where: { id: masterId, userId: user.id, recurrenceRule: { not: null } },
   });
@@ -905,7 +964,7 @@ export async function deleteEventOccurrence(masterId: string, originalStartIso: 
 
   await prisma.event.update({
     where: { id: masterId },
-    data: { excludeDates: withExcludedStart(master.excludeDates, originalStartIso) },
+    data: { excludeDates: withExcludedStart(master.excludeDates, normalizedOriginalStart) },
   });
   revalidatePath("/");
 }
@@ -1610,6 +1669,7 @@ export async function searchEventsAction(query: string) {
 }
 
 const MAX_ICS_IMPORT_EVENTS = 1000;
+const MAX_ICS_IMPORT_BYTES = 5 * 1024 * 1024;
 
 /**
  * ICS import (#33) — creates a plain one-off (or, if the file's VEVENT
@@ -1624,6 +1684,9 @@ export async function importIcsAction(
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) {
     return { ok: false, error: "No file selected." };
+  }
+  if (file.size > MAX_ICS_IMPORT_BYTES) {
+    return { ok: false, error: "File is too large (5MB max)." };
   }
 
   let parsed;
@@ -1647,6 +1710,7 @@ export async function importIcsAction(
       allDay: e.allDay,
       recurrenceRule: e.recurrenceRule,
       notes: e.notes,
+      excludeDates: e.excludeDates,
     })),
   });
 

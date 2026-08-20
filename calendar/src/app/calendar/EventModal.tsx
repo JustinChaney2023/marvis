@@ -137,8 +137,7 @@ export default function EventModal({
     }
   }, [mode, event]);
 
-  const handleAddGuest = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  const handleAddGuest = async () => {
     if (!event || !guestEmail.trim() || isAddingGuest) return;
     setIsAddingGuest(true);
     setGuestError(null);
@@ -214,6 +213,11 @@ export default function EventModal({
       } else if (event) {
         if (isEditingRecurring && editScope === "occurrence") {
           await updateEventOccurrence(event.id, event.start.toISOString(), formData);
+        } else if (isEditingRecurring) {
+          // "All events" from a specific occurrence — see updateEvent's
+          // own comment for why the pre-edit occurrence start has to be
+          // passed through instead of just the edited form values.
+          await updateEvent(event.id, formData, event.start.toISOString());
         } else {
           await updateEvent(event.id, formData);
         }
@@ -348,18 +352,28 @@ export default function EventModal({
                   ))}
                 </ul>
               )}
-              <form onSubmit={handleAddGuest} className="flex gap-2">
+              {/* A div, not a nested <form> — this lives inside the main
+                  event <form> below, and nested forms are invalid HTML
+                  (unpredictable submit/Enter-key behavior, hydration
+                  warnings). */}
+              <div className="flex gap-2">
                 <input
                   type="email"
                   value={guestEmail}
                   onChange={(e) => setGuestEmail(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleAddGuest();
+                    }
+                  }}
                   placeholder="guest@example.com"
                   className={`${inputClass} flex-1`}
                 />
-                <Button type="submit" variant="secondary" pending={isAddingGuest}>
+                <Button type="button" variant="secondary" pending={isAddingGuest} onClick={handleAddGuest}>
                   Invite
                 </Button>
-              </form>
+              </div>
               {guestError && <span className="text-xs text-red-600 dark:text-red-400">{guestError}</span>}
             </div>
           )}

@@ -17,7 +17,7 @@ export default async function RsvpPage(props: PageProps<"/rsvp/[token]">) {
         <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
           {invite.eventStart.toLocaleString()} – {invite.eventEnd.toLocaleTimeString()}
         </p>
-        {invite.meetingUrl && (
+        {invite.meetingUrl && /^https?:\/\//i.test(invite.meetingUrl) && (
           <a
             href={invite.meetingUrl}
             className="mt-1 inline-block text-sm text-indigo-600 dark:text-indigo-400"

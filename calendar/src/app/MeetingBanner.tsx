@@ -66,7 +66,12 @@ export default function MeetingBanner() {
       </span>
       <div className="flex shrink-0 items-center gap-2">
         <a
-          href={next.meetingUrl ?? "#"}
+          // Defense in depth — actions.ts's meetingUrlFromFormData already
+          // rejects non-http(s) schemes at write time, but this is a
+          // render-time backstop against any row written before that
+          // guard existed. A "javascript:" href would otherwise execute
+          // on click.
+          href={next.meetingUrl && /^https?:\/\//i.test(next.meetingUrl) ? next.meetingUrl : "#"}
           target="_blank"
           rel="noreferrer"
           className="rounded-full bg-indigo-600 px-3 py-1 text-xs font-medium text-white hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400"

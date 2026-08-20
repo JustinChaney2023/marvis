@@ -14,6 +14,16 @@ function isSafeUrl(href: string): boolean {
   return /^(https?:|mailto:|\/|#)/i.test(href.trim());
 }
 
+// `title`/`alt` land inside a double-quoted HTML attribute below — a
+// markdown title/alt string containing a literal `"` (e.g. an escaped
+// `\"` in the source) would otherwise close the attribute early and let
+// the rest of its own text be parsed as new attributes (an
+// `onmouseover=` etc.), the exact class of bug this file's own href
+// scheme check exists to prevent for links/images themselves.
+function escapeAttr(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
 const renderer = new marked.Renderer();
 
 renderer.html = () => "";
@@ -21,14 +31,14 @@ renderer.html = () => "";
 renderer.link = ({ href, title, tokens }) => {
   const text = renderer.parser.parseInline(tokens);
   if (!isSafeUrl(href)) return text;
-  const titleAttr = title ? ` title="${title}"` : "";
-  return `<a href="${href}" target="_blank" rel="noopener noreferrer"${titleAttr}>${text}</a>`;
+  const titleAttr = title ? ` title="${escapeAttr(title)}"` : "";
+  return `<a href="${escapeAttr(href)}" target="_blank" rel="noopener noreferrer"${titleAttr}>${text}</a>`;
 };
 
 renderer.image = ({ href, title, text }) => {
   if (!isSafeUrl(href)) return text;
-  const titleAttr = title ? ` title="${title}"` : "";
-  return `<img src="${href}" alt="${text}"${titleAttr} class="max-w-full rounded-lg" />`;
+  const titleAttr = title ? ` title="${escapeAttr(title)}"` : "";
+  return `<img src="${escapeAttr(href)}" alt="${escapeAttr(text)}"${titleAttr} class="max-w-full rounded-lg" />`;
 };
 
 marked.setOptions({ renderer, breaks: true });

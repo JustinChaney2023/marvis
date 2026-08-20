@@ -364,7 +364,14 @@ export default function CalendarClient({
     if (selectedEventIds.size === 0 || isBulkDeleting) return;
     setIsBulkDeleting(true);
     try {
-      await Promise.all([...selectedEventIds].map((id) => deleteEvent(id)));
+      // Same recurring-event exclusion as handleBulkNudge — a recurring
+      // occurrence's `id` (masterId::ISO) never matches a real Event row,
+      // so passing it to deleteEvent silently no-ops. Bulk delete has no
+      // per-occurrence-vs-series prompt the way the single-event modal
+      // does, so recurring events in the selection are just skipped
+      // rather than guessing which scope the user meant.
+      const targets = events.filter((e) => selectedEventIds.has(e.id) && !e.isRecurring);
+      await Promise.all(targets.map((e) => deleteEvent(e.masterId)));
       clearSelection();
     } catch (err) {
       console.error(err);
