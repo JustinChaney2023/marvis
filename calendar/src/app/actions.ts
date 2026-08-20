@@ -30,6 +30,7 @@ import { runAutomationsForStatusChange } from "@/lib/automations";
 import { askScheduleChat, type ChatMessage, type ChatResult } from "@/lib/scheduleChat";
 import { scheduleHabitsForWeek, rescheduleConflictedHabits } from "@/lib/habits";
 import { formatYMD } from "@/lib/calendar-dates";
+import { syncCalendarSubscription } from "@/lib/calendarSubscriptions";
 
 const REMINDER_WINDOW_MIN = 15;
 
@@ -992,6 +993,66 @@ export async function syncAppleCalendarAction() {
   revalidatePath("/");
   revalidatePath("/settings");
   return result;
+}
+
+const MAX_SUBSCRIPTION_NAME_LEN = 100;
+
+export async function addCalendarSubscriptionAction(formData: FormData) {
+  const user = await requireUser();
+  const name = String(formData.get("name") ?? "").trim().slice(0, MAX_SUBSCRIPTION_NAME_LEN);
+  const url = String(formData.get("url") ?? "").trim();
+  if (!name || !/^https?:\/\//i.test(url)) return;
+
+  const subscription = await prisma.calendarSubscription.create({
+    data: { userId: user.id, name, url },
+  });
+  await syncCalendarSubscription(subscription.id, user.id);
+  revalidatePath("/");
+  revalidatePath("/settings");
+}
+
+export async function syncCalendarSubscriptionAction(subscriptionId: string) {
+  const user = await requireUser();
+  const result = await syncCalendarSubscription(subscriptionId, user.id);
+  revalidatePath("/");
+  revalidatePath("/settings");
+  return result;
+}
+
+export async function deleteCalendarSubscriptionAction(subscriptionId: string) {
+  const user = await requireUser();
+  await prisma.calendarSubscription.deleteMany({
+    where: { id: subscriptionId, userId: user.id },
+  });
+  revalidatePath("/");
+  revalidatePath("/settings");
+}
+
+const SUBSCRIPTION_AUTO_SYNC_INTERVAL_MS = 6 * 60 * 60 * 1000;
+
+/**
+ * Same "poll from the client, self-throttle server-side" shape as
+ * syncGoogleCalendarIfDueAction — an ICS subscription changes far less
+ * often than a live Google Calendar, so a much longer interval.
+ */
+export async function syncCalendarSubscriptionsIfDueAction(): Promise<{ synced: boolean }> {
+  const user = await requireUser();
+  const due = await prisma.calendarSubscription.findMany({
+    where: {
+      userId: user.id,
+      OR: [
+        { lastFetchedAt: null },
+        { lastFetchedAt: { lt: new Date(Date.now() - SUBSCRIPTION_AUTO_SYNC_INTERVAL_MS) } },
+      ],
+    },
+  });
+  if (due.length === 0) return { synced: false };
+
+  for (const sub of due) {
+    await syncCalendarSubscription(sub.id, user.id);
+  }
+  revalidatePath("/");
+  return { synced: true };
 }
 
 export async function updateSchedulingSettingsAction(formData: FormData) {

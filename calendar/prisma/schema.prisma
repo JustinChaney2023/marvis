@@ -45,6 +45,7 @@ model User {
   timeSlots               TimeSlot[]
   sharesGiven             CalendarShare[] @relation("SharesGiven")
   sharesReceived          CalendarShare[] @relation("SharesReceived")
+  calendarSubscriptions   CalendarSubscription[]
 }
 
 // DB-backed sessions (not signed/stateless JWTs) — lets a logout or a
@@ -109,6 +110,13 @@ model Event {
   // CalDAV UID for Apple-synced events (src/lib/apple-sync.ts) — read-only
   // overlay, no push-back, so unlike Google there's no dirty-tracking here.
   appleEventUid   String?     @unique
+  // ICS-subscription overlay (#32, src/lib/calendarSubscriptions.ts) — same
+  // read-only, locked, no-push-back treatment as Apple, but scoped to one
+  // subscription's uid rather than globally unique (two different
+  // subscription URLs could reuse the same UID).
+  subscriptionId       String?
+  subscription         CalendarSubscription? @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  subscriptionEventUid String?
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 
@@ -117,12 +125,33 @@ model Event {
   // foreign-key index on userId alone doesn't help an ORDER/range scan
   // on start. Free to add now, before rows accumulate over months.
   @@index([userId, start])
+  @@unique([subscriptionId, subscriptionEventUid])
+}
+
+/**
+ * A subscribed external calendar (#32) — an ICS URL (holidays, a
+ * friend's public calendar) periodically fetched and overlaid read-only,
+ * same "materialize into Event rows, locked, no push-back" treatment as
+ * Apple sync already uses. Manually-triggered + auto-synced-if-stale the
+ * same way Google's connection is (this app has no background cron).
+ */
+model CalendarSubscription {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name          String
+  url           String
+  lastFetchedAt DateTime?
+  lastError     String?
+  createdAt     DateTime  @default(now())
+  events        Event[]
 }
 
 enum EventSource {
   LOCAL
   GOOGLE
   APPLE
+  SUBSCRIBED
 }
 
 // One connected Google account per user (was a single global row back when

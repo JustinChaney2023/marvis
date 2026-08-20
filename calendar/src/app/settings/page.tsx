@@ -15,6 +15,7 @@ import ShareAvailabilityButton from "./ShareAvailabilityButton";
 import BookingLinksManager from "./BookingLinksManager";
 import CalendarSharingManager from "./CalendarSharingManager";
 import IcsImportForm from "./IcsImportForm";
+import CalendarSubscriptionsManager from "./CalendarSubscriptionsManager";
 import AutomationRulesManager from "./AutomationRulesManager";
 import HabitsManager from "./HabitsManager";
 import TimeSlotsManager from "./TimeSlotsManager";
@@ -46,6 +47,10 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
 
   const account = await prisma.googleAccount.findUnique({ where: { userId: user.id } });
   const appleAccount = await prisma.appleAccount.findUnique({ where: { userId: user.id } });
+  const calendarSubscriptions = await prisma.calendarSubscription.findMany({
+    where: { userId: user.id },
+    orderBy: { createdAt: "asc" },
+  });
   const settings = await getAppSettings(user.id);
   const bookingLinks = await prisma.bookingLink.findMany({
     where: { userId: user.id },
@@ -375,6 +380,18 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
             Export calendar (.ics)
           </a>
           <IcsImportForm />
+        </div>
+      </section>
+
+      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
+        <h2 className="text-lg font-semibold">Subscribed calendars</h2>
+        <p className="mt-1 text-xs text-zinc-400">
+          Subscribe to an external calendar by its ICS URL — holidays, a
+          friend&apos;s public calendar. Read-only, auto-synced every 6
+          hours.
+        </p>
+        <div className="mt-3">
+          <CalendarSubscriptionsManager subscriptions={calendarSubscriptions} />
         </div>
       </section>
 

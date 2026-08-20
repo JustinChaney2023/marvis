@@ -55,6 +55,7 @@ export function buildIcsCalendar(events: IcsExportEvent[]): string {
 }
 
 export type ParsedIcsEvent = {
+  uid: string;
   title: string;
   start: Date;
   end: Date;
@@ -74,9 +75,10 @@ export function parseIcsEvents(icsText: string): ParsedIcsEvent[] {
   const events: ParsedIcsEvent[] = [];
   for (const vevent of comp.getAllSubcomponents("vevent")) {
     const event = new ICAL.Event(vevent);
-    if (!event.startDate || !event.endDate) continue;
+    if (!event.uid || !event.startDate || !event.endDate) continue;
     const rruleProp = vevent.getFirstPropertyValue("rrule") as { toString(): string } | null;
     events.push({
+      uid: event.uid,
       title: event.summary || "(untitled)",
       start: event.startDate.toJSDate(),
       end: event.endDate.toJSDate(),

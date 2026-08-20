@@ -4,7 +4,7 @@ import "./globals.css";
 import QuickCapture from "./QuickCapture";
 import ShortcutsHelp from "./ShortcutsHelp";
 import NotificationWatcher from "./NotificationWatcher";
-import GoogleSyncWatcher from "./GoogleSyncWatcher";
+import SyncWatcher from "./SyncWatcher";
 import MeetingBanner from "./MeetingBanner";
 import TopBar from "./TopBar";
 
@@ -54,7 +54,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <QuickCapture />
         <ShortcutsHelp />
         <NotificationWatcher />
-        <GoogleSyncWatcher />
+        <SyncWatcher />
       </body>
     </html>
   );
