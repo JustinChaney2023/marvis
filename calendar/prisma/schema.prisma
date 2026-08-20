@@ -86,6 +86,15 @@ model Event {
   // Excluded from auto-rescheduling (src/lib/scheduler.ts's stale-task
   // sweep never moves a locked event, even if its slot looks stale).
   locked          Boolean     @default(false)
+  // Out-of-office/focus-time as distinct event types (#36) — mostly a
+  // display distinction (a badge on the block, its own color) rather
+  // than new scheduling behavior: both types already block scheduling
+  // like any other event via fetchBusyIntervals, and Google's own
+  // "auto-decline conflicting invites" doesn't map onto this app's
+  // guest model (a guest here is an external email invited to *your*
+  // event, never you being invited to someone else's — there's nothing
+  // to auto-decline on your behalf).
+  eventType       EventType   @default(DEFAULT)
   // Not unique — a chunked task (Task.chunkMin set) places 2+ Event rows
   // sharing one taskId, same "occurrences share a parent id" shape as
   // Habit below. An unchunked task still has at most one.
@@ -193,6 +202,12 @@ model CalendarSubscription {
   lastError     String?
   createdAt     DateTime  @default(now())
   events        Event[]
+}
+
+enum EventType {
+  DEFAULT
+  OUT_OF_OFFICE
+  FOCUS_TIME
 }
 
 enum EventSource {

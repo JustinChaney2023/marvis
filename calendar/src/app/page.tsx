@@ -110,6 +110,7 @@ export default async function Page(props: PageProps<"/">) {
   );
   const priorityByMasterId = new Map(rows.map((r) => [r.id, r.task?.priority ?? null]));
   const meetingUrlByMasterId = new Map(rows.map((r) => [r.id, r.meetingUrl]));
+  const eventTypeByMasterId = new Map(rows.map((r) => [r.id, r.eventType]));
   const events: CalendarEvent[] = expandEvents(rows, from, to)
     .map((o) => ({
       id: o.id,
@@ -124,6 +125,7 @@ export default async function Page(props: PageProps<"/">) {
       projectColor: colorByMasterId.get(o.masterId) ?? null,
       taskPriority: priorityByMasterId.get(o.masterId) ?? null,
       meetingUrl: meetingUrlByMasterId.get(o.masterId) ?? null,
+      eventType: eventTypeByMasterId.get(o.masterId) ?? "DEFAULT",
     }))
     .sort((a, b) => a.start.getTime() - b.start.getTime());
 

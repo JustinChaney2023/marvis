@@ -751,6 +751,15 @@ function lockedFromFormData(formData: FormData): boolean {
   return formData.get("locked") === "on";
 }
 
+const EVENT_TYPES = ["DEFAULT", "OUT_OF_OFFICE", "FOCUS_TIME"] as const;
+
+function eventTypeFromFormData(formData: FormData): (typeof EVENT_TYPES)[number] {
+  const raw = String(formData.get("eventType") ?? "DEFAULT");
+  return (EVENT_TYPES as readonly string[]).includes(raw)
+    ? (raw as (typeof EVENT_TYPES)[number])
+    : "DEFAULT";
+}
+
 // A brand-new/moved recurring event could conflict with a scheduled task
 // on any future occurrence, not just the one instant we'd check here —
 // that's a sweep problem the periodic rescheduleStaleTasks (run by
@@ -780,6 +789,7 @@ export async function createEvent(formData: FormData) {
       meetingUrl,
       color,
       locked: lockedFromFormData(formData),
+      eventType: eventTypeFromFormData(formData),
       localDirty: true,
     },
   });
@@ -813,6 +823,7 @@ export async function updateEvent(eventId: string, formData: FormData) {
       meetingUrl,
       color,
       locked: lockedFromFormData(formData),
+      eventType: eventTypeFromFormData(formData),
       localDirty: true,
     },
   });
@@ -869,6 +880,7 @@ export async function updateEventOccurrence(
         meetingUrl,
         color,
         locked: lockedFromFormData(formData),
+        eventType: eventTypeFromFormData(formData),
         recurrenceExceptionOfId: masterId,
         recurrenceOriginalStart: new Date(originalStartIso),
         localDirty: true,

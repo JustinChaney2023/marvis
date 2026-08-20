@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { layoutOverlappingEvents } from "./CalendarClient";
+import { layoutAllDayEvents, layoutOverlappingEvents } from "./CalendarClient";
 
 function ev(id: string, startHour: number, endHour: number) {
   return {
@@ -15,7 +15,24 @@ function ev(id: string, startHour: number, endHour: number) {
     projectColor: null,
     taskPriority: null,
     meetingUrl: null,
+    eventType: "DEFAULT" as const,
   };
+}
+
+// Multi-day all-day event, given as [startDay, endDay) (end exclusive,
+// same convention as the DB: Event.end for a 3-day trip is midnight of
+// the day after it's back).
+function allDayEv(id: string, startDay: number, endDay: number) {
+  return {
+    ...ev(id, 0, 0),
+    start: new Date(2026, 7, startDay),
+    end: new Date(2026, 7, endDay),
+    allDay: true,
+  };
+}
+
+function week(startDay: number) {
+  return Array.from({ length: 7 }, (_, i) => new Date(2026, 7, startDay + i));
 }
 
 // Two overlapping events share a 2-column cluster; a separate later event
@@ -47,6 +64,42 @@ function ev(id: string, startHour: number, endHour: number) {
   const elapsedMs = performance.now() - started;
   assert.equal(placed.length, 2000);
   assert.ok(elapsedMs < 500, `layoutOverlappingEvents took ${elapsedMs}ms for 2000 disjoint events — expected well under 500ms`);
+}
+
+// layoutAllDayEvents: a 3-day trip (Aug 17-19, i.e. end-exclusive Aug 20)
+// spans one continuous bar across those three columns of a Mon(17)-start
+// week, not three separate one-day fragments.
+{
+  const days = week(17);
+  const placements = layoutAllDayEvents([allDayEv("trip", 17, 20)], days);
+  assert.equal(placements.length, 1);
+  assert.equal(placements[0].col, 0);
+  assert.equal(placements[0].span, 3);
+  assert.equal(placements[0].track, 0);
+}
+
+// Clamped at both ends when the trip runs off the edges of the visible
+// week — it should still show one bar spanning the whole visible width,
+// not extend past it or disappear.
+{
+  const days = week(17); // Aug 17-23
+  const placements = layoutAllDayEvents([allDayEv("trip", 15, 30)], days);
+  assert.equal(placements.length, 1);
+  assert.equal(placements[0].col, 0);
+  assert.equal(placements[0].span, 7);
+}
+
+// Two overlapping multi-day events stack into separate tracks instead of
+// colliding; a third, non-overlapping one reuses the first freed track.
+{
+  const days = week(17);
+  const placements = layoutAllDayEvents(
+    [allDayEv("a", 17, 20), allDayEv("b", 18, 21), allDayEv("c", 21, 23)],
+    days,
+  );
+  const byId = new Map(placements.map((p) => [p.event.id, p]));
+  assert.notEqual(byId.get("a")!.track, byId.get("b")!.track);
+  assert.equal(byId.get("c")!.track, byId.get("a")!.track); // "a" ended before "c" starts
 }
 
 console.log("CalendarClient.test.ts: all checks passed");

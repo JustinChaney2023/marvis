@@ -37,7 +37,14 @@ export type EventModalEvent = {
   // Color field re-pins whatever's showing as this event's own explicit
   // color, same as any other field in this form.
   color: string | null;
+  eventType: "DEFAULT" | "OUT_OF_OFFICE" | "FOCUS_TIME";
 };
+
+const EVENT_TYPE_OPTIONS = [
+  { value: "DEFAULT", label: "Default" },
+  { value: "OUT_OF_OFFICE", label: "Out of office" },
+  { value: "FOCUS_TIME", label: "Focus time" },
+] as const;
 
 const EVENT_COLOR_OPTIONS = Object.keys(PROJECT_EVENT_COLORS);
 
@@ -49,6 +56,7 @@ type Props = {
   // edit mode, which always derives its initial values from `event`.
   initialTitle?: string;
   initialLocked?: boolean;
+  initialEventType?: EventModalEvent["eventType"];
   event: EventModalEvent | null;
   onClose: () => void;
 };
@@ -73,6 +81,7 @@ export default function EventModal({
   initialEnd,
   initialTitle: prefillTitle,
   initialLocked,
+  initialEventType,
   event,
   onClose,
 }: Props) {
@@ -366,6 +375,23 @@ export default function EventModal({
               {EVENT_COLOR_OPTIONS.map((c) => (
                 <option key={c} value={c}>
                   {c}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="text-zinc-500">Event type</span>
+            <select
+              name="eventType"
+              defaultValue={
+                mode === "edit" ? (event?.eventType ?? "DEFAULT") : (initialEventType ?? "DEFAULT")
+              }
+              className={inputClass}
+            >
+              {EVENT_TYPE_OPTIONS.map((t) => (
+                <option key={t.value} value={t.value}>
+                  {t.label}
                 </option>
               ))}
             </select>

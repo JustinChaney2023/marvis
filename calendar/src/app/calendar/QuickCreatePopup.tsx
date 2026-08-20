@@ -41,6 +41,7 @@ export default function QuickCreatePopup({ start, end, onClose, onCreatedEvent }
           locked: true,
           meetingUrl: null,
           color: null,
+          eventType: "DEFAULT",
         });
       } else {
         await createQuickTaskAction(trimmed, start.toISOString(), end.toISOString());

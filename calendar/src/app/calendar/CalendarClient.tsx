@@ -51,6 +51,9 @@ export type CalendarEvent = {
   // EventBlock, showing every priority level would clutter a block this
   // small.
   taskPriority: number | null;
+  // Out-of-office/focus-time as distinct event types (#36) — mostly a
+  // display distinction (EventBlock renders a small badge for either).
+  eventType: "DEFAULT" | "OUT_OF_OFFICE" | "FOCUS_TIME";
 };
 
 // PROJECT_EVENT_COLORS/DEFAULT_EVENT_COLOR now live in @/lib/eventColors
@@ -247,7 +250,14 @@ function minutesToDate(day: Date, minutes: number): Date {
 }
 
 type ModalState =
-  | { mode: "create"; start: Date; end: Date; initialTitle?: string; initialLocked?: boolean }
+  | {
+      mode: "create";
+      start: Date;
+      end: Date;
+      initialTitle?: string;
+      initialLocked?: boolean;
+      initialEventType?: CalendarEvent["eventType"];
+    }
   | { mode: "edit"; event: EventModalEvent }
   // Dragging/clicking empty space on the grid opens this lightweight
   // "what is this" popup first, instead of the full event editor — see
@@ -284,6 +294,7 @@ export default function CalendarClient({
         locked: match.locked,
         meetingUrl: match.meetingUrl,
         color: match.projectColor,
+        eventType: match.eventType,
       },
     };
   });
@@ -303,7 +314,7 @@ export default function CalendarClient({
   const openCreate = (
     s: Date,
     e: Date,
-    prefill?: { title?: string; locked?: boolean },
+    prefill?: { title?: string; locked?: boolean; eventType?: CalendarEvent["eventType"] },
   ) =>
     setModalState({
       mode: "create",
@@ -311,6 +322,7 @@ export default function CalendarClient({
       end: e,
       initialTitle: prefill?.title,
       initialLocked: prefill?.locked,
+      initialEventType: prefill?.eventType,
     });
   const openQuickCreate = (s: Date, e: Date) =>
     setModalState({ mode: "quick", start: s, end: e });
@@ -372,6 +384,7 @@ export default function CalendarClient({
         locked: event.locked,
         meetingUrl: event.meetingUrl,
         color: event.projectColor,
+        eventType: event.eventType,
       },
     });
   };
@@ -452,11 +465,25 @@ export default function CalendarClient({
           title="A locked block the auto-scheduler won't place tasks into"
           onClick={() => {
             const { start, end } = defaultNewEventTimes();
-            openCreate(start, end, { title: "Focus time", locked: true });
+            openCreate(start, end, { title: "Focus time", locked: true, eventType: "FOCUS_TIME" });
           }}
           className="rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 shadow-sm transition-colors hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-200 dark:hover:bg-zinc-700"
         >
           + Focus block
+        </button>
+        <button
+          type="button"
+          title="Blocks the day off and marks it distinctly on the calendar"
+          onClick={() => {
+            const start = new Date(today);
+            start.setHours(0, 0, 0, 0);
+            const end = new Date(start);
+            end.setDate(end.getDate() + 1);
+            openCreate(start, end, { title: "Out of office", locked: true, eventType: "OUT_OF_OFFICE" });
+          }}
+          className="rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 shadow-sm transition-colors hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-200 dark:hover:bg-zinc-700"
+        >
+          + Out of office
         </button>
         <button
           type="button"
@@ -563,6 +590,7 @@ export default function CalendarClient({
           initialEnd={modalState.end}
           initialTitle={modalState.initialTitle}
           initialLocked={modalState.initialLocked}
+          initialEventType={modalState.initialEventType}
           event={null}
           onClose={closeModal}
         />
@@ -1267,6 +1295,11 @@ function EventBlock({
         }`}
       >
         {event.title}
+        {event.eventType !== "DEFAULT" && (
+          <span className="ml-1 rounded bg-black/10 px-1 py-px text-[9px] font-semibold uppercase opacity-70 dark:bg-white/10">
+            {event.eventType === "OUT_OF_OFFICE" ? "OOO" : "Focus"}
+          </span>
+        )}
       </div>
       {displayHeight >= 32 && (
         <div className="truncate text-[10px] opacity-80">
