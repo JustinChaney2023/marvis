@@ -387,6 +387,29 @@ export async function quickCaptureTask(text: string) {
   revalidatePath("/tasks");
 }
 
+const DEFAULT_QUICK_EVENT_DURATION_MIN = 30;
+
+/**
+ * Quick-add for calendar events (#38) — same "c" quick-capture parser as
+ * tasks, just materialized as an Event instead. A time with no explicit
+ * duration ("for 30 min"/"for 1h") gets a 30-min default block; no
+ * date/time at all falls back to starting now.
+ */
+export async function quickCaptureEvent(text: string) {
+  const user = await requireUser();
+  const parsed = parseQuickCapture(text);
+  if (!parsed.title) return;
+
+  const start = parsed.dueAt ?? new Date();
+  const durationMin = parsed.durationMin ?? DEFAULT_QUICK_EVENT_DURATION_MIN;
+  const end = new Date(start.getTime() + durationMin * 60_000);
+
+  await prisma.event.create({
+    data: { userId: user.id, title: parsed.title, start, end },
+  });
+  revalidatePath("/");
+}
+
 export async function createProject(formData: FormData) {
   const user = await requireUser();
   const name = String(formData.get("name") ?? "").trim();

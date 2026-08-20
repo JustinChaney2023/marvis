@@ -12,6 +12,7 @@ export type ParsedQuickCapture = {
   title: string;
   dueAt: Date | null;
   priority: number;
+  durationMin: number | null;
 };
 
 function startOfDay(d: Date): Date {
@@ -45,6 +46,18 @@ export function parseQuickCapture(
   if (priorityMatch) {
     priority = Number(priorityMatch[1]);
     text = removeMatch(text, priorityMatch);
+  }
+
+  // "for 30 min" / "for 1h" — an explicit duration, used by the
+  // quick-add-event mode (#38). Unambiguous "for ..." phrasing so it
+  // doesn't collide with the date/time matches below.
+  let durationMin: number | null = null;
+  const durationMatch = text.match(/\bfor (\d+)\s*(min|m|hour|hr|h)\b/i);
+  if (durationMatch) {
+    const amount = Number(durationMatch[1]);
+    const unit = durationMatch[2].toLowerCase();
+    durationMin = unit.startsWith("h") ? amount * 60 : amount;
+    text = removeMatch(text, durationMatch);
   }
 
   let dateBase: Date | null = null;
@@ -91,7 +104,7 @@ export function parseQuickCapture(
   }
 
   const title = text.replace(/\s{2,}/g, " ").trim();
-  return { title, dueAt, priority };
+  return { title, dueAt, priority, durationMin };
 }
 
 function removeMatch(text: string, match: RegExpMatchArray): string {

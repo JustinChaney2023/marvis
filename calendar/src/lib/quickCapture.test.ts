@@ -67,4 +67,22 @@ const now = new Date(2026, 7, 19, 10, 0);
   assert.equal(r.dueAt.getHours(), 12);
 }
 
+// explicit duration for quick-add-event (#38)
+{
+  const r = parseQuickCapture("Lunch with Sam tomorrow 1pm for 1h", now);
+  assert.equal(r.title, "Lunch with Sam");
+  assert.equal(r.durationMin, 60);
+  assert.ok(r.dueAt);
+  assert.equal(r.dueAt.getHours(), 13);
+}
+{
+  const r = parseQuickCapture("Standup for 30 min", now);
+  assert.equal(r.title, "Standup");
+  assert.equal(r.durationMin, 30);
+}
+{
+  const r = parseQuickCapture("Buy milk", now);
+  assert.equal(r.durationMin, null);
+}
+
 console.log("quickCapture.test.ts: all checks passed");
