@@ -924,7 +924,7 @@ export async function syncGoogleCalendarAction() {
 // Google sync previously only ran when someone remembered to click
 // "Sync" in Settings — a real gap (the whole point of connecting Google
 // is that changes there show up here without a manual step). Polled by
-// GoogleSyncWatcher.tsx from every page instead, gated by this interval
+// SyncWatcher.tsx from every page instead, gated by this interval
 // so it isn't hammering the Google API on every poll tick.
 const GOOGLE_AUTO_SYNC_INTERVAL_MS = 10 * 60 * 1000;
 
