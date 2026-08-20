@@ -475,6 +475,7 @@ export default function CalendarClient({
           <MonthView
             days={range.days}
             events={events}
+            sharedEvents={sharedEvents}
             today={today}
             viewStart={start}
             onEmptyClick={openQuickCreate}
@@ -1288,6 +1289,7 @@ function EventBlock({
 function MonthView({
   days,
   events,
+  sharedEvents = [],
   today,
   viewStart,
   onEmptyClick,
@@ -1295,6 +1297,7 @@ function MonthView({
 }: {
   days: Date[];
   events: CalendarEvent[];
+  sharedEvents?: SharedEvent[];
   today: Date;
   viewStart: Date;
   onEmptyClick: (start: Date, end: Date) => void;
@@ -1314,6 +1317,19 @@ function MonthView({
     return map;
   }, [events, days]);
 
+  // Shared-calendar overlay (#44) — month view previously showed only
+  // your own events, silently dropping any shared-calendar overlap. Just
+  // a count badge here, not the full diagonal-stripe blocks the
+  // week/day grid renders — a month cell has no room for that detail.
+  const sharedCountByDay = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const day of days) {
+      const key = formatYMD(day);
+      map.set(key, sharedEvents.filter((ev) => overlapsDay(ev, day)).length);
+    }
+    return map;
+  }, [sharedEvents, days]);
+
   const currentMonth = viewStart.getMonth();
 
   return (
@@ -1331,6 +1347,7 @@ function MonthView({
           key={day.toISOString()}
           day={day}
           events={eventsByDay.get(formatYMD(day)) ?? []}
+          sharedCount={sharedCountByDay.get(formatYMD(day)) ?? 0}
           today={today}
           inCurrentMonth={day.getMonth() === currentMonth}
           onEmptyClick={onEmptyClick}
@@ -1344,6 +1361,7 @@ function MonthView({
 function MonthCell({
   day,
   events,
+  sharedCount = 0,
   today,
   inCurrentMonth,
   onEmptyClick,
@@ -1351,6 +1369,7 @@ function MonthCell({
 }: {
   day: Date;
   events: CalendarEvent[];
+  sharedCount?: number;
   today: Date;
   inCurrentMonth: boolean;
   onEmptyClick: (start: Date, end: Date) => void;
@@ -1421,6 +1440,17 @@ function MonthCell({
           >
             +{more} more
           </Link>
+        )}
+        {sharedCount > 0 && (
+          <span
+            className="truncate rounded-md border-l-2 border-l-zinc-400 px-1.5 py-0.5 text-left text-[11px] text-zinc-500 dark:border-l-zinc-500 dark:text-zinc-400"
+            style={{
+              backgroundImage:
+                "repeating-linear-gradient(45deg, rgba(113,113,122,0.12), rgba(113,113,122,0.12) 4px, transparent 4px, transparent 8px)",
+            }}
+          >
+            {sharedCount} shared
+          </span>
         )}
       </div>
     </div>
