@@ -31,6 +31,8 @@ import { askScheduleChat, type ChatMessage, type ChatResult } from "@/lib/schedu
 import { scheduleHabitsForWeek, rescheduleConflictedHabits } from "@/lib/habits";
 import { formatYMD } from "@/lib/calendar-dates";
 import { syncCalendarSubscription } from "@/lib/calendarSubscriptions";
+import { randomBytes } from "node:crypto";
+import { isEmailConfigured, sendEmail } from "@/lib/email";
 
 const REMINDER_WINDOW_MIN = 15;
 
@@ -894,6 +896,93 @@ export async function deleteEventOccurrence(masterId: string, originalStartIso: 
     data: { excludeDates: withExcludedStart(master.excludeDates, originalStartIso) },
   });
   revalidatePath("/");
+}
+
+const MAX_GUESTS_PER_EVENT = 50;
+
+/**
+ * Event guests + RSVP (#34) — invite by email, no account required.
+ * Identity is the invite email + a random respond token (checked at
+ * /rsvp/[token], no auth) rather than a userId, since the whole point
+ * is inviting people who don't have an account here. Re-inviting the
+ * same email just re-sends without creating a second row (@@unique).
+ */
+export async function addEventGuestAction(eventId: string, email: string) {
+  const user = await requireUser();
+  const trimmedEmail = email.trim().toLowerCase();
+  if (!trimmedEmail || !trimmedEmail.includes("@")) return { ok: false as const, error: "Invalid email." };
+
+  const event = await prisma.event.findFirst({ where: { id: eventId, userId: user.id } });
+  if (!event) return { ok: false as const, error: "Event not found." };
+
+  const guestCount = await prisma.eventGuest.count({ where: { eventId } });
+  if (guestCount >= MAX_GUESTS_PER_EVENT) {
+    return { ok: false as const, error: `Limit of ${MAX_GUESTS_PER_EVENT} guests per event.` };
+  }
+
+  const guest = await prisma.eventGuest.upsert({
+    where: { eventId_email: { eventId, email: trimmedEmail } },
+    create: { eventId, email: trimmedEmail, respondToken: randomBytes(24).toString("hex") },
+    update: {},
+  });
+
+  if (isEmailConfigured()) {
+    const appUrl = process.env.APP_URL ?? "http://localhost:3000";
+    const rsvpUrl = `${appUrl}/rsvp/${guest.respondToken}`;
+    const when = `${event.start.toLocaleString()} - ${event.end.toLocaleTimeString()}`;
+    await sendEmail(
+      trimmedEmail,
+      `You're invited: ${event.title}`,
+      `You've been invited to "${event.title}" (${when}).\n\nRespond: ${rsvpUrl}`,
+    );
+  }
+
+  revalidatePath("/");
+  return { ok: true as const, emailSent: isEmailConfigured() };
+}
+
+export async function getEventGuestsAction(eventId: string) {
+  const user = await requireUser();
+  const event = await prisma.event.findFirst({ where: { id: eventId, userId: user.id } });
+  if (!event) return [];
+  return prisma.eventGuest.findMany({
+    where: { eventId },
+    orderBy: { createdAt: "asc" },
+    select: { id: true, email: true, status: true },
+  });
+}
+
+export async function removeEventGuestAction(guestId: string) {
+  const user = await requireUser();
+  await prisma.eventGuest.deleteMany({
+    where: { id: guestId, event: { userId: user.id } },
+  });
+  revalidatePath("/");
+}
+
+/** Public — no auth. The respond token itself is the guest's credential. */
+export async function respondToInviteAction(token: string, status: "ACCEPTED" | "DECLINED") {
+  const { count } = await prisma.eventGuest.updateMany({
+    where: { respondToken: token },
+    data: { status, respondedAt: new Date() },
+  });
+  return count > 0;
+}
+
+export async function getInviteAction(token: string) {
+  const guest = await prisma.eventGuest.findUnique({
+    where: { respondToken: token },
+    include: { event: { select: { title: true, start: true, end: true, meetingUrl: true } } },
+  });
+  if (!guest) return null;
+  return {
+    email: guest.email,
+    status: guest.status,
+    eventTitle: guest.event.title,
+    eventStart: guest.event.start,
+    eventEnd: guest.event.end,
+    meetingUrl: guest.event.meetingUrl,
+  };
 }
 
 export async function moveEvent(eventId: string, startIso: string, endIso: string) {

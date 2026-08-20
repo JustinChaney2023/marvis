@@ -9,7 +9,7 @@ import FeedbackButton from "./FeedbackButton";
 
 // Public/pre-auth routes render their own minimal chrome, so the app nav
 // and settings/feedback icons (which assume a logged-in user) stay hidden.
-const HIDDEN_PREFIXES = ["/login", "/signup", "/forgot-password", "/reset-password", "/book/"];
+const HIDDEN_PREFIXES = ["/login", "/signup", "/forgot-password", "/reset-password", "/book/", "/rsvp/"];
 
 // Keep in sync with package.json's "version" — duplicated rather than
 // imported so this client bundle doesn't pull in the whole package.json

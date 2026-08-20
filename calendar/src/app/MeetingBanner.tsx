@@ -10,7 +10,7 @@ const POLL_MS = 30_000;
 // Same public/pre-auth routes TopBar hides on — getUpcomingMeetingBannerAction
 // requires a signed-in user, so polling here on a page nobody's logged in on
 // would just redirect(/login) every 30s for nothing.
-const HIDDEN_PREFIXES = ["/login", "/signup", "/forgot-password", "/reset-password", "/book/"];
+const HIDDEN_PREFIXES = ["/login", "/signup", "/forgot-password", "/reset-password", "/book/", "/rsvp/"];
 
 type Meeting = { id: string; title: string; startIso: string; meetingUrl: string | null };
 

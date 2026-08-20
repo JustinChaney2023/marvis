@@ -7,6 +7,9 @@ import {
   updateEvent,
   updateEventOccurrence,
   deleteEventOccurrence,
+  addEventGuestAction,
+  removeEventGuestAction,
+  getEventGuestsAction,
 } from "../actions";
 import { toLocalInputValue } from "@/lib/calendar-dates";
 import { CloseIcon } from "../icons";
@@ -112,6 +115,41 @@ export default function EventModal({
   // series-wide behavior this app already had, so it's opt-in rather
   // than a surprise change to existing muscle memory.
   const [editScope, setEditScope] = useState<"series" | "occurrence">("series");
+
+  type Guest = { id: string; email: string; status: "PENDING" | "ACCEPTED" | "DECLINED" };
+  const [guests, setGuests] = useState<Guest[]>([]);
+  const [guestEmail, setGuestEmail] = useState("");
+  const [isAddingGuest, setIsAddingGuest] = useState(false);
+  const [guestError, setGuestError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (mode === "edit" && event) {
+      getEventGuestsAction(event.id).then(setGuests);
+    }
+  }, [mode, event]);
+
+  const handleAddGuest = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!event || !guestEmail.trim() || isAddingGuest) return;
+    setIsAddingGuest(true);
+    setGuestError(null);
+    try {
+      const result = await addEventGuestAction(event.id, guestEmail);
+      if (result.ok) {
+        setGuestEmail("");
+        setGuests(await getEventGuestsAction(event.id));
+      } else {
+        setGuestError(result.error);
+      }
+    } finally {
+      setIsAddingGuest(false);
+    }
+  };
+
+  const handleRemoveGuest = async (guestId: string) => {
+    await removeEventGuestAction(guestId);
+    setGuests((prev) => prev.filter((g) => g.id !== guestId));
+  };
 
   const titleInputRef = useRef<HTMLInputElement>(null);
   const startDateRef = useRef<HTMLInputElement>(null);
@@ -264,6 +302,58 @@ export default function EventModal({
               className={inputClass}
             />
           </label>
+
+          {mode === "edit" && (
+            <div className="flex flex-col gap-1.5 text-sm">
+              <span className="text-zinc-500">Guests</span>
+              {guests.length > 0 && (
+                <ul className="flex flex-col gap-1">
+                  {guests.map((g) => (
+                    <li
+                      key={g.id}
+                      className="flex items-center justify-between gap-2 rounded-lg border border-zinc-200 px-2.5 py-1.5 text-xs dark:border-zinc-600"
+                    >
+                      <span className="truncate">{g.email}</span>
+                      <span className="flex shrink-0 items-center gap-2">
+                        <span
+                          className={
+                            g.status === "ACCEPTED"
+                              ? "text-green-600 dark:text-green-400"
+                              : g.status === "DECLINED"
+                                ? "text-red-600 dark:text-red-400"
+                                : "text-zinc-400"
+                          }
+                        >
+                          {g.status.charAt(0) + g.status.slice(1).toLowerCase()}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveGuest(g.id)}
+                          className="text-zinc-400 hover:text-red-600 dark:hover:text-red-400"
+                          aria-label={`Remove ${g.email}`}
+                        >
+                          <CloseIcon className="h-3.5 w-3.5" />
+                        </button>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <form onSubmit={handleAddGuest} className="flex gap-2">
+                <input
+                  type="email"
+                  value={guestEmail}
+                  onChange={(e) => setGuestEmail(e.target.value)}
+                  placeholder="guest@example.com"
+                  className={`${inputClass} flex-1`}
+                />
+                <Button type="submit" variant="secondary" pending={isAddingGuest}>
+                  Invite
+                </Button>
+              </form>
+              {guestError && <span className="text-xs text-red-600 dark:text-red-400">{guestError}</span>}
+            </div>
+          )}
 
           <label className="flex flex-col gap-1 text-sm">
             <span className="text-zinc-500">Color</span>

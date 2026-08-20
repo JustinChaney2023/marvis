@@ -139,12 +139,41 @@ model Event {
   recurrenceExceptionOverrides Event[] @relation("RecurrenceExceptions")
   recurrenceOriginalStart      DateTime?
 
+  guests          EventGuest[]
+
   // Every calendar-range query (the main grid, fetchBusyIntervals,
   // "Upcoming") filters by userId + an overlap on start/end — a plain
   // foreign-key index on userId alone doesn't help an ORDER/range scan
   // on start. Free to add now, before rows accumulate over months.
   @@index([userId, start])
   @@unique([subscriptionId, subscriptionEventUid])
+}
+
+/**
+ * Event guests + RSVP (#34) — an invited email, not necessarily a real
+ * `User` of this app (v1's whole point is inviting people who don't
+ * have an account here), so identity is the invite email + a random
+ * respond token rather than a userId. One email invited twice to the
+ * same event just re-sends/updates the same row (@@unique below).
+ */
+model EventGuest {
+  id           String      @id @default(cuid())
+  eventId      String
+  event        Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  email        String
+  name         String?
+  status       RsvpStatus  @default(PENDING)
+  respondToken String      @unique
+  createdAt    DateTime    @default(now())
+  respondedAt  DateTime?
+
+  @@unique([eventId, email])
+}
+
+enum RsvpStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
 }
 
 /**

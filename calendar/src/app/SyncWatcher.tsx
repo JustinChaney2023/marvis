@@ -13,7 +13,7 @@ const POLL_MS = 2 * 60 * 1000;
 // Same pre-auth routes MeetingBanner hides on — syncGoogleCalendarIfDueAction
 // requires a signed-in user, so polling here on a page nobody's logged in
 // on would just redirect(/login) every tick for nothing.
-const HIDDEN_PREFIXES = ["/login", "/signup", "/forgot-password", "/reset-password", "/book/"];
+const HIDDEN_PREFIXES = ["/login", "/signup", "/forgot-password", "/reset-password", "/book/", "/rsvp/"];
 
 /**
  * External sync used to only run when someone remembered to click
