@@ -775,6 +775,11 @@ function reminderMinutesFromFormData(formData: FormData): number | null {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
 }
 
+function notesFromFormData(formData: FormData): string | null {
+  const raw = String(formData.get("notes") ?? "").trim();
+  return raw || null;
+}
+
 // meetingUrl is rendered as a plain <a href> on the public /rsvp/[token]
 // page (and MeetingBanner) — a "javascript:" value would execute on
 // click for a guest who never signed in. <input type="url"> only
@@ -822,6 +827,7 @@ export async function createEvent(formData: FormData) {
       recurrenceRule,
       meetingUrl,
       color,
+      notes: notesFromFormData(formData),
       locked: lockedFromFormData(formData),
       eventType: eventTypeFromFormData(formData),
       allDay: allDayFromFormData(formData),
@@ -891,6 +897,7 @@ export async function updateEvent(
       recurrenceRule,
       meetingUrl,
       color,
+      notes: notesFromFormData(formData),
       locked: lockedFromFormData(formData),
       eventType: eventTypeFromFormData(formData),
       allDay: allDayFromFormData(formData),
@@ -964,6 +971,7 @@ export async function updateEventOccurrence(
         end,
         meetingUrl,
         color,
+        notes: notesFromFormData(formData),
         locked: lockedFromFormData(formData),
         eventType: eventTypeFromFormData(formData),
         allDay: allDayFromFormData(formData),

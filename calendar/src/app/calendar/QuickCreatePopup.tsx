@@ -35,6 +35,7 @@ export default function QuickCreatePopup({ start, end, onClose, onCreatedEvent }
         onCreatedEvent({
           id,
           title: trimmed,
+          notes: null,
           start,
           end,
           recurrenceRule: null,

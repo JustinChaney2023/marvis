@@ -112,11 +112,13 @@ export default async function Page(props: PageProps<"/">) {
   const meetingUrlByMasterId = new Map(rows.map((r) => [r.id, r.meetingUrl]));
   const eventTypeByMasterId = new Map(rows.map((r) => [r.id, r.eventType]));
   const reminderMinutesByMasterId = new Map(rows.map((r) => [r.id, r.reminderMinutes]));
+  const notesByMasterId = new Map(rows.map((r) => [r.id, r.notes]));
   const events: CalendarEvent[] = expandEvents(rows, from, to)
     .map((o) => ({
       id: o.id,
       masterId: o.masterId,
       title: o.title,
+      notes: notesByMasterId.get(o.masterId) ?? null,
       start: o.start,
       end: o.end,
       isRecurring: o.isRecurring,

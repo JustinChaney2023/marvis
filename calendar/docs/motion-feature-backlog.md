@@ -1,5 +1,31 @@
 # Motion replica — feature backlog
 
+## Overnight Google Calendar parity session, iteration 2 (2026-08-21)
+Continued the iteration-1 audit into areas not yet covered (working
+location, RSVP nuance, event color count, notification channels,
+event description text, print/density). Most checked out already
+shipped or already scoped elsewhere. One real gap found and shipped:
+
+- [x] **Event description/notes field** (#48) — `Event.notes` already
+      existed in the schema and round-tripped through ICS import/export
+      (`src/lib/ics.ts`'s `DESCRIPTION` line), but nothing in the app
+      ever wrote to it: `EventModal` had no field for it at all, and
+      `createEvent`/`updateEvent`/`updateEventOccurrence` never read a
+      `notes` value from form data. Reused the existing `NotesEditor`
+      component as-is (same one `TaskModal` already uses) rather than
+      building a second notes editor, added a `notesFromFormData`
+      helper (same shape as the other `*FromFormData` helpers), and
+      threaded `notes` through the client-side `CalendarEvent`/
+      `EventModalEvent` types and `page.tsx`'s per-master-id maps
+      (same pattern `reminderMinutes`/`allDay` already used).
+
+Deferred, not this iteration: Google/Apple sync don't read or write
+`Event.notes` at all (`google-sync.ts` has no `description` handling) —
+a real gap, but a separate one from "can you set it in this app's own
+UI," and touches the sync code paths, not the modal; worth its own pass.
+Still open from iteration 1: #46 multi-timezone, #31 task attachments,
+#20 native integrations (OAuth-blocked), #16 AI notetaker.
+
 ## Overnight Google Calendar parity session, iteration 1 (2026-08-21)
 Priority bar going forward is full Google Calendar feature parity (this
 app is an explicit replacement/overlay for it), not just Motion parity.

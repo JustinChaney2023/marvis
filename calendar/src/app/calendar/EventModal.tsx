@@ -22,10 +22,12 @@ import {
   type WeekdayCode,
 } from "@/lib/recurrence";
 import { PROJECT_EVENT_COLORS } from "@/lib/eventColors";
+import NotesEditor from "../ui/NotesEditor";
 
 export type EventModalEvent = {
   id: string;
   title: string;
+  notes: string | null;
   start: Date;
   end: Date;
   recurrenceRule: string | null;
@@ -344,6 +346,11 @@ export default function EventModal({
                 className={inputClass}
               />
             </label>
+          </div>
+
+          <div className="flex flex-col gap-1 text-sm">
+            <span className="text-zinc-500">Notes</span>
+            <NotesEditor name="notes" defaultValue={mode === "edit" ? (event?.notes ?? "") : ""} />
           </div>
 
           {mode === "edit" && (
