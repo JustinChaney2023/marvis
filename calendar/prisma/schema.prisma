@@ -95,6 +95,11 @@ model Event {
   // event, never you being invited to someone else's — there's nothing
   // to auto-decline on your behalf).
   eventType       EventType   @default(DEFAULT)
+  // Minutes before start to fire a browser reminder notification. Null =
+  // no reminder (Google Calendar's own "None" option) — the app-wide
+  // 10-minute default lived only in NotificationWatcher.tsx before this;
+  // moving it here makes it per-event instead of fixed for every event.
+  reminderMinutes Int?        @default(10)
   // Not unique — a chunked task (Task.chunkMin set) places 2+ Event rows
   // sharing one taskId, same "occurrences share a parent id" shape as
   // Habit below. An unchunked task still has at most one.

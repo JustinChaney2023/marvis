@@ -1,8 +1,44 @@
 # Motion replica — feature backlog
 
+## Overnight Google Calendar parity session, iteration 1 (2026-08-21)
+Priority bar going forward is full Google Calendar feature parity (this
+app is an explicit replacement/overlay for it), not just Motion parity.
+Did a feature-by-feature pass over Google Calendar's actual surface
+(event fields, reminders/notifications, view options, keyboard
+shortcuts, search, quick-add, color palette, subscriptions, working
+location, OOO auto-decline, print/offline) against what's already
+shipped per this doc/the closed issues below — almost everything checked
+out already done (ICS subscriptions #32, ICS import/export #33, guests+
+RSVP #34, working hours #35, OOO/focus-time #36, world clock #37, NL
+quick-add #38, search #39, recurring exceptions #40, shortcuts #41,
+snooze #42, print #43, calendar sharing #44, group scheduling #45, an
+8-color event palette). One real, previously-unnoticed gap found and
+shipped:
+
+- [x] **Per-event customizable reminder** (#47) — the browser
+      notification reminder was a single hardcoded global 10-minute
+      window (`NotificationWatcher.tsx`'s old `NOTIFY_WITHIN_MIN`), with
+      no per-event control and no way to turn it off, unlike Google
+      Calendar's per-event None/5/10/30/60/1440-minute picker. New
+      `Event.reminderMinutes Int? @default(10)` (null = no reminder);
+      `EventModal` gets a "Reminder" select with those same presets.
+      `getUpcomingEventReminders` (`src/app/actions.ts`) now filters by
+      each occurrence's own `reminderMinutes` instead of a fixed window,
+      widened its query window to the longest preset (1 day) to still
+      catch them, and `NotificationWatcher.tsx` no longer re-checks a
+      threshold client-side since the server already only returns
+      occurrences that are due. `npx tsc --noEmit`, `npm test`, and
+      `npm run build` all pass.
+
+Still open, deliberately not this iteration's focus (see their own
+issues for reasoning): #46 multi-timezone, #31 task attachments/activity
+log, #20 broader native integrations (OAuth-blocked), #16 AI meeting
+notetaker.
+
 ## Modal layout + all-day events (2026-08-21)
 Two small user-reported fixes, then an overnight self-directed session
-kicked off at the end (see entry below once it lands).
+kicked off at the end (see the "Overnight Google Calendar parity
+session" entry above).
 
 - [x] **EventModal/TaskModal were taller than the screen** — both were a
       single narrow (`max-w-md`) column of stacked fields. Widened both

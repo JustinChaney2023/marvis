@@ -16,6 +16,7 @@ function ev(id: string, startHour: number, endHour: number) {
     taskPriority: null,
     meetingUrl: null,
     eventType: "DEFAULT" as const,
+    reminderMinutes: null,
   };
 }
 

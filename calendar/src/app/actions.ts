@@ -34,13 +34,16 @@ import { syncCalendarSubscription } from "@/lib/calendarSubscriptions";
 import { randomBytes } from "node:crypto";
 import { isEmailConfigured, sendEmail } from "@/lib/email";
 
-const REMINDER_WINDOW_MIN = 15;
+// Widest of REMINDER_MINUTES_PRESETS (EventModal.tsx) plus a little
+// slack, so the window is never narrower than the longest custom
+// reminder a user can pick.
+const REMINDER_WINDOW_MIN = 24 * 60 + 15;
 
 /**
- * Occurrences (recurring included) starting within the next
- * REMINDER_WINDOW_MIN minutes, for the client-side notification watcher.
- * Read-only, no "already notified" tracking here — that's session-local
- * client state, since it only needs to matter while a tab is open.
+ * Occurrences (recurring included) whose own per-event `reminderMinutes`
+ * has now come due, for the client-side notification watcher. Read-only,
+ * no "already notified" tracking here — that's session-local client
+ * state, since it only needs to matter while a tab is open.
  */
 export async function getUpcomingEventReminders() {
   const user = await requireUser();
@@ -49,14 +52,23 @@ export async function getUpcomingEventReminders() {
   const rows = await prisma.event.findMany({
     where: {
       userId: user.id,
+      reminderMinutes: { not: null },
       OR: [{ start: { gte: now, lt: soon } }, { recurrenceRule: { not: null } }],
     },
   });
-  return expandEvents(rows, now, soon).map((o) => ({
-    id: o.id,
-    title: o.title,
-    startIso: o.start.toISOString(),
-  }));
+  const reminderMinutesByMasterId = new Map(rows.map((r) => [r.id, r.reminderMinutes]));
+  return expandEvents(rows, now, soon)
+    .filter((o) => {
+      const reminderMinutes = reminderMinutesByMasterId.get(o.masterId);
+      if (reminderMinutes == null) return false;
+      const minutesAway = (o.start.getTime() - now.getTime()) / 60_000;
+      return minutesAway <= reminderMinutes;
+    })
+    .map((o) => ({
+      id: o.id,
+      title: o.title,
+      startIso: o.start.toISOString(),
+    }));
 }
 
 const MEETING_BANNER_LOOKAHEAD_MIN = 15;
@@ -755,6 +767,14 @@ function allDayFromFormData(formData: FormData): boolean {
   return formData.get("allDay") === "on";
 }
 
+// "" (the EventModal <select>'s "None" option) -> no reminder at all.
+function reminderMinutesFromFormData(formData: FormData): number | null {
+  const raw = String(formData.get("reminderMinutes") ?? "");
+  if (!raw) return null;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+}
+
 // meetingUrl is rendered as a plain <a href> on the public /rsvp/[token]
 // page (and MeetingBanner) — a "javascript:" value would execute on
 // click for a guest who never signed in. <input type="url"> only
@@ -805,6 +825,7 @@ export async function createEvent(formData: FormData) {
       locked: lockedFromFormData(formData),
       eventType: eventTypeFromFormData(formData),
       allDay: allDayFromFormData(formData),
+      reminderMinutes: reminderMinutesFromFormData(formData),
       localDirty: true,
     },
   });
@@ -873,6 +894,7 @@ export async function updateEvent(
       locked: lockedFromFormData(formData),
       eventType: eventTypeFromFormData(formData),
       allDay: allDayFromFormData(formData),
+      reminderMinutes: reminderMinutesFromFormData(formData),
       localDirty: true,
     },
   });
@@ -945,6 +967,7 @@ export async function updateEventOccurrence(
         locked: lockedFromFormData(formData),
         eventType: eventTypeFromFormData(formData),
         allDay: allDayFromFormData(formData),
+        reminderMinutes: reminderMinutesFromFormData(formData),
         recurrenceExceptionOfId: masterId,
         recurrenceOriginalStart: new Date(normalizedOriginalStart),
         localDirty: true,

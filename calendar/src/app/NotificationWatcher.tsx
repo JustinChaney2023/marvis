@@ -4,7 +4,6 @@ import { useEffect, useReducer, useRef, useSyncExternalStore } from "react";
 import { getUpcomingEventReminders, getPendingAutomationNotificationsAction } from "./actions";
 
 const POLL_MS = 60_000;
-const NOTIFY_WITHIN_MIN = 10;
 const SNOOZE_MS = 5 * 60_000;
 
 // ponytail: plain `new Notification()` has no action buttons — those
@@ -62,16 +61,17 @@ export default function NotificationWatcher() {
 
     const poll = async () => {
       try {
+        // The server only returns occurrences whose own per-event
+        // reminderMinutes has already come due — nothing left to
+        // threshold-check here, just dedup against what's already fired.
         const upcoming = await getUpcomingEventReminders();
         const now = Date.now();
         for (const occ of upcoming) {
           if (notifiedIds.current.has(occ.id)) continue;
           const startMs = new Date(occ.startIso).getTime();
           const minutesAway = (startMs - now) / 60_000;
-          if (minutesAway <= NOTIFY_WITHIN_MIN) {
-            notifiedIds.current.add(occ.id);
-            showReminderNotification(occ.title, minutesAway);
-          }
+          notifiedIds.current.add(occ.id);
+          showReminderNotification(occ.title, minutesAway);
         }
 
         // Server-generated (task automations), not derived from a poll

@@ -54,6 +54,7 @@ export type CalendarEvent = {
   // Out-of-office/focus-time as distinct event types (#36) — mostly a
   // display distinction (EventBlock renders a small badge for either).
   eventType: "DEFAULT" | "OUT_OF_OFFICE" | "FOCUS_TIME";
+  reminderMinutes: number | null;
 };
 
 // PROJECT_EVENT_COLORS/DEFAULT_EVENT_COLOR now live in @/lib/eventColors
@@ -296,6 +297,7 @@ export default function CalendarClient({
         color: match.projectColor,
         eventType: match.eventType,
         allDay: match.allDay,
+        reminderMinutes: match.reminderMinutes,
       },
     };
   });
@@ -394,6 +396,7 @@ export default function CalendarClient({
         color: event.projectColor,
         eventType: event.eventType,
         allDay: event.allDay,
+        reminderMinutes: event.reminderMinutes,
       },
     });
   };

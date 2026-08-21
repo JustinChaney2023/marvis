@@ -43,6 +43,7 @@ export default function QuickCreatePopup({ start, end, onClose, onCreatedEvent }
           color: null,
           eventType: "DEFAULT",
           allDay: false,
+          reminderMinutes: 10,
         });
       } else {
         await createQuickTaskAction(trimmed, start.toISOString(), end.toISOString());

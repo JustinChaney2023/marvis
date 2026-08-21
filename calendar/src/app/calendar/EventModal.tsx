@@ -39,7 +39,17 @@ export type EventModalEvent = {
   color: string | null;
   eventType: "DEFAULT" | "OUT_OF_OFFICE" | "FOCUS_TIME";
   allDay: boolean;
+  reminderMinutes: number | null;
 };
+
+const REMINDER_MINUTES_PRESETS = [
+  { value: "", label: "None" },
+  { value: "5", label: "5 minutes before" },
+  { value: "10", label: "10 minutes before" },
+  { value: "30", label: "30 minutes before" },
+  { value: "60", label: "1 hour before" },
+  { value: "1440", label: "1 day before" },
+] as const;
 
 const EVENT_TYPE_OPTIONS = [
   { value: "DEFAULT", label: "Default" },
@@ -432,6 +442,25 @@ export default function EventModal({
               </select>
             </label>
           </div>
+
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="text-zinc-500">Reminder</span>
+            <select
+              name="reminderMinutes"
+              defaultValue={
+                mode === "edit"
+                  ? (event?.reminderMinutes?.toString() ?? "")
+                  : "10"
+              }
+              className={inputClass}
+            >
+              {REMINDER_MINUTES_PRESETS.map((r) => (
+                <option key={r.value} value={r.value}>
+                  {r.label}
+                </option>
+              ))}
+            </select>
+          </label>
 
           <label className="flex cursor-pointer items-center gap-2 text-sm">
             <input
