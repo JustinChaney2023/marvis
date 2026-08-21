@@ -388,6 +388,8 @@ model Task {
   parent         Task?      @relation("TaskSubtasks", fields: [parentId], references: [id], onDelete: Cascade)
   subtasks       Task[]     @relation("TaskSubtasks")
   timeLogEntries TimeLogEntry[]
+  attachments    TaskAttachment[]
+  activity       TaskActivity[]
   // Cross-cutting tags (Motion's "Labels"), separate from Project — a
   // task can carry several, unlike the one Project it belongs to.
   labels         Label[]
@@ -406,6 +408,41 @@ model Task {
   // dueAt — same reasoning as Event's (userId, start) index above.
   @@index([userId, status])
   @@index([userId, dueAt])
+}
+
+// A file attached to a task. No multi-account sharing exists on Task
+// (Assignee is just a label under the owning account, not a real second
+// User — real accounts only share calendars, per CalendarShare) so this
+// is always read/written by the task's own owner, never a second party.
+model TaskAttachment {
+  id         String   @id @default(cuid())
+  taskId     String
+  task       Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  // Original filename, display-only — never used to build the on-disk
+  // path (see the upload route for why: no path-traversal/extension
+  // surface from a client-supplied name).
+  filename   String
+  storedPath String
+  mimeType   String
+  sizeBytes  Int
+  createdAt  DateTime @default(now())
+}
+
+// A running log on a task: auto-recorded field changes (from updateTask's
+// before/after diff) plus freeform comments. Single-user notes-to-self,
+// same ownership reasoning as TaskAttachment above — not a multi-party
+// discussion thread.
+model TaskActivity {
+  id        String   @id @default(cuid())
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  // "comment" | "priority" | "dueDate" | "assignee" — kept as a plain
+  // String rather than an enum since `detail` already carries the real
+  // meaning and a comment's `kind` never drives branching logic beyond
+  // "is this the free-text one."
+  kind      String
+  detail    String
+  createdAt DateTime @default(now())
 }
 
 // Lightweight tag, not a full custom-field builder — quick visual

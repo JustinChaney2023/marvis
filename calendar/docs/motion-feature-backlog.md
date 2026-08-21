@@ -1,5 +1,52 @@
 # Motion replica — feature backlog
 
+## Task attachments + activity log (2026-08-21, #31)
+The other "medium-large" item left for a real scoping pass, done right
+after #46. #31's original issue body was stale — 4 of its 5 items
+(auto-scheduled indicator, hard deadline, chunking, rich-text notes) had
+already shipped in earlier sessions per this doc; the only real remaining
+scope was file attachments + an activity/comment log.
+
+Scope note, worth keeping on file: this is a **single-user** log, not a
+multi-party thread. `Task.assigneeId` points at an `Assignee` row — a label
+under the owning account, not a second real `User` — and real accounts
+only ever share *calendars* (`CalendarShare`), never tasks. So this is a
+running notes-to-self on your own task, with no visibility/permission model
+to build.
+
+- [x] **`TaskAttachment`/`TaskActivity` models** — attachments cascade-
+      delete with their `Task`; activity is either an auto-logged field
+      change (`kind: "field"`) or a freeform comment (`kind: "comment"`),
+      both just a `detail` string (comments store the text verbatim,
+      field changes get a server-generated line so a client can't spoof
+      what "changed").
+- [x] **Upload route** `/api/uploads/attachments` — same convention as the
+      existing note-image uploader (`/api/uploads`: random on-disk name
+      under `public/uploads/<userId>/`, original filename never trusted
+      for the path), widened for real attachments: 20MB cap (vs. the
+      image uploader's 5MB) and a MIME allowlist covering PDF, plain
+      text/CSV, Word/Excel/PowerPoint (both legacy and OOXML), zip, and
+      the same image types as before. SVG excluded for the same reason
+      as the existing uploader (embeddable `<script>`).
+- [x] **`updateTask` now diffs and auto-logs** priority/due-date/assignee
+      changes (the fields it actually writes — `status` changes go
+      through separate actions like the Start/Delay buttons, not
+      `updateTask`, and aren't wired into the log this round — a small,
+      clearly-scoped follow-up if wanted later, not forgotten).
+- [x] **TaskModal**: new Attachments section (upload input, list with
+      download link + delete) and Activity section (merged timeline of
+      field changes + comments, a comment box at the bottom) — same UI
+      shape as `EventModal`'s Guests section (list + a small inline
+      add-form, no nested `<form>`).
+- [x] Ownership checks on every new action (`addTaskAttachmentAction`,
+      `deleteTaskAttachmentAction`, `addTaskCommentAction`,
+      `getTaskActivityAction`) — each resolves the task (or the
+      attachment's task) scoped to `userId` before doing anything, same
+      discipline as the 2026-08-19 fifth-pass IDOR audit that fixed this
+      exact bug class elsewhere in this file.
+
+`npx tsc --noEmit`, `npm test`, and `npm run build` all pass clean.
+
 ## Multi-timezone support (2026-08-21, #46)
 The "medium-large" architecture item the overnight session deliberately
 left for a real scoping pass — done as its own follow-up session, scoped

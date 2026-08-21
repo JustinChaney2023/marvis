@@ -1,7 +1,15 @@
 "use client";
 
-import { useState } from "react";
-import { createTask, updateTask } from "../actions";
+import { useEffect, useRef, useState } from "react";
+import {
+  createTask,
+  updateTask,
+  getTaskActivityAction,
+  addTaskCommentAction,
+  addTaskAttachmentAction,
+  deleteTaskAttachmentAction,
+  type TaskActivityEntry,
+} from "../actions";
 import { CloseIcon } from "../icons";
 import Button from "../ui/Button";
 import { toLocalInputValue, formatYMD } from "@/lib/calendar-dates";
@@ -100,6 +108,60 @@ export default function TaskModal({
     setSelectedBlockedByIds((prev) => (prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id]));
   };
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const [activity, setActivity] = useState<TaskActivityEntry[]>([]);
+  const [commentText, setCommentText] = useState("");
+  const [isPostingComment, setIsPostingComment] = useState(false);
+  const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const attachmentInputRef = useRef<HTMLInputElement>(null);
+
+  const refreshActivity = async () => {
+    if (!task) return;
+    setActivity(await getTaskActivityAction(task.id));
+  };
+  useEffect(() => {
+    if (mode === "edit" && task) refreshActivity();
+  }, [mode, task]);
+
+  const handleAddComment = async () => {
+    if (!task || !commentText.trim() || isPostingComment) return;
+    setIsPostingComment(true);
+    try {
+      await addTaskCommentAction(task.id, commentText);
+      setCommentText("");
+      await refreshActivity();
+    } finally {
+      setIsPostingComment(false);
+    }
+  };
+
+  const handleUploadAttachment = async (file: File) => {
+    if (!task || isUploadingAttachment) return;
+    setIsUploadingAttachment(true);
+    setAttachmentError(null);
+    try {
+      const body = new FormData();
+      body.set("file", file);
+      const res = await fetch("/api/uploads/attachments", { method: "POST", body });
+      const data = await res.json();
+      if (!res.ok) {
+        setAttachmentError(data.error ?? "Upload failed.");
+        return;
+      }
+      await addTaskAttachmentAction(task.id, data);
+      await refreshActivity();
+    } finally {
+      setIsUploadingAttachment(false);
+      if (attachmentInputRef.current) attachmentInputRef.current.value = "";
+    }
+  };
+
+  const handleDeleteAttachment = async (attachmentId: string) => {
+    await deleteTaskAttachmentAction(attachmentId);
+    await refreshActivity();
+  };
+
   const [recurrenceSelection, setRecurrenceSelection] = useState<string>(() => {
     const rule = task?.recurrenceRule ?? "";
     if (RECURRENCE_PRESETS.some((p) => p.value === rule)) return rule;
@@ -442,6 +504,94 @@ export default function TaskModal({
               )}
             </label>
           </div>
+
+          {mode === "edit" && task && (
+            <div className="flex flex-col gap-2 border-t border-zinc-200 pt-4 text-sm dark:border-zinc-700">
+              <span className="text-zinc-500">Attachments</span>
+              <div className="flex flex-col gap-1.5">
+                {activity
+                  .filter((e) => e.attachment)
+                  .map((e) => (
+                    <div
+                      key={e.id}
+                      className="flex items-center justify-between gap-2 rounded-lg border border-zinc-200 px-2.5 py-1.5 text-xs dark:border-zinc-600"
+                    >
+                      <a
+                        href={e.attachment!.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="truncate text-indigo-600 hover:underline dark:text-indigo-400"
+                      >
+                        {e.attachment!.filename}
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteAttachment(e.attachment!.id)}
+                        className="text-zinc-400 hover:text-red-600 dark:hover:text-red-400"
+                        aria-label={`Remove ${e.attachment!.filename}`}
+                      >
+                        <CloseIcon className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+              </div>
+              <input
+                ref={attachmentInputRef}
+                type="file"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleUploadAttachment(file);
+                }}
+                disabled={isUploadingAttachment}
+                className="text-xs text-zinc-500"
+              />
+              {attachmentError && (
+                <span className="text-xs text-red-600 dark:text-red-400">{attachmentError}</span>
+              )}
+
+              <span className="mt-2 text-zinc-500">Activity</span>
+              <div className="flex max-h-40 flex-col gap-1.5 overflow-y-auto">
+                {activity.length === 0 && (
+                  <span className="text-xs text-zinc-400">No activity yet.</span>
+                )}
+                {activity
+                  .filter((e) => !e.attachment)
+                  .map((e) => (
+                    <div key={e.id} className="text-xs">
+                      <span className="text-zinc-400">
+                        {e.createdAt.toLocaleString(undefined, {
+                          month: "short",
+                          day: "numeric",
+                          hour: "numeric",
+                          minute: "2-digit",
+                        })}
+                      </span>{" "}
+                      <span className={e.kind === "comment" ? "text-zinc-700 dark:text-zinc-300" : "text-zinc-500"}>
+                        {e.detail}
+                      </span>
+                    </div>
+                  ))}
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={commentText}
+                  onChange={(ev) => setCommentText(ev.target.value)}
+                  onKeyDown={(ev) => {
+                    if (ev.key === "Enter") {
+                      ev.preventDefault();
+                      handleAddComment();
+                    }
+                  }}
+                  placeholder="Add a comment…"
+                  className={`${inputClass} flex-1`}
+                />
+                <Button type="button" variant="secondary" pending={isPostingComment} onClick={handleAddComment}>
+                  Comment
+                </Button>
+              </div>
+            </div>
+          )}
 
           <div className="mt-2 flex items-center justify-end gap-2">
             <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>

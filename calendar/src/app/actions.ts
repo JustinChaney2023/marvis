@@ -33,6 +33,8 @@ import { formatYMD } from "@/lib/calendar-dates";
 import { syncCalendarSubscription } from "@/lib/calendarSubscriptions";
 import { randomBytes } from "node:crypto";
 import { isEmailConfigured, sendEmail } from "@/lib/email";
+import { unlink } from "node:fs/promises";
+import path from "node:path";
 
 // Widest of REMINDER_MINUTES_PRESETS (EventModal.tsx) plus a little
 // slack, so the window is never narrower than the longest custom
@@ -246,16 +248,54 @@ export async function createTask(formData: FormData) {
   revalidatePath("/tasks");
 }
 
+const PRIORITY_LABEL = ["Low", "Medium", "High", "Urgent"];
+
+// Auto-logged TaskActivity entries for whatever updateTask actually
+// changed — generated server-side from the real before/after values so
+// a client can't spoof what "changed."
+async function logTaskFieldChanges(
+  taskId: string,
+  before: { priority: number; dueAt: Date | null; assigneeId: string | null },
+  after: { priority: number; dueAt: Date | null; assigneeId: string | null },
+) {
+  const entries: string[] = [];
+  if (before.priority !== after.priority) {
+    entries.push(`Priority changed to ${PRIORITY_LABEL[after.priority] ?? after.priority}`);
+  }
+  if ((before.dueAt?.getTime() ?? null) !== (after.dueAt?.getTime() ?? null)) {
+    entries.push(
+      after.dueAt ? `Due date changed to ${formatYMD(after.dueAt)}` : "Due date removed",
+    );
+  }
+  if (before.assigneeId !== after.assigneeId) {
+    const assignee = after.assigneeId
+      ? await prisma.assignee.findUnique({ where: { id: after.assigneeId }, select: { name: true } })
+      : null;
+    entries.push(assignee ? `Assigned to ${assignee.name}` : "Unassigned");
+  }
+  if (entries.length === 0) return;
+  await prisma.taskActivity.createMany({
+    data: entries.map((detail) => ({ taskId, kind: "field", detail })),
+  });
+}
+
 export async function updateTask(taskId: string, formData: FormData) {
   const user = await requireUser();
   const fields = await taskFieldsFromFormData(formData, user.id);
   if (!fields.title) return;
+
+  const existing = await prisma.task.findFirst({
+    where: { id: taskId, userId: user.id },
+    select: { priority: true, dueAt: true, assigneeId: true },
+  });
+  if (!existing) return;
 
   const { count } = await prisma.task.updateMany({
     where: { id: taskId, userId: user.id },
     data: fields,
   });
   if (count === 0) return;
+  await logTaskFieldChanges(taskId, existing, fields);
   await setTaskLabels(user.id, taskId, labelIdsFromFormData(formData));
   await setTaskBlockedBy(user.id, taskId, blockedByIdsFromFormData(formData));
 
@@ -266,6 +306,89 @@ export async function updateTask(taskId: string, formData: FormData) {
   // action the user can already trigger themselves.
   revalidatePath("/tasks");
   revalidatePath("/");
+}
+
+export type TaskActivityEntry = {
+  id: string;
+  kind: "field" | "comment" | "attachment";
+  detail: string;
+  createdAt: Date;
+  // Only set for kind "attachment" — id/filename to render a download
+  // link and a delete button.
+  attachment?: { id: string; filename: string; url: string; sizeBytes: number };
+};
+
+/** Attachments + activity/comments for one task, merged into one timeline. */
+export async function getTaskActivityAction(taskId: string): Promise<TaskActivityEntry[]> {
+  const user = await requireUser();
+  const task = await prisma.task.findFirst({ where: { id: taskId, userId: user.id } });
+  if (!task) return [];
+
+  const [activity, attachments] = await Promise.all([
+    prisma.taskActivity.findMany({ where: { taskId }, orderBy: { createdAt: "asc" } }),
+    prisma.taskAttachment.findMany({ where: { taskId }, orderBy: { createdAt: "asc" } }),
+  ]);
+
+  const entries: TaskActivityEntry[] = activity.map((a) => ({
+    id: a.id,
+    kind: a.kind === "comment" ? "comment" : "field",
+    detail: a.detail,
+    createdAt: a.createdAt,
+  }));
+  for (const att of attachments) {
+    entries.push({
+      id: att.id,
+      kind: "attachment",
+      detail: `Attached ${att.filename}`,
+      createdAt: att.createdAt,
+      attachment: {
+        id: att.id,
+        filename: att.filename,
+        url: `/uploads/${att.storedPath}`,
+        sizeBytes: att.sizeBytes,
+      },
+    });
+  }
+  entries.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  return entries;
+}
+
+export async function addTaskCommentAction(taskId: string, comment: string) {
+  const user = await requireUser();
+  const trimmed = comment.trim();
+  if (!trimmed) return;
+  const task = await prisma.task.findFirst({ where: { id: taskId, userId: user.id } });
+  if (!task) return;
+
+  await prisma.taskActivity.create({ data: { taskId, kind: "comment", detail: trimmed } });
+  revalidatePath("/tasks");
+}
+
+/** Registers a file already written by POST /api/uploads/attachments as this task's attachment. */
+export async function addTaskAttachmentAction(
+  taskId: string,
+  file: { filename: string; storedPath: string; mimeType: string; sizeBytes: number },
+) {
+  const user = await requireUser();
+  const task = await prisma.task.findFirst({ where: { id: taskId, userId: user.id } });
+  if (!task) return;
+
+  await prisma.taskAttachment.create({ data: { taskId, ...file } });
+  revalidatePath("/tasks");
+}
+
+export async function deleteTaskAttachmentAction(attachmentId: string) {
+  const user = await requireUser();
+  const attachment = await prisma.taskAttachment.findFirst({
+    where: { id: attachmentId, task: { userId: user.id } },
+  });
+  if (!attachment) return;
+
+  await prisma.taskAttachment.delete({ where: { id: attachmentId } });
+  // Best-effort — a missing file on disk shouldn't block removing the
+  // now-orphaned DB row the user already asked to delete.
+  await unlink(path.join(process.cwd(), "public", "uploads", attachment.storedPath)).catch(() => {});
+  revalidatePath("/tasks");
 }
 
 export async function createSubtaskAction(parentId: string, title: string) {
@@ -375,6 +498,19 @@ export async function deleteTaskAction(taskId: string) {
   const user = await requireUser();
   const task = await prisma.task.findFirst({ where: { id: taskId, userId: user.id } });
   if (!task) return;
+
+  // TaskAttachment rows cascade with the Task row (schema.prisma), but
+  // that only drops the DB rows — the files on disk need their own
+  // cleanup, best-effort same as deleteTaskAttachmentAction.
+  const attachments = await prisma.taskAttachment.findMany({
+    where: { taskId },
+    select: { storedPath: true },
+  });
+  await Promise.all(
+    attachments.map((a) =>
+      unlink(path.join(process.cwd(), "public", "uploads", a.storedPath)).catch(() => {}),
+    ),
+  );
 
   // Event.taskId has no onDelete clause (no cascade/set-null), so the
   // linked scheduled Event has to go before the Task row itself, or the
