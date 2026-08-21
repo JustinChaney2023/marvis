@@ -1,5 +1,29 @@
 # Motion replica — feature backlog
 
+## Overnight Google Calendar parity session, iteration 4 (2026-08-21)
+Checked duplicate-event quick action, month-view drag-across-days for
+all-day creation, search-query operators (#39), guest permission tiers,
+declining with a note, and event-color inheritance order — all either
+already adequate or genuinely lower-value than the one real gap found:
+
+- [x] **Shared calendars had no show/hide toggle** (#50) — Google's
+      sidebar lets you show/hide any "Other calendar" with a checkbox,
+      no need to unsubscribe. This app's `CalendarShare` overlay (#44)
+      was all-or-nothing: once shared with you, it always rendered, no
+      way to declutter it short of asking the owner to revoke. Added
+      `CalendarShare.hiddenByRecipient` (recipient-only field — the
+      owner's grant/permission is untouched), a new
+      `setCalendarShareHiddenAction` scoped to `sharedWithId` (not
+      `ownerId` — this is the recipient's own view preference, not a
+      grant change), a "Show on my calendar" checkbox per received share
+      in `CalendarSharingManager`, and `page.tsx`'s shared-events query
+      now filters `hiddenByRecipient: false`.
+
+Deferred, not filed as its own issue: Google/Apple sync still don't
+round-trip `Event.notes` (carried over from iteration 2). Still open:
+#46 multi-timezone, #31 task attachments, #20 native integrations
+(OAuth-blocked), #16 AI notetaker.
+
 ## Overnight Google Calendar parity session, iteration 3 (2026-08-21)
 Continued the audit (event color count, single-event .ics download,
 sync round-tripping notes, email reminders, RSVP nuance, search

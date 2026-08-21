@@ -555,6 +555,11 @@ model CalendarShare {
   sharedWith   User            @relation("SharesReceived", fields: [sharedWithId], references: [id], onDelete: Cascade)
   permission   SharePermission @default(BUSY_ONLY)
   createdAt    DateTime        @default(now())
+  // Recipient-side "show on my calendar" toggle (Google Calendar's
+  // checkbox on each entry under "Other calendars") — the owner still
+  // grants/revokes the share itself; this only controls whether the
+  // recipient currently wants the overlay cluttering their own view.
+  hiddenByRecipient Boolean    @default(false)
 
   @@unique([ownerId, sharedWithId])
 }

@@ -138,7 +138,7 @@ export default async function Page(props: PageProps<"/">) {
   // than filtering client-side, so a real title never even reaches the
   // browser for a calendar that's only supposed to show as "Busy".
   const shares = await prisma.calendarShare.findMany({
-    where: { sharedWithId: user.id },
+    where: { sharedWithId: user.id, hiddenByRecipient: false },
     include: { owner: { select: { id: true, name: true, email: true } } },
   });
   const sharedEvents: SharedEvent[] = shares.length

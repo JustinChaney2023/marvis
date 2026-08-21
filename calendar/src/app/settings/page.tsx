@@ -520,9 +520,11 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
               permission: s.permission,
             }))}
             received={sharesReceived.map((s) => ({
+              id: s.id,
               ownerEmail: s.owner.email,
               ownerName: s.owner.name,
               permission: s.permission,
+              hidden: s.hiddenByRecipient,
             }))}
           />
         </div>

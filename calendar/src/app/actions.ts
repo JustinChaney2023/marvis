@@ -491,6 +491,19 @@ export async function deleteCalendarShareAction(shareId: string) {
   revalidatePath("/");
 }
 
+// Recipient-only "show on my calendar" toggle — scoped to sharedWithId,
+// not ownerId, since this doesn't touch the share grant itself, only
+// whether *this* recipient currently wants it overlaid on their view.
+export async function setCalendarShareHiddenAction(shareId: string, hidden: boolean) {
+  const user = await requireUser();
+  await prisma.calendarShare.updateMany({
+    where: { id: shareId, sharedWithId: user.id },
+    data: { hiddenByRecipient: hidden },
+  });
+  revalidatePath("/settings");
+  revalidatePath("/");
+}
+
 const GROUP_MEETING_HORIZON_DAYS = 14;
 
 export type GroupSlotResult =
