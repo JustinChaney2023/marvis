@@ -139,7 +139,7 @@ export default function EventModal({
   // than a surprise change to existing muscle memory.
   const [editScope, setEditScope] = useState<"series" | "occurrence">("series");
 
-  type Guest = { id: string; email: string; status: "PENDING" | "ACCEPTED" | "DECLINED" };
+  type Guest = { id: string; email: string; status: "PENDING" | "ACCEPTED" | "DECLINED" | "TENTATIVE" };
   const [guests, setGuests] = useState<Guest[]>([]);
   const [guestEmail, setGuestEmail] = useState("");
   const [isAddingGuest, setIsAddingGuest] = useState(false);
@@ -371,7 +371,9 @@ export default function EventModal({
                               ? "text-green-600 dark:text-green-400"
                               : g.status === "DECLINED"
                                 ? "text-red-600 dark:text-red-400"
-                                : "text-zinc-400"
+                                : g.status === "TENTATIVE"
+                                  ? "text-amber-600 dark:text-amber-400"
+                                  : "text-zinc-400"
                           }
                         >
                           {g.status.charAt(0) + g.status.slice(1).toLowerCase()}

@@ -1,5 +1,27 @@
 # Motion replica — feature backlog
 
+## Overnight Google Calendar parity session, iteration 3 (2026-08-21)
+Continued the audit (event color count, single-event .ics download,
+sync round-tripping notes, email reminders, RSVP nuance, search
+operators, duplicate-event). Most already adequate or already-scoped
+(8-color palette is a deliberate choice, not a parity gap; per-event
+.ics export already exists via `/api/ics/export?eventId=`). One real
+gap found and shipped:
+
+- [x] **RSVP had no "Maybe"/tentative option** (#49) — guest RSVP
+      (`RsvpStatus`, #34) only supported Accept/Decline. Added
+      `TENTATIVE` to the enum (no migration needed — SQLite stores
+      Prisma enums as plain `TEXT`, so a new variant is schema-compatible
+      with existing rows with zero DDL change), a third "Maybe" button
+      on the public `/rsvp/[token]` page (`RsvpClient.tsx`), and an
+      amber status color for it in `EventModal`'s guest list (green/red/
+      amber/zinc for Accepted/Declined/Tentative/Pending).
+
+Deferred, noted but not filed as its own issue yet: Google/Apple sync
+still don't read or write `Event.notes` (carried over from iteration 2).
+Still open: #46 multi-timezone, #31 task attachments, #20 native
+integrations (OAuth-blocked), #16 AI notetaker.
+
 ## Overnight Google Calendar parity session, iteration 2 (2026-08-21)
 Continued the iteration-1 audit into areas not yet covered (working
 location, RSVP nuance, event color count, notification channels,

@@ -1070,7 +1070,10 @@ export async function removeEventGuestAction(guestId: string) {
 }
 
 /** Public — no auth. The respond token itself is the guest's credential. */
-export async function respondToInviteAction(token: string, status: "ACCEPTED" | "DECLINED") {
+export async function respondToInviteAction(
+  token: string,
+  status: "ACCEPTED" | "DECLINED" | "TENTATIVE",
+) {
   const { count } = await prisma.eventGuest.updateMany({
     where: { respondToken: token },
     data: { status, respondedAt: new Date() },

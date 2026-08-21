@@ -188,6 +188,7 @@ enum RsvpStatus {
   PENDING
   ACCEPTED
   DECLINED
+  TENTATIVE
 }
 
 /**
