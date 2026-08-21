@@ -1,5 +1,67 @@
 # Motion replica — feature backlog
 
+## Multi-timezone support (2026-08-21, #46)
+The "medium-large" architecture item the overnight session deliberately
+left for a real scoping pass — done as its own follow-up session, scoped
+per Justin's own direction: auto-detect + editable in Settings, and the
+*full* fix (scheduler, booking page, and Google-sync export all honor each
+account's own zone), not just a display-layer patch.
+
+Root cause confirmed by reading the code first: `scheduler.ts` built every
+work-hours window with `setHours()`/`getHours()` on a plain `Date`, which
+resolves in the *server process's* own timezone — wrong the moment a real
+account's browser timezone differs from wherever this app happens to be
+hosted. `google-sync.ts`'s `LOCAL_TIMEZONE` had the same problem for
+recurring-event export.
+
+- [x] **`User.timezone`** — nullable IANA zone string. Null = server's own
+      zone (zero behavior change for an account that hasn't set one yet).
+- [x] **`src/lib/timezone.ts`** — native `Intl`-only zone math (no new
+      dependency): `getTimeZoneOffsetMinutes`, `getZonedWeekday`,
+      `getZonedDateParts`, `zonedWallTimeToUtc`. Self-check in
+      `timezone.test.ts` (now chained into `npm test`). One documented
+      known gap: the wall-clock hour inside a spring-forward/fall-back
+      DST transition itself isn't specially disambiguated — flagged with
+      a `ponytail:`-style comment rather than built now.
+- [x] **`scheduler.ts` rewritten to take a `timeZone` on every window
+      builder** (`workWindowFor`, `defaultWindowFn`, `windowFnFor` and
+      its `windowFnForTimeSlot`/`windowFnForWorkingHours` wrappers,
+      `excludeDaysWindowFn`, `findEarliestSlot`'s day-boundary
+      `skipToNextDay`, `dateKey`/`isEnergyMatch`/`scoreSlot` for
+      project-clustering and energy-window scoring) — `scheduleTask` now
+      fetches the task owner's own `User.timezone` and threads it
+      through everywhere. Defaults preserve the old server-zone behavior
+      for callers that don't pass one yet (habits.ts, existing tests).
+- [x] **Group scheduling (#45) now genuinely per-participant** — new
+      `intersectWindowFns` combines every participant's own working-hours
+      *and* timezone into one shared window (a slot only counts if it's
+      inside *everyone's* own local work hours, not just the requester's
+      9-6). `findGroupSlot` fetches each participant's `AppSettings` +
+      `timezone` and intersects. This is the concrete case #46's own
+      scoping note flagged as "a real prerequisite for group scheduling
+      being correct across timezones."
+- [x] **Booking page / `booking.ts`** — availability generation and the
+      re-validation on submit both use the booking-link owner's own zone;
+      day-grouping keys are now the owner's own calendar day, not the
+      server's.
+- [x] **`google-sync.ts` `exportToGoogle`** uses the exporting account's
+      own zone for the Google Calendar API's `timeZone` field, falling
+      back to the server's zone only if unset.
+- [x] **Auto-detect + Settings**: `TimezoneSync.tsx` (mounted in
+      `layout.tsx`, same hidden-route pattern as `SyncWatcher`) calls a
+      new `syncUserTimezoneAction` once per load with the browser's own
+      `Intl` zone — never overwrites an already-set value. Settings →
+      Scheduling has a "Your timezone" field (`setUserTimezoneAction`,
+      reusing the existing `Intl.supportedValuesOf("timeZone")` datalist
+      the World-clock field already had) for a manual override.
+
+Deliberately not touched: `habits.ts` still schedules against the
+hardcoded 9am-6pm default window (now at least in the *right* timezone),
+not the user's real working-hours settings — pre-existing gap, unrelated
+to timezone correctness, not in scope here.
+
+`npx tsc --noEmit`, `npm test`, and `npm run build` all pass clean.
+
 ## Overnight Google Calendar parity session — wrap-up (2026-08-21)
 Five self-paced iterations (each a background research-then-ship pass, see
 the individual iteration entries directly below), triggered by an explicit

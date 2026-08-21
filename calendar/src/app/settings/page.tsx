@@ -8,6 +8,7 @@ import {
   disconnectAppleAction,
   updateAiSettingsAction,
   updateSchedulingSettingsAction,
+  setUserTimezoneAction,
 } from "../actions";
 import SyncButton from "./SyncButton";
 import AppleSyncButton from "./AppleSyncButton";
@@ -120,6 +121,34 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
               <>
       <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
         <h2 className="text-lg font-semibold">Scheduling</h2>
+        <form action={setUserTimezoneAction} className="mt-3 flex flex-wrap items-end gap-3">
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="text-zinc-500">
+              Your timezone{" "}
+              <span className="text-zinc-400">
+                — the scheduler, booking page, and Google export all use this
+              </span>
+            </span>
+            <input
+              type="text"
+              name="timezone"
+              list="timezones"
+              required
+              defaultValue={user.timezone ?? ""}
+              placeholder={Intl.DateTimeFormat().resolvedOptions().timeZone}
+              className="w-56 rounded-lg border border-zinc-200 bg-white px-2 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800"
+            />
+          </label>
+          <Button type="submit" variant="secondary">
+            Save timezone
+          </Button>
+          {!user.timezone && (
+            <span className="text-xs text-zinc-400">
+              Auto-detected from your browser once you visit any other page —
+              set it here to override.
+            </span>
+          )}
+        </form>
         <form
           action={updateSchedulingSettingsAction}
           className="mt-3 flex flex-wrap items-end gap-3"

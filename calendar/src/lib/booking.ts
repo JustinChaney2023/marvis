@@ -7,6 +7,7 @@ import {
   windowFnForWorkingHours,
 } from "@/lib/scheduler";
 import { getAppSettings } from "@/lib/settings";
+import { getZonedDateParts } from "@/lib/timezone";
 
 const BOOKING_HORIZON_DAYS = 14;
 const MAX_SLOTS_PER_DAY = 40; // safety cap, not a real-world limit at 15-min granularity
@@ -26,7 +27,11 @@ export async function getAvailableBookingSlots(
   durationMin: number,
   excludeDays: string | null = null,
 ): Promise<{ day: string; slots: Date[] }[]> {
-  const settings = await getAppSettings(ownerUserId);
+  const [settings, owner] = await Promise.all([
+    getAppSettings(ownerUserId),
+    prisma.user.findUniqueOrThrow({ where: { id: ownerUserId }, select: { timezone: true } }),
+  ]);
+  const timeZone = owner.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
   const now = new Date();
   const horizonEnd = new Date(now.getTime() + BOOKING_HORIZON_DAYS * 86_400_000);
 
@@ -34,7 +39,7 @@ export async function getAvailableBookingSlots(
     await fetchBusyIntervals(ownerUserId, now, horizonEnd),
     settings.bufferMin,
   );
-  const getWindow = excludeDaysWindowFn(excludeDays, windowFnForWorkingHours(settings));
+  const getWindow = excludeDaysWindowFn(excludeDays, windowFnForWorkingHours(settings, timeZone), timeZone);
 
   const byDay = new Map<string, Date[]>();
   let cursor = now;
@@ -45,10 +50,17 @@ export async function getAvailableBookingSlots(
       busy,
       horizonEnd,
       getWindow,
+      timeZone,
     );
     if (!slot) break;
 
-    const key = slot.start.toDateString();
+    // Grouped by the *owner's* calendar day, not the server's — this is
+    // their published availability, so "today"/"tomorrow" on the booking
+    // page has to match their own wall-clock day. Zero-padded ISO
+    // (matching calendar-dates.ts's formatYMD) since callers `new Date()`
+    // this string back for display.
+    const { year, month, day } = getZonedDateParts(slot.start, timeZone);
+    const key = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
     const list = byDay.get(key) ?? [];
     if (list.length < MAX_SLOTS_PER_DAY) {
       list.push(slot.start);
@@ -103,7 +115,11 @@ export async function createBooking(
     if (!link || link.userId !== ownerUserId || !link.enabled) {
       return { ok: false, error: "Booking is not currently enabled." };
     }
-    const settings = await getAppSettings(ownerUserId);
+    const [settings, owner] = await Promise.all([
+      getAppSettings(ownerUserId),
+      prisma.user.findUniqueOrThrow({ where: { id: ownerUserId }, select: { timezone: true } }),
+    ]);
+    const timeZone = owner.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
 
     const start = new Date(startIso);
     if (Number.isNaN(start.getTime()) || start.getTime() < Date.now()) {
@@ -130,7 +146,8 @@ export async function createBooking(
       link.durationMin,
       busy,
       horizonEnd,
-      excludeDaysWindowFn(link.excludeDays, windowFnForWorkingHours(settings)),
+      excludeDaysWindowFn(link.excludeDays, windowFnForWorkingHours(settings, timeZone), timeZone),
+      timeZone,
     );
     if (!derived || derived.start.getTime() !== start.getTime()) {
       return { ok: false, error: "That slot isn't available — please pick another." };

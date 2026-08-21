@@ -1,7 +1,10 @@
 import { prisma } from "@/lib/prisma";
 import { expandEvents } from "@/lib/recurrence";
 import { getAppSettings } from "@/lib/settings";
+import { getZonedDateParts, getZonedWeekday, zonedWallTimeToUtc } from "@/lib/timezone";
 import type { TaskEnergy } from "@prisma/client";
+
+const SERVER_TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
 // Auto-scheduler: work-hours earliest-fit as the primitive (findEarliestSlot,
 // unit-tested directly), with a scored candidate search on top
@@ -30,22 +33,26 @@ const ENERGY_PREFERRED_HOURS: Record<TaskEnergy, [number, number]> = {
   LOW: [13, 18],
 };
 
-function isWorkDay(date: Date) {
-  const day = date.getDay();
+function isWorkDay(date: Date, timeZone: string) {
+  const day = getZonedWeekday(date, timeZone);
   return day !== 0 && day !== 6;
 }
 
+// Every real-world IANA zone's UTC offset is a whole multiple of 15
+// minutes, so rounding on the plain UTC millisecond grid lands on the
+// same wall-clock quarter-hour in any zone — no need to route this
+// through zone-aware math.
 function roundUpToGranularity(date: Date) {
   const ms = SLOT_GRANULARITY_MIN * 60_000;
   return new Date(Math.ceil(date.getTime() / ms) * ms);
 }
 
-function workWindowFor(date: Date) {
-  const start = new Date(date);
-  start.setHours(WORK_START_HOUR, 0, 0, 0);
-  const end = new Date(date);
-  end.setHours(WORK_END_HOUR, 0, 0, 0);
-  return { start, end };
+function workWindowFor(date: Date, timeZone: string) {
+  const { year, month, day } = getZonedDateParts(date, timeZone);
+  return {
+    start: zonedWallTimeToUtc(year, month, day, WORK_START_HOUR, 0, timeZone),
+    end: zonedWallTimeToUtc(year, month, day, WORK_END_HOUR, 0, timeZone),
+  };
 }
 
 /**
@@ -58,9 +65,12 @@ export type WindowFn = (date: Date) => DayWindow | null;
 
 // Default: the app's original hardcoded 9am-6pm-weekdays assumption,
 // still what a task with no assigned TimeSlot (settings/TimeSlotsManager)
-// schedules against.
-function defaultWindowFn(date: Date): DayWindow | null {
-  return isWorkDay(date) ? workWindowFor(date) : null;
+// schedules against, and what habits.ts uses (habits don't have their own
+// working-hours setting yet). Falls back to the server's own zone for an
+// account that hasn't set one yet (see User.timezone), so existing
+// behavior is unchanged until a browser reports a real zone for it.
+export function defaultWindowFn(timeZone: string): WindowFn {
+  return (date) => (isWorkDay(date, timeZone) ? workWindowFor(date, timeZone) : null);
 }
 
 const WEEKDAY_CODE_FOR_DAY = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"];
@@ -69,12 +79,19 @@ const WEEKDAY_CODE_FOR_DAY = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"];
  * Wraps a WindowFn to also reject any weekday in `excludeDays` (same
  * "SU,MO,TU,..." format as TimeSlot.daysOfWeek) — used by a booking
  * link's "no-meeting day" toggle to decline slots on chosen days without
- * touching the owner's own work-hours window.
+ * touching the owner's own work-hours window. `base` already carries
+ * whatever timezone it was built with; this only needs its own copy for
+ * evaluating which weekday `date` falls on.
  */
-export function excludeDaysWindowFn(excludeDays: string | null, base: WindowFn = defaultWindowFn): WindowFn {
+export function excludeDaysWindowFn(
+  excludeDays: string | null,
+  base: WindowFn = defaultWindowFn(SERVER_TIMEZONE),
+  timeZone: string = SERVER_TIMEZONE,
+): WindowFn {
   if (!excludeDays) return base;
   const excluded = new Set(excludeDays.split(",").filter(Boolean));
-  return (date: Date) => (excluded.has(WEEKDAY_CODE_FOR_DAY[date.getDay()]) ? null : base(date));
+  return (date: Date) =>
+    excluded.has(WEEKDAY_CODE_FOR_DAY[getZonedWeekday(date, timeZone)]) ? null : base(date);
 }
 
 export function findEarliestSlot(
@@ -82,20 +99,22 @@ export function findEarliestSlot(
   durationMin: number,
   busy: { start: Date; end: Date }[],
   horizonEnd: Date,
-  getWindow: WindowFn = defaultWindowFn,
+  getWindow: WindowFn = defaultWindowFn(SERVER_TIMEZONE),
+  timeZone: string = SERVER_TIMEZONE,
 ) {
   const durationMs = durationMin * 60_000;
   let cursor = roundUpToGranularity(from);
 
-  // Resets cursor to the next calendar day's midnight — not just "+24h",
-  // which preserves time-of-day and can get stuck (e.g. cursor at 17:45
-  // every day forever, always past a 9-6 window's end, since 17:45 is
-  // never "before" that day's start either). Midnight always is.
+  // Resets cursor to the next calendar day's midnight *in timeZone* — not
+  // just "+24h", which preserves time-of-day and can get stuck (e.g.
+  // cursor at 17:45 every day forever, always past a 9-6 window's end,
+  // since 17:45 is never "before" that day's start either). Midnight
+  // always is. Must track the target zone's own day boundary, not the
+  // server's — otherwise this can skip or repeat a day for anyone whose
+  // zone differs from the server's.
   const skipToNextDay = () => {
-    const next = new Date(cursor);
-    next.setDate(next.getDate() + 1);
-    next.setHours(0, 0, 0, 0);
-    cursor = next;
+    const { year, month, day } = getZonedDateParts(cursor, timeZone);
+    cursor = zonedWallTimeToUtc(year, month, day + 1, 0, 0, timeZone);
   };
 
   while (cursor < horizonEnd) {
@@ -129,39 +148,35 @@ export function findEarliestSlot(
 }
 
 /** Builds a WindowFn from a "SU,MO,..." day list + minutes-since-midnight range. */
-function windowFnFor(days: string, startMin: number, endMin: number): WindowFn {
+function windowFnFor(days: string, startMin: number, endMin: number, timeZone: string): WindowFn {
   const dayCodes = new Set(days.split(","));
   return (date: Date) => {
-    if (!dayCodes.has(WEEKDAY_CODE_FOR_DAY[date.getDay()])) return null;
-    const start = new Date(date);
-    start.setHours(0, 0, 0, 0);
-    start.setMinutes(startMin);
-    const end = new Date(date);
-    end.setHours(0, 0, 0, 0);
-    end.setMinutes(endMin);
-    return { start, end };
+    if (!dayCodes.has(WEEKDAY_CODE_FOR_DAY[getZonedWeekday(date, timeZone)])) return null;
+    const { year, month, day } = getZonedDateParts(date, timeZone);
+    return {
+      start: zonedWallTimeToUtc(year, month, day, 0, startMin, timeZone),
+      end: zonedWallTimeToUtc(year, month, day, 0, endMin, timeZone),
+    };
   };
 }
 
 /** Builds a WindowFn from a user-configured TimeSlot (Settings/TimeSlotsManager). */
-export function windowFnForTimeSlot(slot: {
-  daysOfWeek: string;
-  startMin: number;
-  endMin: number;
-}): WindowFn {
-  return windowFnFor(slot.daysOfWeek, slot.startMin, slot.endMin);
+export function windowFnForTimeSlot(
+  slot: { daysOfWeek: string; startMin: number; endMin: number },
+  timeZone: string = SERVER_TIMEZONE,
+): WindowFn {
+  return windowFnFor(slot.daysOfWeek, slot.startMin, slot.endMin, timeZone);
 }
 
 /**
  * Builds a WindowFn from a user's "working hours" AppSettings fields (#35)
  * — the real per-user replacement for the hardcoded 9-6 weekday default.
  */
-export function windowFnForWorkingHours(settings: {
-  workDays: string;
-  workStartMin: number;
-  workEndMin: number;
-}): WindowFn {
-  return windowFnFor(settings.workDays, settings.workStartMin, settings.workEndMin);
+export function windowFnForWorkingHours(
+  settings: { workDays: string; workStartMin: number; workEndMin: number },
+  timeZone: string = SERVER_TIMEZONE,
+): WindowFn {
+  return windowFnFor(settings.workDays, settings.workStartMin, settings.workEndMin, timeZone);
 }
 
 export function padForBuffer(
@@ -175,14 +190,17 @@ export function padForBuffer(
   }));
 }
 
-function isEnergyMatch(energy: TaskEnergy, slotStart: Date): boolean {
+function isEnergyMatch(energy: TaskEnergy, slotStart: Date, timeZone: string): boolean {
   const [prefStart, prefEnd] = ENERGY_PREFERRED_HOURS[energy];
-  const hour = slotStart.getHours();
+  const hour = Number(
+    new Intl.DateTimeFormat("en-US", { timeZone, hourCycle: "h23", hour: "2-digit" }).format(slotStart),
+  );
   return hour >= prefStart && hour < prefEnd;
 }
 
-export function dateKey(d: Date): string {
-  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+export function dateKey(d: Date, timeZone: string = SERVER_TIMEZONE): string {
+  const { year, month, day } = getZonedDateParts(d, timeZone);
+  return `${year}-${month}-${day}`;
 }
 
 // +5 for landing on a day that already has another scheduled event from
@@ -200,10 +218,11 @@ function scoreSlot(
   dueAt: Date | null,
   slot: { start: Date; end: Date },
   projectScheduledDays: Set<string>,
+  timeZone: string,
 ): number {
   let score = 0;
-  if (isEnergyMatch(energy, slot.start)) score += 10;
-  if (projectScheduledDays.has(dateKey(slot.start))) score += PROJECT_CLUSTER_BONUS;
+  if (isEnergyMatch(energy, slot.start, timeZone)) score += 10;
+  if (projectScheduledDays.has(dateKey(slot.start, timeZone))) score += PROJECT_CLUSTER_BONUS;
   if (dueAt && slot.start > dueAt) score -= 100; // overshooting the due date is bad, but not disqualifying if it's the only option
   score -= slot.start.getTime() / 1e14; // tie-break toward the earlier candidate
   return score;
@@ -228,6 +247,7 @@ export function findBestSlot(
   from: Date,
   projectScheduledDays: Set<string> = new Set(),
   getWindow?: WindowFn,
+  timeZone: string = SERVER_TIMEZONE,
 ) {
   let cursor = from;
   let best: { start: Date; end: Date } | null = null;
@@ -236,19 +256,19 @@ export function findBestSlot(
   const limit = wantsClustering ? CLUSTERING_CANDIDATE_LIMIT : CANDIDATE_LIMIT;
 
   for (let i = 0; i < limit; i++) {
-    const slot = findEarliestSlot(cursor, task.durationMin, busy, horizonEnd, getWindow);
+    const slot = findEarliestSlot(cursor, task.durationMin, busy, horizonEnd, getWindow, timeZone);
     if (!slot) break;
 
-    const score = scoreSlot(task.energy, task.dueAt, slot, projectScheduledDays);
+    const score = scoreSlot(task.energy, task.dueAt, slot, projectScheduledDays, timeZone);
     if (score > bestScore) {
       bestScore = score;
       best = slot;
     }
 
     const goodEnough =
-      isEnergyMatch(task.energy, slot.start) &&
+      isEnergyMatch(task.energy, slot.start, timeZone) &&
       (!task.dueAt || slot.start <= task.dueAt) &&
-      (!wantsClustering || projectScheduledDays.has(dateKey(slot.start)));
+      (!wantsClustering || projectScheduledDays.has(dateKey(slot.start, timeZone)));
     if (goodEnough) break;
 
     // A full-day jump per rejected candidate (an earlier version of this)
@@ -274,6 +294,7 @@ async function getProjectScheduledDays(
   excludeTaskId: string,
   now: Date,
   horizonEnd: Date,
+  timeZone: string,
 ): Promise<Set<string>> {
   if (!projectId) return new Set();
   const siblingEvents = await prisma.event.findMany({
@@ -284,7 +305,7 @@ async function getProjectScheduledDays(
     },
     select: { start: true },
   });
-  return new Set(siblingEvents.map((e) => dateKey(e.start)));
+  return new Set(siblingEvents.map((e) => dateKey(e.start, timeZone)));
 }
 
 /**
@@ -300,13 +321,14 @@ function applyDailyCap(
   now: Date,
   horizonEnd: Date,
   capMin: number | null,
+  timeZone: string,
 ): { start: Date; end: Date }[] {
   if (!capMin) return busy;
 
   const blocks: { start: Date; end: Date }[] = [];
   for (let day = new Date(now); day < horizonEnd; day = new Date(day.getTime() + 86_400_000)) {
-    if (!isWorkDay(day)) continue;
-    const { start: dayStart, end: dayEnd } = workWindowFor(day);
+    if (!isWorkDay(day, timeZone)) continue;
+    const { start: dayStart, end: dayEnd } = workWindowFor(day, timeZone);
     const busyMinutes = busy.reduce((sum, b) => {
       const overlapStart = b.start > dayStart ? b.start : dayStart;
       const overlapEnd = b.end < dayEnd ? b.end : dayEnd;
@@ -345,6 +367,32 @@ export async function fetchBusyIntervals(userId: string, now: Date, horizonEnd: 
 }
 
 /**
+ * Intersects several participants' own work-hours WindowFns into one:
+ * a candidate slot has to fall within *everyone's* window, each evaluated
+ * in that person's own zone for the same absolute instant. Any participant
+ * being off that calendar day (weekend, or a shorter/offset work window)
+ * shrinks or kills the shared window for that day.
+ */
+function intersectWindowFns(fns: WindowFn[]): WindowFn {
+  return (date) => {
+    let result: DayWindow | null = null;
+    for (const fn of fns) {
+      const participantWindow = fn(date);
+      if (!participantWindow) return null;
+      if (!result) {
+        result = participantWindow;
+        continue;
+      }
+      const newStart: Date = participantWindow.start > result.start ? participantWindow.start : result.start;
+      const newEnd: Date = participantWindow.end < result.end ? participantWindow.end : result.end;
+      if (newStart >= newEnd) return null;
+      result = { start: newStart, end: newEnd };
+    }
+    return result;
+  };
+}
+
+/**
  * Group scheduling v1 — no new algorithm, just fetchBusyIntervals for
  * each participant unioned into one combined busy list, then the same
  * findEarliestSlot every solo schedule already uses. Only works for real
@@ -352,6 +400,10 @@ export async function fetchBusyIntervals(userId: string, now: Date, horizonEnd: 
  * — an Assignee that isn't also a User has none). Authorization (who's
  * allowed to be included) is the caller's job, not this function's — see
  * findGroupMeetingSlotAction in actions.ts.
+ *
+ * Each participant's own working-hours settings and timezone (#46) are
+ * honored and intersected — a slot only counts if it's within *everyone's*
+ * own work window in their own local time, not just the requester's.
  */
 export async function findGroupSlot(
   userIds: string[],
@@ -360,13 +412,21 @@ export async function findGroupSlot(
   horizonEnd: Date,
   bufferMin: number,
 ): Promise<{ start: Date; end: Date } | null> {
-  const perUserBusy = await Promise.all(
-    userIds.map((id) => fetchBusyIntervals(id, now, horizonEnd)),
-  );
+  const [perUserBusy, users, perUserSettings] = await Promise.all([
+    Promise.all(userIds.map((id) => fetchBusyIntervals(id, now, horizonEnd))),
+    prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, timezone: true } }),
+    Promise.all(userIds.map((id) => getAppSettings(id))),
+  ]);
+  const timeZoneById = new Map(users.map((u) => [u.id, u.timezone ?? SERVER_TIMEZONE]));
   const combinedBusy = padForBuffer(perUserBusy.flat(), bufferMin).sort(
     (a, b) => a.start.getTime() - b.start.getTime(),
   );
-  return findEarliestSlot(now, durationMin, combinedBusy, horizonEnd);
+  const getWindow = intersectWindowFns(
+    perUserSettings.map((settings) =>
+      windowFnForWorkingHours(settings, timeZoneById.get(settings.userId ?? "") ?? SERVER_TIMEZONE),
+    ),
+  );
+  return findEarliestSlot(now, durationMin, combinedBusy, horizonEnd, getWindow, timeZoneById.get(userIds[0]));
 }
 
 // Splits a task's total duration into ~chunkMin-sized pieces (the last
@@ -403,15 +463,20 @@ export async function scheduleTask(userId: string, taskId: string) {
   // in the past.
   const searchFrom = task.startAt && task.startAt > now ? task.startAt : now;
   const horizonEnd = new Date(now.getTime() + HORIZON_DAYS * 86_400_000);
-  const settings = await getAppSettings(userId);
+  const [settings, owner] = await Promise.all([
+    getAppSettings(userId),
+    prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { timezone: true } }),
+  ]);
+  const timeZone = owner.timezone ?? SERVER_TIMEZONE;
   const getWindow = task.timeSlot
-    ? windowFnForTimeSlot(task.timeSlot)
-    : windowFnForWorkingHours(settings);
+    ? windowFnForTimeSlot(task.timeSlot, timeZone)
+    : windowFnForWorkingHours(settings, timeZone);
   let busy = applyDailyCap(
     padForBuffer(await fetchBusyIntervals(userId, now, horizonEnd), settings.bufferMin),
     now,
     horizonEnd,
     settings.dailyCapMin,
+    timeZone,
   );
   const projectScheduledDays = await getProjectScheduledDays(
     userId,
@@ -419,6 +484,7 @@ export async function scheduleTask(userId: string, taskId: string) {
     task.id,
     now,
     horizonEnd,
+    timeZone,
   );
 
   // Each chunk is searched in turn, folding the just-placed chunk (plus
@@ -439,6 +505,7 @@ export async function scheduleTask(userId: string, taskId: string) {
       cursor,
       projectScheduledDays,
       getWindow,
+      timeZone,
     );
     if (!slot) return null;
     slots.push(slot);

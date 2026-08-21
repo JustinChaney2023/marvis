@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { getAppSettings } from "@/lib/settings";
-import { fetchBusyIntervals, findEarliestSlot, padForBuffer } from "@/lib/scheduler";
-import { startOfWeekMonday, addDays } from "@/lib/calendar-dates";
+import { defaultWindowFn, fetchBusyIntervals, findEarliestSlot, padForBuffer } from "@/lib/scheduler";
+import { startOfWeek, addDays } from "@/lib/calendar-dates";
 
 /**
  * Tops up each enabled habit to its timesPerWeek quota for the current
@@ -18,9 +18,12 @@ export async function scheduleHabitsForWeek(userId: string): Promise<{ placed: n
   if (habits.length === 0) return { placed: 0 };
 
   const now = new Date();
-  const weekStart = startOfWeekMonday(now);
+  const weekStart = startOfWeek(now);
   const weekEnd = addDays(weekStart, 7);
   const settings = await getAppSettings(userId);
+  const owner = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { timezone: true } });
+  const timeZone = owner.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const getWindow = defaultWindowFn(timeZone);
 
   let placed = 0;
   for (const habit of habits) {
@@ -39,7 +42,7 @@ export async function scheduleHabitsForWeek(userId: string): Promise<{ placed: n
     let cursor = now > weekStart ? now : weekStart;
 
     while (needed > 0) {
-      const slot = findEarliestSlot(cursor, habit.durationMin, busy, weekEnd);
+      const slot = findEarliestSlot(cursor, habit.durationMin, busy, weekEnd, getWindow, timeZone);
       if (!slot) break;
       await prisma.event.create({
         data: {
@@ -101,7 +104,7 @@ export async function rescheduleHabitOccurrence(userId: string, eventId: string)
   if (!event || !event.habitId) return;
 
   const now = new Date();
-  const weekEnd = addDays(startOfWeekMonday(now), 7);
+  const weekEnd = addDays(startOfWeek(now), 7);
   const durationMin = (event.end.getTime() - event.start.getTime()) / 60_000;
 
   // Delete first so the occurrence's own old slot doesn't show up as
@@ -109,8 +112,10 @@ export async function rescheduleHabitOccurrence(userId: string, eventId: string)
   await prisma.event.delete({ where: { id: eventId } });
 
   const settings = await getAppSettings(userId);
+  const owner = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { timezone: true } });
+  const timeZone = owner.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
   const busy = padForBuffer(await fetchBusyIntervals(userId, now, weekEnd), settings.bufferMin);
-  const slot = findEarliestSlot(now, durationMin, busy, weekEnd);
+  const slot = findEarliestSlot(now, durationMin, busy, weekEnd, defaultWindowFn(timeZone), timeZone);
   if (slot) {
     await prisma.event.create({
       data: { userId, habitId: event.habitId, title: event.title, start: slot.start, end: slot.end },

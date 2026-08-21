@@ -6,8 +6,8 @@ import { parseYMD, formatYMD } from "@/lib/calendar-dates";
 const SYNC_PAST_DAYS = 7;
 const SYNC_FUTURE_DAYS = 90;
 // Google requires an explicit IANA zone on recurring events (it expands
-// the RRULE server-side in that zone) — the app has no per-user timezone
-// setting, so this assumes the machine's local zone is the user's.
+// the RRULE server-side in that zone). Fallback only, for an account that
+// hasn't had its own User.timezone (#46) set yet.
 const LOCAL_TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
 function extractRRule(recurrence: string[] | null | undefined): string | null {
@@ -142,6 +142,8 @@ export async function exportToGoogle(userId: string) {
   if (!auth) return { exported: 0 };
   const calendar = google.calendar({ version: "v3", auth: auth.client });
 
+  const owner = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { timezone: true } });
+  const timeZone = owner.timezone ?? LOCAL_TIMEZONE;
   const all = await prisma.event.findMany({ where: { userId } });
   const toPush = all.filter((e) => !e.googleEventId || e.localDirty);
 
@@ -153,10 +155,10 @@ export async function exportToGoogle(userId: string) {
         description: event.notes ?? undefined,
         start: event.allDay
           ? { date: formatYMD(event.start) }
-          : { dateTime: event.start.toISOString(), timeZone: LOCAL_TIMEZONE },
+          : { dateTime: event.start.toISOString(), timeZone },
         end: event.allDay
           ? { date: formatYMD(event.end) }
-          : { dateTime: event.end.toISOString(), timeZone: LOCAL_TIMEZONE },
+          : { dateTime: event.end.toISOString(), timeZone },
         recurrence: event.recurrenceRule ? [`RRULE:${event.recurrenceRule}`] : undefined,
       };
 

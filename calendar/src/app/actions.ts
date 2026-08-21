@@ -1397,6 +1397,36 @@ export async function updateSchedulingSettingsAction(formData: FormData) {
   revalidatePath("/");
 }
 
+function isValidTimeZone(tz: string): boolean {
+  try {
+    Intl.DateTimeFormat(undefined, { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Auto-detect (#46) — called once by TimezoneSync.tsx on mount with the
+ * browser's own `Intl.DateTimeFormat().resolvedOptions().timeZone`.
+ * Never overwrites an already-set value: it might be a deliberate manual
+ * override from Settings, not just an earlier auto-detect run.
+ */
+export async function syncUserTimezoneAction(timezone: string): Promise<void> {
+  const user = await requireUser();
+  if (user.timezone || !isValidTimeZone(timezone)) return;
+  await prisma.user.update({ where: { id: user.id }, data: { timezone } });
+}
+
+/** Manual override from Settings — always wins, even over a later auto-detect. */
+export async function setUserTimezoneAction(formData: FormData): Promise<void> {
+  const user = await requireUser();
+  const timezone = String(formData.get("timezone") ?? "").trim();
+  if (!timezone || !isValidTimeZone(timezone)) return;
+  await prisma.user.update({ where: { id: user.id }, data: { timezone } });
+  revalidatePath("/settings");
+}
+
 // Secret fields (localAiApiKey, anthropicApiKey) are never redisplayed
 // once saved — the form just shows "a key is saved" — so a blank
 // submission means "leave it as-is," not "clear it." An explicit

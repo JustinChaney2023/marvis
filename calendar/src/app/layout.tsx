@@ -5,6 +5,7 @@ import QuickCapture from "./QuickCapture";
 import ShortcutsHelp from "./ShortcutsHelp";
 import NotificationWatcher from "./NotificationWatcher";
 import SyncWatcher from "./SyncWatcher";
+import TimezoneSync from "./TimezoneSync";
 import MeetingBanner from "./MeetingBanner";
 import TopBar from "./TopBar";
 
@@ -55,6 +56,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <ShortcutsHelp />
         <NotificationWatcher />
         <SyncWatcher />
+        <TimezoneSync />
       </body>
     </html>
   );

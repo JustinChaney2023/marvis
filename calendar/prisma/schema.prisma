@@ -25,6 +25,13 @@ model User {
   // future admin-only surface. Not a general role system.
   isAdmin      Boolean  @default(false)
   createdAt    DateTime @default(now())
+  // IANA zone name (e.g. "America/Chicago") the scheduler/booking-page/
+  // Google-sync-export code treats as *this account's* timezone (#46).
+  // Null = not yet detected — TimezoneSync.tsx auto-fills it from the
+  // browser on first load after login; every server-side reader falls
+  // back to the server process's own zone when null, so an existing
+  // account's behavior doesn't change until its own browser sets this.
+  timezone     String?
 
   sessions      Session[]
   events        Event[]
