@@ -95,6 +95,7 @@ export async function importFromGoogle(userId: string) {
         create: {
           userId,
           title: item.summary ?? "(untitled)",
+          notes: item.description ?? null,
           start,
           end,
           allDay,
@@ -105,6 +106,7 @@ export async function importFromGoogle(userId: string) {
         },
         update: {
           title: item.summary ?? "(untitled)",
+          notes: item.description ?? null,
           start,
           end,
           allDay,
@@ -148,6 +150,7 @@ export async function exportToGoogle(userId: string) {
     try {
       const body = {
         summary: event.title,
+        description: event.notes ?? undefined,
         start: event.allDay
           ? { date: formatYMD(event.start) }
           : { dateTime: event.start.toISOString(), timeZone: LOCAL_TIMEZONE },

@@ -1,5 +1,15 @@
 # Motion replica — feature backlog
 
+## Overnight Google Calendar parity session, iteration 5 (2026-08-21)
+- [x] **Sync `Event.notes` with Google/Apple** (#51) — the notes field
+      added in iteration 2 had a UI and round-tripped through this app's
+      own ICS export/import, but `google-sync.ts`/`apple-sync.ts` never
+      touched it on either sync path. Wired Google's `description` field
+      both ways (`importFromGoogle`/`exportToGoogle`) and Apple's
+      `DESCRIPTION` (via `event.description` on `ical.js`'s parsed
+      `ICAL.Event`) on import only — Apple sync has no export function
+      at all today, so there's no write direction to add it to.
+
 ## Overnight Google Calendar parity session, iteration 4 (2026-08-21)
 Checked duplicate-event quick action, month-view drag-across-days for
 all-day creation, search-query operators (#39), guest permission tiers,
