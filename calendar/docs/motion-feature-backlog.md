@@ -1,5 +1,33 @@
 # Motion replica — feature backlog
 
+## Modal layout + all-day events (2026-08-21)
+Two small user-reported fixes, then an overnight self-directed session
+kicked off at the end (see entry below once it lands).
+
+- [x] **EventModal/TaskModal were taller than the screen** — both were a
+      single narrow (`max-w-md`) column of stacked fields. Widened both
+      to `max-w-2xl`, regrouped fields into 2-column grids (Title/
+      Meeting link, Color/Event type, Start/End, Project/Assignee,
+      Color/Min chunk), and gave `EventModal` the same
+      `max-h-[85vh] overflow-y-auto` safety net `TaskModal` already had.
+      Net effect: wider and noticeably shorter, fits on screen without
+      scrolling on most laptop displays.
+- [x] **All-day events** — `Event.allDay` already existed in the schema
+      and was fully wired through Google/Apple/ICS sync and the
+      calendar's own all-day banner row/layout, but there was no way to
+      *set* it from the UI. Added an "All day" checkbox to `EventModal`;
+      checking it swaps the Start/End time inputs for date-only pickers
+      (end shown as the inclusive last day). Stored `end` is normalized
+      to the exclusive day-after on submit — the same convention
+      `google-sync.ts`/`ics.ts`/`layoutAllDayEvents` already assumed, so
+      no display-side code needed to change. Wired into `createEvent`,
+      `updateEvent`, and `updateEventOccurrence` (`allDayFromFormData`,
+      same pattern as the existing `locked` checkbox).
+
+Deliberately not done: a UI to *drag* across multiple days in month view
+and have it auto-check All day — the checkbox is fully functional for
+that case already (pick a date range), just not automatic yet.
+
 ## Issue backlog clear-out session (2026-08-20, headless)
 Worked every open GitHub issue in one pass: 15 closed, 2 correctly
 identified as already-shipped-but-uncommitted and just needed

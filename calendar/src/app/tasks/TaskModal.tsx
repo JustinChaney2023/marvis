@@ -21,6 +21,8 @@ const TASK_COLOR_OPTIONS = Object.keys(PROJECT_EVENT_COLORS);
 type Project = { id: string; name: string };
 type Assignee = { id: string; name: string; type: "HUMAN" | "AI" };
 type TimeSlot = { id: string; name: string };
+type Label = { id: string; name: string; color: string };
+type TaskOption = { id: string; title: string };
 
 export type TaskModalTask = {
   id: string;
@@ -37,6 +39,8 @@ export type TaskModalTask = {
   color: string | null;
   hardDeadline: boolean;
   chunkMin: number | null;
+  labels: { id: string }[];
+  blockedBy: { id: string }[];
 };
 
 type Props = {
@@ -45,6 +49,10 @@ type Props = {
   projects: Project[];
   assignees: Assignee[];
   timeSlots: TimeSlot[];
+  labels: Label[];
+  // Other open tasks this one can depend on — the task's own id (in edit
+  // mode) is filtered out by the caller, not here.
+  otherTasks: TaskOption[];
   defaultProjectId: string;
   // Only meaningful in create mode — edit mode always uses the task's
   // own already-saved assigneeId (including explicitly unassigned),
@@ -73,10 +81,24 @@ export default function TaskModal({
   projects,
   assignees,
   timeSlots,
+  labels,
+  otherTasks,
   defaultProjectId,
   defaultAssigneeId,
   onClose,
 }: Props) {
+  const [selectedLabelIds, setSelectedLabelIds] = useState<string[]>(
+    () => task?.labels.map((l) => l.id) ?? [],
+  );
+  const toggleLabel = (id: string) => {
+    setSelectedLabelIds((prev) => (prev.includes(id) ? prev.filter((l) => l !== id) : [...prev, id]));
+  };
+  const [selectedBlockedByIds, setSelectedBlockedByIds] = useState<string[]>(
+    () => task?.blockedBy.map((t) => t.id) ?? [],
+  );
+  const toggleBlockedBy = (id: string) => {
+    setSelectedBlockedByIds((prev) => (prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id]));
+  };
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [recurrenceSelection, setRecurrenceSelection] = useState<string>(() => {
     const rule = task?.recurrenceRule ?? "";
@@ -139,7 +161,7 @@ export default function TaskModal({
       role="dialog"
       aria-modal="true"
     >
-      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-6 shadow-2xl ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
+      <div className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-6 shadow-2xl ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold tracking-tight">
             {mode === "edit" ? "Edit task" : "New task"}
@@ -214,26 +236,6 @@ export default function TaskModal({
             </label>
           </div>
 
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-zinc-500">Min chunk</span>
-            <div className="flex items-center gap-1.5">
-              <input
-                type="number"
-                name="chunkMin"
-                value={chunkMinValue}
-                onChange={(e) => setChunkMinValue(e.target.value)}
-                min={1}
-                step={1}
-                placeholder="No chunking"
-                aria-label="Split into chunks of this many minutes"
-                className={`${inputClass} max-w-[8rem]`}
-              />
-              <span className="text-xs text-zinc-400">
-                min — splits the task into pieces this long, with breaks between
-              </span>
-            </div>
-          </label>
-
           <div className="grid grid-cols-2 gap-3">
             <label className="flex flex-col gap-1 text-sm">
               <span className="text-zinc-500">Project</span>
@@ -261,17 +263,87 @@ export default function TaskModal({
             </label>
           </div>
 
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-zinc-500">Color</span>
-            <select name="color" defaultValue={task?.color ?? ""} className={inputClass}>
-              <option value="">Use project color</option>
-              {TASK_COLOR_OPTIONS.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="flex flex-col gap-1 text-sm">
+              <span className="text-zinc-500">Color</span>
+              <select name="color" defaultValue={task?.color ?? ""} className={inputClass}>
+                <option value="">Use project color</option>
+                {TASK_COLOR_OPTIONS.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 text-sm">
+              <span className="text-zinc-500">Min chunk</span>
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="number"
+                  name="chunkMin"
+                  value={chunkMinValue}
+                  onChange={(e) => setChunkMinValue(e.target.value)}
+                  min={1}
+                  step={1}
+                  placeholder="No chunking"
+                  aria-label="Split into chunks of this many minutes"
+                  className={inputClass}
+                />
+              </div>
+              <span className="text-xs text-zinc-400">min per piece, with breaks between</span>
+            </label>
+          </div>
+
+          <input type="hidden" name="labelIds" value={selectedLabelIds.join(",")} />
+          {labels.length > 0 && (
+            <div className="flex flex-col gap-1 text-sm">
+              <span className="text-zinc-500">Labels</span>
+              <div className="flex flex-wrap gap-1.5">
+                {labels.map((label) => {
+                  const selected = selectedLabelIds.includes(label.id);
+                  return (
+                    <button
+                      key={label.id}
+                      type="button"
+                      aria-pressed={selected}
+                      onClick={() => toggleLabel(label.id)}
+                      className={
+                        selected
+                          ? "rounded-full bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-indigo-700 dark:bg-indigo-500"
+                          : "rounded-full border border-zinc-200 px-2.5 py-1 text-xs text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-400 dark:hover:bg-zinc-700"
+                      }
+                    >
+                      {label.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          <input type="hidden" name="blockedByIds" value={selectedBlockedByIds.join(",")} />
+          {otherTasks.length > 0 && (
+            <details className="text-sm">
+              <summary className="cursor-pointer text-zinc-500">
+                Blocked by{selectedBlockedByIds.length > 0 ? ` (${selectedBlockedByIds.length})` : ""}
+              </summary>
+              <div className="mt-1.5 flex max-h-40 flex-col gap-1 overflow-y-auto rounded-lg border border-zinc-200 p-2 dark:border-zinc-600">
+                {otherTasks.map((t) => (
+                  <label key={t.id} className="flex cursor-pointer items-center gap-2 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={selectedBlockedByIds.includes(t.id)}
+                      onChange={() => toggleBlockedBy(t.id)}
+                    />
+                    <span className="truncate">{t.title}</span>
+                  </label>
+                ))}
+              </div>
+              <span className="mt-1 block text-xs text-zinc-400">
+                Won&apos;t be auto-scheduled until everything checked here is Done.
+              </span>
+            </details>
+          )}
 
           {timeSlots.length > 0 && (
             <label className="flex flex-col gap-1 text-sm">

@@ -11,7 +11,7 @@ import {
   removeEventGuestAction,
   getEventGuestsAction,
 } from "../actions";
-import { toLocalInputValue } from "@/lib/calendar-dates";
+import { toLocalInputValue, formatYMD, parseYMD } from "@/lib/calendar-dates";
 import { CloseIcon } from "../icons";
 import Button from "../ui/Button";
 import {
@@ -38,6 +38,7 @@ export type EventModalEvent = {
   // color, same as any other field in this form.
   color: string | null;
   eventType: "DEFAULT" | "OUT_OF_OFFICE" | "FOCUS_TIME";
+  allDay: boolean;
 };
 
 const EVENT_TYPE_OPTIONS = [
@@ -86,6 +87,7 @@ export default function EventModal({
   onClose,
 }: Props) {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isAllDay, setIsAllDay] = useState(() => (mode === "edit" ? !!event?.allDay : false));
   const [recurrenceSelection, setRecurrenceSelection] = useState<string>(() => {
     const rule =
       mode === "edit" && event?.recurrenceRule ? event.recurrenceRule : "";
@@ -189,8 +191,18 @@ export default function EventModal({
     const st = startTimeRef.current?.value ?? "";
     const ed = endDateRef.current?.value ?? "";
     const et = endTimeRef.current?.value ?? "";
-    if (sd && st) formData.set("start", `${sd}T${st}`);
-    if (ed && et) formData.set("end", `${ed}T${et}`);
+    if (isAllDay) {
+      // The end-date input shows the inclusive last day; store the
+      // exclusive day-after (Google Calendar's own all-day convention —
+      // see the endDateValue comment above) so display/layout math
+      // elsewhere doesn't need a separate all-day code path.
+      formData.set("start", `${sd}T00:00`);
+      const exclusiveEnd = new Date(parseYMD(ed || sd).getTime() + 86_400_000);
+      formData.set("end", `${formatYMD(exclusiveEnd)}T00:00`);
+    } else {
+      if (sd && st) formData.set("start", `${sd}T${st}`);
+      if (ed && et) formData.set("end", `${ed}T${et}`);
+    }
 
     // "Custom" is a UI-only sentinel — convert it to the actual RRULE
     // (or plain "FREQ=WEEKLY" when no days are selected) before it reaches
@@ -267,7 +279,13 @@ export default function EventModal({
   );
   const startDateValue = startValue.slice(0, 10);
   const startTimeValue = startValue.slice(11);
-  const endDateValue = endValue.slice(0, 10);
+  // Stored `end` for an all-day event is the exclusive day *after* the
+  // last day (same convention Google Calendar uses) — the date input
+  // shows the inclusive last day instead, one day earlier.
+  const endDateValue =
+    mode === "edit" && event?.allDay
+      ? formatYMD(new Date(event.end.getTime() - 86_400_000))
+      : endValue.slice(0, 10);
   const endTimeValue = endValue.slice(11);
   const isEditingRecurring = mode === "edit" && !!event?.recurrenceRule;
 
@@ -278,7 +296,7 @@ export default function EventModal({
       role="dialog"
       aria-modal="true"
     >
-      <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-6 shadow-2xl ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
+      <div className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-6 shadow-2xl ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold tracking-tight">
             {mode === "create" ? "New event" : "Edit event"}
@@ -294,27 +312,29 @@ export default function EventModal({
         </div>
 
         <form onSubmit={handleSubmit} className="mt-4 flex flex-col gap-4">
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-zinc-500">Title</span>
-            <input
-              ref={titleInputRef}
-              name="title"
-              required
-              defaultValue={initialTitle}
-              className={inputClass}
-            />
-          </label>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="flex flex-col gap-1 text-sm">
+              <span className="text-zinc-500">Title</span>
+              <input
+                ref={titleInputRef}
+                name="title"
+                required
+                defaultValue={initialTitle}
+                className={inputClass}
+              />
+            </label>
 
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-zinc-500">Meeting link (optional)</span>
-            <input
-              name="meetingUrl"
-              type="url"
-              placeholder="https://..."
-              defaultValue={mode === "edit" ? (event?.meetingUrl ?? "") : ""}
-              className={inputClass}
-            />
-          </label>
+            <label className="flex flex-col gap-1 text-sm">
+              <span className="text-zinc-500">Meeting link (optional)</span>
+              <input
+                name="meetingUrl"
+                type="url"
+                placeholder="https://..."
+                defaultValue={mode === "edit" ? (event?.meetingUrl ?? "") : ""}
+                className={inputClass}
+              />
+            </label>
+          </div>
 
           {mode === "edit" && (
             <div className="flex flex-col gap-1.5 text-sm">
@@ -378,78 +398,97 @@ export default function EventModal({
             </div>
           )}
 
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-zinc-500">Color</span>
-            <select
-              name="color"
-              defaultValue={(mode === "edit" ? event?.color : null) ?? ""}
-              className={inputClass}
-            >
-              <option value="">Default</option>
-              {EVENT_COLOR_OPTIONS.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="flex flex-col gap-1 text-sm">
+              <span className="text-zinc-500">Color</span>
+              <select
+                name="color"
+                defaultValue={(mode === "edit" ? event?.color : null) ?? ""}
+                className={inputClass}
+              >
+                <option value="">Default</option>
+                {EVENT_COLOR_OPTIONS.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="flex flex-col gap-1 text-sm">
+              <span className="text-zinc-500">Event type</span>
+              <select
+                name="eventType"
+                defaultValue={
+                  mode === "edit" ? (event?.eventType ?? "DEFAULT") : (initialEventType ?? "DEFAULT")
+                }
+                className={inputClass}
+              >
+                {EVENT_TYPE_OPTIONS.map((t) => (
+                  <option key={t.value} value={t.value}>
+                    {t.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <label className="flex cursor-pointer items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              name="allDay"
+              checked={isAllDay}
+              onChange={(e) => setIsAllDay(e.target.checked)}
+              className="h-4 w-4 rounded border-zinc-300 text-indigo-600 focus:ring-indigo-500/40 dark:border-zinc-600"
+            />
+            <span className="text-zinc-700 dark:text-zinc-300">All day</span>
           </label>
 
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-zinc-500">Event type</span>
-            <select
-              name="eventType"
-              defaultValue={
-                mode === "edit" ? (event?.eventType ?? "DEFAULT") : (initialEventType ?? "DEFAULT")
-              }
-              className={inputClass}
-            >
-              {EVENT_TYPE_OPTIONS.map((t) => (
-                <option key={t.value} value={t.value}>
-                  {t.label}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="flex flex-col gap-1 text-sm">
+              <span className="text-zinc-500">Start</span>
+              <div className="flex gap-2">
+                <input
+                  ref={startDateRef}
+                  type="date"
+                  required
+                  defaultValue={startDateValue}
+                  className={`${inputClass} flex-[2]`}
+                />
+                {!isAllDay && (
+                  <input
+                    ref={startTimeRef}
+                    type="time"
+                    required
+                    defaultValue={startTimeValue}
+                    className={`${inputClass} flex-1`}
+                  />
+                )}
+              </div>
+            </label>
 
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-zinc-500">Start</span>
-            <div className="flex gap-2">
-              <input
-                ref={startDateRef}
-                type="date"
-                required
-                defaultValue={startDateValue}
-                className={`${inputClass} flex-[2]`}
-              />
-              <input
-                ref={startTimeRef}
-                type="time"
-                required
-                defaultValue={startTimeValue}
-                className={`${inputClass} flex-1`}
-              />
-            </div>
-          </label>
-
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-zinc-500">End</span>
-            <div className="flex gap-2">
-              <input
-                ref={endDateRef}
-                type="date"
-                required
-                defaultValue={endDateValue}
-                className={`${inputClass} flex-[2]`}
-              />
-              <input
-                ref={endTimeRef}
-                type="time"
-                required
-                defaultValue={endTimeValue}
-                className={`${inputClass} flex-1`}
-              />
-            </div>
-          </label>
+            <label className="flex flex-col gap-1 text-sm">
+              <span className="text-zinc-500">End{isAllDay ? " (last day)" : ""}</span>
+              <div className="flex gap-2">
+                <input
+                  ref={endDateRef}
+                  type="date"
+                  required
+                  defaultValue={endDateValue}
+                  className={`${inputClass} flex-[2]`}
+                />
+                {!isAllDay && (
+                  <input
+                    ref={endTimeRef}
+                    type="time"
+                    required
+                    defaultValue={endTimeValue}
+                    className={`${inputClass} flex-1`}
+                  />
+                )}
+              </div>
+            </label>
+          </div>
 
           <div className="border-t border-zinc-200 pt-4 dark:border-zinc-700">
             {isEditingRecurring && (

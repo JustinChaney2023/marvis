@@ -751,6 +751,10 @@ function lockedFromFormData(formData: FormData): boolean {
   return formData.get("locked") === "on";
 }
 
+function allDayFromFormData(formData: FormData): boolean {
+  return formData.get("allDay") === "on";
+}
+
 // meetingUrl is rendered as a plain <a href> on the public /rsvp/[token]
 // page (and MeetingBanner) — a "javascript:" value would execute on
 // click for a guest who never signed in. <input type="url"> only
@@ -800,6 +804,7 @@ export async function createEvent(formData: FormData) {
       color,
       locked: lockedFromFormData(formData),
       eventType: eventTypeFromFormData(formData),
+      allDay: allDayFromFormData(formData),
       localDirty: true,
     },
   });
@@ -867,6 +872,7 @@ export async function updateEvent(
       color,
       locked: lockedFromFormData(formData),
       eventType: eventTypeFromFormData(formData),
+      allDay: allDayFromFormData(formData),
       localDirty: true,
     },
   });
@@ -938,6 +944,7 @@ export async function updateEventOccurrence(
         color,
         locked: lockedFromFormData(formData),
         eventType: eventTypeFromFormData(formData),
+        allDay: allDayFromFormData(formData),
         recurrenceExceptionOfId: masterId,
         recurrenceOriginalStart: new Date(normalizedOriginalStart),
         localDirty: true,

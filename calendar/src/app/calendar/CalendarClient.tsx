@@ -295,6 +295,7 @@ export default function CalendarClient({
         meetingUrl: match.meetingUrl,
         color: match.projectColor,
         eventType: match.eventType,
+        allDay: match.allDay,
       },
     };
   });
@@ -392,6 +393,7 @@ export default function CalendarClient({
         meetingUrl: event.meetingUrl,
         color: event.projectColor,
         eventType: event.eventType,
+        allDay: event.allDay,
       },
     });
   };
