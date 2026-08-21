@@ -1,5 +1,40 @@
 # Motion replica — feature backlog
 
+## Overnight Google Calendar parity session — wrap-up (2026-08-21)
+Five self-paced iterations (each a background research-then-ship pass, see
+the individual iteration entries directly below), triggered by an explicit
+ask to treat Google Calendar feature parity as the priority bar — this app
+is a stated Google Calendar replacement/overlay, not just a Motion clone.
+
+**Shipped**: per-event reminders w/ presets (#47), event description/notes
+field in EventModal (#48), tentative "Maybe" RSVP status (#49), show/hide
+toggle for shared calendars (#50), notes syncing to/from Google + Apple
+(#51). All five: `npx tsc --noEmit` + `npm test` clean before commit,
+committed locally only (never pushed), each backed by its own closed
+GitHub issue.
+
+**Checked and judged NOT gaps** (so a future session doesn't re-propose
+them): 8-color event palette vs. Google's 11 (deliberate choice), single-
+event `.ics` download (already exists, `/api/ics/export`), duplicate-event
+quick action, drag-across-days all-day creation in month view, guest
+permission tiers beyond RSVP, declining an invite with a note, search
+query operators beyond plain text, color inheriting from the wrong source.
+
+**Deliberately not attempted this session** — real, already-filed gaps,
+but each is a bigger architectural lift than a single background
+iteration should take unsupervised: **#46 multi-timezone support** (touches
+every `Date`/`formatTime` call plus google-sync.ts — see its original
+2026-08-20 scoping note) and **#31 task attachments + activity log**
+(genuinely new subsystems, not a slot-in). Both need a real scoping pass
+with Justin before implementation, same reasoning the doc already had on
+file for them — nothing new learned tonight changes that.
+
+**Assessment**: three separate audits (iterations 2, 3, 4) independently
+converged on "fresh Google Calendar gaps are scarce now" — this app's
+Google Calendar parity is in a genuinely strong place. Next session's best
+use of time is either scoping #46/#31 properly with Justin, or picking a
+fresh angle (e.g. a live user-facing UI/UX pass, not another feature audit).
+
 ## Overnight Google Calendar parity session, iteration 5 (2026-08-21)
 - [x] **Sync `Event.notes` with Google/Apple** (#51) — the notes field
       added in iteration 2 had a UI and round-tripped through this app's
