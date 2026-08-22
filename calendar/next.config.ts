@@ -16,6 +16,12 @@ const securityHeaders = [
   { key: "X-Frame-Options", value: "DENY" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+  // This app doesn't terminate TLS itself — a self-host is expected to
+  // sit behind a reverse proxy (nginx/Caddy/etc.) handling HTTPS. Inert
+  // over a plain-HTTP response (browsers only honor HSTS from a secure
+  // context), so it's harmless to send unconditionally and just works
+  // once a proxy is in front of this.
+  { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" },
   {
     key: "Content-Security-Policy",
     // 'unsafe-inline' on script-src is required for the pre-paint theme
@@ -44,6 +50,10 @@ const nextConfig: NextConfig = {
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },
+  // Lets dev-mode HMR work when accessing the dev server over Tailscale
+  // instead of localhost — Next blocks cross-origin dev requests by
+  // default. No effect on a production build.
+  allowedDevOrigins: isDev ? ["100.93.49.60"] : undefined,
 };
 
 export default nextConfig;

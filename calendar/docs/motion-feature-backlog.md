@@ -1,5 +1,145 @@
 # Motion replica — feature backlog
 
+## Security + accessibility audit (2026-08-22)
+Prompted by a user-shared "20 things to check before launching" checklist
+plus an explicit ask for OWASP Top 10 and accessibility coverage. Builds on
+the 2026-08-18 "Security deep-dive" and 2026-08-19 "Server-action ownership
+re-audit" above — re-verified those findings still hold and specifically
+re-checked every server action added *since* (attachments/activity log,
+timezone, multi-account Google, booking min-notice/max-per-day, recurrence
+splitting, project templates) for the same IDOR/tampering bug class.
+`src/app/actions.ts`/`scheduleChat.ts`/`aiClient.ts`/the new chat UI were
+mid-edit by a concurrent session (#55) — read-only for this pass, findings
+there are flagged, not fixed.
+
+**The 20-item checklist:**
+- ✅ **API keys hidden** — `.gitignore` covers `.env*`; `.env` never
+  committed; `.env.example` has empty placeholder values only.
+- ✅ **No secrets in git history** — scanned full history for common
+  key/token patterns (`AIza...`, `sk-...`, PEM headers). Nothing found.
+- ➖ **"Public DB key"** — N/A, SQLite+Prisma has no anon-key concept;
+  `DATABASE_URL` is a local file path, never sent to the client.
+- ✅ **Row-level security equivalent** — spot-checked every action added
+  since the 2026-08-19 audit (`getTaskActivityAction`, `addTaskCommentAction`,
+  `addTaskAttachmentAction`, `deleteTaskAttachmentAction`,
+  `disconnectGoogleAction`, `setDefaultGoogleAccountAction`,
+  `renameGoogleAccountAction`, `syncUserTimezoneAction`,
+  `setUserTimezoneAction`, booking min-notice/max-per-day form parsing) —
+  all correctly scope by `userId`/ownership. `googleAccountIdFromFormData`
+  (the per-event "Sync to" override from #52) also verifies ownership
+  before trusting a client-supplied account id — same `verifyOwnedId`
+  discipline as the rest of the file.
+- ⚠️ **One real gap, flagged not fixed (actions.ts mid-edit by #55)**:
+  `addTaskAttachmentAction` trusts a client-supplied `storedPath` verbatim
+  without verifying it's under the caller's own `${user.id}/` upload
+  directory. A server action can be invoked directly with arbitrary args,
+  not just through the upload UI — low severity (the on-disk name is an
+  unguessable random UUID, and Next's static file serving doesn't traverse
+  `..` outside `public/`), but should still check
+  `storedPath.startsWith(\`${user.id}/\`)` before writing the row, same
+  defense-in-depth already applied to every other client-supplied id in
+  this file. **Follow-up needed** once #55's edits land.
+- ✅ **Sensitive data encrypted at rest** — `TOKEN_ENCRYPTION_KEY`
+  (AES-256-GCM) still covers every `GoogleAccount` row's tokens; #52's
+  move to multiple accounts per user didn't change the encryption path,
+  just added more rows using the same one.
+- ✅ **Server-side auth on every action** — swept all 92 exported
+  functions across `actions.ts`; only 3 lack `requireUser()`
+  (`respondToInviteAction`, `getInviteAction`, `createBookingAction`),
+  all three genuinely public by design (token/slug-resolved, same as the
+  2026-08-19 audit already noted for booking).
+- ✅ **Record access locked to owner** — same finding as row-level
+  security above.
+- ✅ **Field tampering blocked** — booking link min-notice/max-per-day
+  values are clamped server-side (0–10,080 min, 1–100/day) regardless of
+  what the client sends; no action spreads raw FormData into a Prisma
+  `data:` object without an explicit field list.
+- ✅ **Session cookies secure** — `httpOnly: true`, `secure` in
+  production, `sameSite: "lax"` (`src/lib/auth.ts`).
+- ✅ **Passwords hashed** — `scrypt` (Node stdlib, no dependency) with a
+  random salt per password and `timingSafeEqual` comparison — not a weak
+  hash, not plaintext.
+- ✅ **Login rate-limited** — 8/15min/IP, shared `src/lib/rateLimit.ts`,
+  still wired correctly.
+- ➖ **Bot protection (CAPTCHA)** — genuinely absent, same accepted
+  tradeoff the 2026-08-18 audit already reasoned through for this app's
+  scale (rate limiting exists instead); still holds.
+- ✅ **Parameterized queries** — zero `$queryRaw`/`$executeRaw` anywhere;
+  100% through Prisma's query builder.
+- ✅ **Input validation** — spot-checked; numeric fields clamped, enum
+  fields validated against an allow-list, empty/malformed values dropped
+  rather than trusted (`isValidTimeZone`, `parseBookingLinkForm`, etc.).
+- ✅ **User content escaped (XSS)** — `src/lib/markdown.ts` strips raw
+  HTML entirely (`renderer.html = () => ""`), allowlists link/image URL
+  schemes, and escapes attribute values — already hardened. Its own
+  "self-XSS only, notes are private to their author" reasoning was
+  re-verified still true: confirmed `SharedEvent` (calendar sharing) never
+  includes `notes`, and the public RSVP page never renders event notes to
+  a guest — notes still never cross to a second real account.
+- ✅ **File uploads restricted** — both upload routes (`/api/uploads`,
+  `/api/uploads/attachments`) use a MIME allowlist (SVG deliberately
+  excluded from both — active XSS vector), a size cap, and a
+  server-generated random filename, never the client's own filename, for
+  the on-disk path.
+- 🔧 **Security headers** — added `Strict-Transport-Security` (was
+  missing entirely; inert over plain HTTP, so harmless without a
+  reverse-proxy TLS terminator and effective once one exists). Everything
+  else (CSP, X-Frame-Options, nosniff, Referrer-Policy, Permissions-Policy)
+  already covered nothing new needed adjusting for any feature shipped
+  since.
+- 🔧 **HTTPS enforced** — this app never terminates TLS itself; documented
+  that assumption directly in `next.config.ts` (a self-host needs a
+  reverse proxy — nginx/Caddy/etc. — in front of it) rather than leaving
+  it silently assumed.
+- ⚠️ **Dependencies scanned** — `npm audit`: 3 *high* findings, all the
+  same root cause (`deepmerge-ts` stack-exhaustion advisory,
+  GHSA-ggr8-5vv4-36mx) pulled in transitively by `@prisma/config` →
+  `prisma` (the CLI/migration tool), **not** `@prisma/client` (the actual
+  runtime query engine this app's requests go through). `npm audit fix
+  --force`'s suggested fix is actually a *downgrade* to an older prisma
+  — not a real fix, just npm's resolver finding an older tree without the
+  vulnerable transitive dep. Reviewed and accepted: exploiting this needs
+  attacker-controlled input reaching the Prisma CLI's own config-merging
+  step, which never happens in this app's request path (only at `migrate`/
+  `generate` time, over inputs this repo itself controls). Revisit when
+  a genuinely newer `prisma` release drops the vulnerable transitive dep.
+
+**OWASP Top 10 (2021)**: Broken Access Control ✅ (per row-level-security
+findings above, minus the one flagged attachment gap), Cryptographic
+Failures ✅ (scrypt + AES-256-GCM), Injection ✅ (Prisma-only, no raw SQL),
+Insecure Design ✅ (confirm-before-execute being designed into #55 rather
+than bolted on after is exactly this working as intended), Security
+Misconfiguration ✅ (headers/CSP, now +HSTS), Vulnerable/Outdated Components
+⚠️ (see npm audit above — accepted, not exploitable in this app's own
+request path), Identification/Authentication Failures ✅ (rate limiting,
+hashing, session revocation), Software/Data Integrity Failures ➖ (no
+CI/CD artifact signing or unsanitized deserialization surface exists to
+fail), Security Logging/Monitoring Failures ➖ (accepted — no centralized
+log aggregation for a single-user/small-group self-host; revisit only if
+this ever runs multi-tenant), **SSRF** ✅ — already excellent:
+`calendarSubscriptions.ts`'s `assertPublicUrl` resolves the hostname to an
+actual IP and rejects private/loopback/link-local ranges (not just a
+hostname-string check), disables redirects, and caps response size —
+exactly the right shape for a feature whose entire point is "fetch a
+URL I don't control."
+
+**Accessibility**: dialog roles/`aria-modal` consistent across all 7
+modal-style components (nothing found missing it). Icon-only interactive
+elements checked — the one hit (`team/page.tsx`'s person/robot icon) is
+decorative next to visible text, not an unlabeled control. RSVP/priority
+status already pairs color with text/an icon+tooltip, never color alone.
+Keyboard alternative to drag-to-move an event already exists (click →
+EventModal → edit Start/End directly). 🔧 One real gap fixed: the
+calendar search input (`CalendarSearch.tsx`) stripped the focus outline
+(`outline-none`) with no visible replacement — a keyboard user tabbing to
+it got zero focus indicator. Added `focus-within:ring-2` to its container.
+
+`npx tsc --noEmit`, `npm test`, `npm run build` all pass clean. No schema
+changes. Nothing touched in `actions.ts`/`scheduleChat.ts`/`aiClient.ts`/
+the new chat UI (owned by the concurrent #55 session) — the one finding
+there (`addTaskAttachmentAction`'s `storedPath` trust) is flagged above
+for follow-up once that lands.
+
 ## AI chat can now take action (2026-08-22, #55)
 `src/lib/scheduleChat.ts` was explicitly read-only — its system prompt
 said "you cannot create, edit, or delete anything." Justin decided the

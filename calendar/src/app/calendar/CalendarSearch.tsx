@@ -46,7 +46,7 @@ export default function CalendarSearch({ view }: { view: string }) {
 
   return (
     <div ref={containerRef} className="relative">
-      <div className="flex items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-3 py-1.5 dark:border-zinc-700 dark:bg-zinc-800">
+      <div className="flex items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-3 py-1.5 focus-within:ring-2 focus-within:ring-indigo-500/40 dark:border-zinc-700 dark:bg-zinc-800">
         <SearchIcon className="h-3.5 w-3.5 text-zinc-400" />
         <input
           type="text"
