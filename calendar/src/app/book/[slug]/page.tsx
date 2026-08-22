@@ -13,7 +13,12 @@ export default async function PublicBookingPage(
     notFound();
   }
 
-  const raw = await getAvailableBookingSlots(link.userId, link.durationMin);
+  const raw = await getAvailableBookingSlots(
+    link.userId,
+    link.durationMin,
+    link.excludeDays,
+    link.minNoticeMin,
+  );
   const availability: BookingDay[] = raw.map((entry) => ({
     dayLabel: entry.day,
     slots: entry.slots.map((d) => d.toISOString()),

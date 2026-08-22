@@ -1700,17 +1700,19 @@ function parseBookingLinkForm(formData: FormData) {
   const rawSlug = String(formData.get("slug") ?? "").trim();
   const slug = rawSlug ? slugify(rawSlug) : "";
   const excludeDays = String(formData.get("excludeDays") ?? "").trim() || null;
-  return { title, durationMin, slug, excludeDays };
+  const rawMinNotice = Number(formData.get("minNoticeMin") ?? 60);
+  const minNoticeMin = Number.isFinite(rawMinNotice) ? Math.min(Math.max(rawMinNotice, 0), 10_080) : 60;
+  return { title, durationMin, slug, excludeDays, minNoticeMin };
 }
 
 export async function createBookingLinkAction(formData: FormData) {
   const user = await requireUser();
-  const { title, durationMin, slug, excludeDays } = parseBookingLinkForm(formData);
+  const { title, durationMin, slug, excludeDays, minNoticeMin } = parseBookingLinkForm(formData);
   if (!slug || !Number.isFinite(durationMin) || durationMin < 5 || durationMin > 240) return;
 
   try {
     await prisma.bookingLink.create({
-      data: { userId: user.id, slug, title, durationMin, excludeDays, enabled: true },
+      data: { userId: user.id, slug, title, durationMin, excludeDays, minNoticeMin, enabled: true },
     });
   } catch {
     // Unique constraint on slug — already taken (by this user or another).
@@ -1720,13 +1722,13 @@ export async function createBookingLinkAction(formData: FormData) {
 
 export async function updateBookingLinkAction(linkId: string, formData: FormData) {
   const user = await requireUser();
-  const { title, durationMin, slug, excludeDays } = parseBookingLinkForm(formData);
+  const { title, durationMin, slug, excludeDays, minNoticeMin } = parseBookingLinkForm(formData);
   if (!slug || !Number.isFinite(durationMin) || durationMin < 5 || durationMin > 240) return;
 
   try {
     await prisma.bookingLink.updateMany({
       where: { id: linkId, userId: user.id },
-      data: { title, durationMin, slug, excludeDays },
+      data: { title, durationMin, slug, excludeDays, minNoticeMin },
     });
   } catch {
     // Unique constraint on slug — already taken by another link.

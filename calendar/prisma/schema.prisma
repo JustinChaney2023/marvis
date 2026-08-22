@@ -592,6 +592,12 @@ model BookingLink {
   // "SA,SU" to decline weekend bookings. Null/empty = every day the
   // normal work-hours window already allows.
   excludeDays String?
+  // Minimum lead time before a booking, in minutes — a visitor can't
+  // book (and availability won't even list) a slot starting sooner than
+  // this from "now". Google Calendar's Appointment Schedules call this
+  // the same thing. 60 = the same "at least an hour's notice" default
+  // most scheduling tools ship with.
+  minNoticeMin Int      @default(60)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }

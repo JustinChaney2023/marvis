@@ -1,5 +1,44 @@
 # Motion replica — feature backlog
 
+## Google Calendar parity audit, round 2 (2026-08-22, #53)
+Fresh sweep after the overnight session + this morning's #46/#31/#52,
+looking at areas not explicitly checked before: Google Tasks parity
+(already exceeded — this app's tasks have real scheduled times, subtasks,
+labels, dependencies, none of which Google Tasks has), Appointment
+Schedules' advanced options, notification channels beyond in-app,
+"smart"/structured event parsing from email (genuinely out of scope — no
+mailbox access, not this app's model), keyboard shortcut completeness,
+event visibility (Public/org-private — doesn't map onto this app's
+single-tenant-per-account model), offline/PWA support, and syncing a
+*non-primary* calendar within one already-connected Google account (a
+smaller, separate thing from #52's multi-*account* support — noted as a
+real but lower-value follow-up, not built this round: `GoogleAccount.
+calendarId` already supports it structurally, just has no picker UI yet).
+
+One real, well-scoped gap found and shipped:
+- [x] **Booking links had no minimum-notice period** (#53) — Google's
+      Appointment Schedules let you require lead time before a booking
+      (e.g. "at least 1 hour"); this app's `getAvailableBookingSlots`/
+      `createBooking` (`src/lib/booking.ts`) started the search at `now`
+      with no offset, so a visitor could see and book a slot starting in
+      the next few minutes. Added `BookingLink.minNoticeMin` (default 60,
+      same "an hour's notice" default most scheduling tools ship with),
+      threaded through slot generation (search cursor starts at
+      `now + minNoticeMin`) and the create-time re-validation (rejects a
+      submission inside the notice window even if the client's slot list
+      was momentarily stale). UI: a "Minimum notice" minutes field in
+      `BookingLinksManager.tsx`, same pattern as the existing
+      `excludeDays` field.
+
+Deferred, not filed as its own issue (lower value, smaller): a "max
+bookings per day" cap on a booking link — genuinely a Google Appointment
+Schedules feature this app lacks, but a narrower want than minimum notice
+(preventing an overbooked day is more a "for high-volume booking pages"
+problem than a personal-use one); and picking a non-primary calendar
+within one connected Google account (see above).
+
+`npx tsc --noEmit`, `npm test`, and `npm run build` all pass clean.
+
 ## Multiple connected Google accounts — personal + work (2026-08-22, #52)
 Justin explicitly asked for "connect multiple calendars from Google...
 someone's personal and someone's work" as part of a broader group-

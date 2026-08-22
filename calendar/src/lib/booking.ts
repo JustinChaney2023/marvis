@@ -26,6 +26,7 @@ export async function getAvailableBookingSlots(
   ownerUserId: string,
   durationMin: number,
   excludeDays: string | null = null,
+  minNoticeMin: number = 60,
 ): Promise<{ day: string; slots: Date[] }[]> {
   const [settings, owner] = await Promise.all([
     getAppSettings(ownerUserId),
@@ -33,6 +34,7 @@ export async function getAvailableBookingSlots(
   ]);
   const timeZone = owner.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
   const now = new Date();
+  const earliestBookable = new Date(now.getTime() + minNoticeMin * 60_000);
   const horizonEnd = new Date(now.getTime() + BOOKING_HORIZON_DAYS * 86_400_000);
 
   const busy = padForBuffer(
@@ -42,7 +44,7 @@ export async function getAvailableBookingSlots(
   const getWindow = excludeDaysWindowFn(excludeDays, windowFnForWorkingHours(settings, timeZone), timeZone);
 
   const byDay = new Map<string, Date[]>();
-  let cursor = now;
+  let cursor = earliestBookable;
   for (let i = 0; i < BOOKING_HORIZON_DAYS * MAX_SLOTS_PER_DAY; i++) {
     const slot = findEarliestSlot(
       cursor,
@@ -122,7 +124,10 @@ export async function createBooking(
     const timeZone = owner.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
 
     const start = new Date(startIso);
-    if (Number.isNaN(start.getTime()) || start.getTime() < Date.now()) {
+    if (
+      Number.isNaN(start.getTime()) ||
+      start.getTime() < Date.now() + link.minNoticeMin * 60_000
+    ) {
       return { ok: false, error: "That time is no longer valid." };
     }
 
