@@ -989,6 +989,11 @@ function notesFromFormData(formData: FormData): string | null {
   return raw || null;
 }
 
+function locationFromFormData(formData: FormData): string | null {
+  const raw = String(formData.get("location") ?? "").trim();
+  return raw || null;
+}
+
 // "" (EventModal's "Default account" option, or the field being absent
 // entirely when there's <2 connected accounts to choose between) means
 // "no explicit pin" — exportToGoogle then routes it to whichever account
@@ -1050,6 +1055,7 @@ export async function createEvent(formData: FormData) {
       meetingUrl,
       color,
       notes: notesFromFormData(formData),
+      location: locationFromFormData(formData),
       locked: lockedFromFormData(formData),
       eventType: eventTypeFromFormData(formData),
       allDay: allDayFromFormData(formData),
@@ -1121,6 +1127,7 @@ export async function updateEvent(
       meetingUrl,
       color,
       notes: notesFromFormData(formData),
+      location: locationFromFormData(formData),
       locked: lockedFromFormData(formData),
       eventType: eventTypeFromFormData(formData),
       allDay: allDayFromFormData(formData),
@@ -1197,6 +1204,7 @@ export async function updateEventOccurrence(
         meetingUrl,
         color,
         notes: notesFromFormData(formData),
+        location: locationFromFormData(formData),
         locked: lockedFromFormData(formData),
         eventType: eventTypeFromFormData(formData),
         allDay: allDayFromFormData(formData),
@@ -1287,6 +1295,7 @@ export async function updateEventFollowing(
         meetingUrl,
         color,
         notes: notesFromFormData(formData),
+        location: locationFromFormData(formData),
         locked: lockedFromFormData(formData),
         eventType: eventTypeFromFormData(formData),
         allDay: allDayFromFormData(formData),
@@ -1334,6 +1343,35 @@ export async function deleteEventOccurrence(masterId: string, originalStartIso: 
   await prisma.event.update({
     where: { id: masterId },
     data: { excludeDates: withExcludedStart(master.excludeDates, normalizedOriginalStart) },
+  });
+  revalidatePath("/");
+}
+
+/**
+ * "Delete this and following" — the parallel delete-scope option to
+ * updateEventFollowing's edit-scope (#54). Unlike that function, there's
+ * nothing to carry forward: just cap the series at the split point via
+ * the same `recurrenceEndsBefore` cutoff. Splitting exactly at the
+ * series' own anchor is equivalent to deleting the whole series.
+ */
+export async function deleteEventFollowing(masterId: string, originalStartIso: string) {
+  const user = await requireUser();
+  const normalizedOriginalStart = normalizeExcludedStart(originalStartIso);
+  if (!normalizedOriginalStart) return;
+  const master = await prisma.event.findFirst({
+    where: { id: masterId, userId: user.id, recurrenceRule: { not: null } },
+  });
+  if (!master) return;
+
+  const splitPoint = new Date(normalizedOriginalStart);
+  if (splitPoint.getTime() === master.start.getTime()) {
+    await deleteEvent(masterId);
+    return;
+  }
+
+  await prisma.event.update({
+    where: { id: masterId },
+    data: { recurrenceEndsBefore: splitPoint },
   });
   revalidatePath("/");
 }
@@ -2183,6 +2221,7 @@ export async function importIcsAction(
       allDay: e.allDay,
       recurrenceRule: e.recurrenceRule,
       notes: e.notes,
+      location: e.location,
       excludeDates: e.excludeDates,
     })),
   });

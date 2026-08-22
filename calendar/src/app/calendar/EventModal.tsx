@@ -8,6 +8,7 @@ import {
   updateEventOccurrence,
   updateEventFollowing,
   deleteEventOccurrence,
+  deleteEventFollowing,
   addEventGuestAction,
   removeEventGuestAction,
   getEventGuestsAction,
@@ -29,6 +30,7 @@ export type EventModalEvent = {
   id: string;
   title: string;
   notes: string | null;
+  location: string | null;
   start: Date;
   end: Date;
   recurrenceRule: string | null;
@@ -273,6 +275,8 @@ export default function EventModal({
     try {
       if (isEditingRecurring && editScope === "occurrence") {
         await deleteEventOccurrence(event.id, event.start.toISOString());
+      } else if (isEditingRecurring && editScope === "following") {
+        await deleteEventFollowing(event.id, event.start.toISOString());
       } else {
         await deleteEvent(event.id);
       }
@@ -360,6 +364,17 @@ export default function EventModal({
               />
             </label>
           </div>
+
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="text-zinc-500">Location (optional)</span>
+            <input
+              name="location"
+              type="text"
+              placeholder="e.g. Room 4B, 123 Main St"
+              defaultValue={mode === "edit" ? (event?.location ?? "") : ""}
+              className={inputClass}
+            />
+          </label>
 
           <div className="flex flex-col gap-1 text-sm">
             <span className="text-zinc-500">Notes</span>
@@ -677,7 +692,11 @@ export default function EventModal({
                 </div>
                 {isEditingRecurring && (
                   <span className="text-xs text-zinc-500">
-                    {editScope === "occurrence" ? "Deletes just this event." : "Deletes the whole series."}
+                    {editScope === "occurrence"
+                      ? "Deletes just this event."
+                      : editScope === "following"
+                        ? "Deletes this and every later occurrence — earlier ones are kept."
+                        : "Deletes the whole series."}
                   </span>
                 )}
               </div>

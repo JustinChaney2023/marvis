@@ -113,6 +113,7 @@ export default async function Page(props: PageProps<"/">) {
   const eventTypeByMasterId = new Map(rows.map((r) => [r.id, r.eventType]));
   const reminderMinutesByMasterId = new Map(rows.map((r) => [r.id, r.reminderMinutes]));
   const notesByMasterId = new Map(rows.map((r) => [r.id, r.notes]));
+  const locationByMasterId = new Map(rows.map((r) => [r.id, r.location]));
   const googleAccountIdByMasterId = new Map(rows.map((r) => [r.id, r.googleAccountId]));
   const events: CalendarEvent[] = expandEvents(rows, from, to)
     .map((o) => ({
@@ -120,6 +121,7 @@ export default async function Page(props: PageProps<"/">) {
       masterId: o.masterId,
       title: o.title,
       notes: notesByMasterId.get(o.masterId) ?? null,
+      location: locationByMasterId.get(o.masterId) ?? null,
       start: o.start,
       end: o.end,
       isRecurring: o.isRecurring,

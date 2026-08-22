@@ -80,6 +80,7 @@ export async function importFromApple(userId: string): Promise<AppleSyncResult> 
               userId,
               title: event.summary || "(untitled)",
               notes: event.description || null,
+              location: event.location || null,
               start: event.startDate.toJSDate(),
               end: event.endDate.toJSDate(),
               allDay: event.startDate.isDate,
@@ -91,6 +92,7 @@ export async function importFromApple(userId: string): Promise<AppleSyncResult> 
             update: {
               title: event.summary || "(untitled)",
               notes: event.description || null,
+              location: event.location || null,
               start: event.startDate.toJSDate(),
               end: event.endDate.toJSDate(),
               allDay: event.startDate.isDate,

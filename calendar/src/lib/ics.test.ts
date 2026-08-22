@@ -15,6 +15,7 @@ import { buildIcsCalendar, parseIcsEvents } from "./ics";
       allDay: false,
       recurrenceRule: "FREQ=WEEKLY;BYDAY=FR",
       notes: "Line1\nLine2",
+      location: null,
     },
   ]);
   const [parsed] = parseIcsEvents(ics);
@@ -39,6 +40,7 @@ import { buildIcsCalendar, parseIcsEvents } from "./ics";
       allDay: true,
       recurrenceRule: null,
       notes: null,
+      location: null,
     },
   ]);
   assert.ok(ics.includes("DTSTART;VALUE=DATE:20260901"), ics);
@@ -59,6 +61,7 @@ import { buildIcsCalendar, parseIcsEvents } from "./ics";
       allDay: false,
       recurrenceRule: "FREQ=WEEKLY",
       notes: null,
+      location: null,
       excludeDates: excluded.toISOString(),
     },
   ]);

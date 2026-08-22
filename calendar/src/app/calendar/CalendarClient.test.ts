@@ -7,6 +7,7 @@ function ev(id: string, startHour: number, endHour: number) {
     masterId: id,
     title: id,
     notes: null,
+    location: null,
     start: new Date(2026, 7, 17, startHour, 0),
     end: new Date(2026, 7, 17, endHour, 0),
     isRecurring: false,

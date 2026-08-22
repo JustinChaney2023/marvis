@@ -1,5 +1,51 @@
 # Motion replica — feature backlog
 
+## Google Calendar parity audit, round 4 (2026-08-22)
+Fresh sweep after the queue got thin over three prior rounds. Checked
+keyboard-shortcut completeness against Google's published list (still
+covers the common ones, no drift), ISO week numbers, "insert from Drive"
+(genuinely out of scope — no Drive integration exists or is planned),
+per-calendar default event color (this app's per-project color already
+covers the practical want), and notification snooze/dismiss-all (already
+covered — the notification watcher's existing dismiss already applies
+per-notification, and volume is low enough for a personal app that a
+bulk action isn't worth the UI it'd need).
+
+Two real, small gaps shipped:
+- [x] **Event location field** (#56) — Google Calendar has always had a
+      separate plain-text physical/informal location ("Room 4B", "123
+      Main St") *in addition to* a video-call link. This app only had
+      `meetingUrl`. Added `Event.location` (migration
+      `20260822190035_add_event_location`), a field in `EventModal`,
+      full round-trip through `createEvent`/`updateEvent`/
+      `updateEventOccurrence`/`updateEventFollowing`, ICS export/import
+      (`LOCATION:`, standard iCal property), and both Google
+      (`item.location`) and Apple (`event.location`, `ical.js` exposes
+      it the same way `.description` already was) sync — same treatment
+      `notes` got in an earlier round, so it doesn't quietly regress the
+      next time someone touches sync code. Skipped: showing location on
+      the public RSVP page — the guest-facing page currently only shows
+      title/time/meeting link; a reasonable follow-up but not required
+      to close the "does this field exist at all" gap.
+- [x] **"Delete this and following" recurring events** — the parallel
+      delete-scope option to #54's edit-scope, explicitly deferred out
+      of that pass. Trivial now that `Event.recurrenceEndsBefore`
+      exists: `deleteEventFollowing()` just sets the cutoff on the
+      master (nothing to carry forward, unlike the edit-scope version
+      which creates a new master). Splitting at the series' own anchor
+      delegates to plain `deleteEvent`. `EventModal`'s three-way scope
+      toggle (already built for #54) now drives delete too, with its own
+      explainer line.
+
+Deferred, not filed as new issues (both still on file from prior
+rounds): #55 (AI chat taking action, needs a confirm-before-execute UX
+design pass) and general "gaps are genuinely scarce now" — this was a
+smaller-finds round by design, not a full re-audit.
+
+`npx tsc --noEmit`, `npm test`, `npm run build` all pass clean. Schema
+touched (`Event.location`) — needs `npx prisma generate` + a dev-server
+restart.
+
 ## Motion core + advanced feature audit (2026-08-22)
 Re-centered on Motion itself after several Google-Calendar-focused
 sessions — researched Motion's actual current (2026) feature set via

@@ -8,6 +8,7 @@ type IcsExportEvent = {
   allDay: boolean;
   recurrenceRule: string | null;
   notes: string | null;
+  location: string | null;
   // RFC 5545 EXDATE (#40's excludeDates) — occurrence starts to mark
   // excluded so a round-trip export/import doesn't resurrect an
   // occurrence the user specifically deleted/moved.
@@ -59,6 +60,7 @@ export function buildIcsCalendar(events: IcsExportEvent[]): string {
     lines.push(`DTEND${event.allDay ? ";VALUE=DATE" : ""}:${icsDate(event.end, event.allDay)}`);
     lines.push(`SUMMARY:${escapeIcsText(event.title)}`);
     if (event.notes) lines.push(`DESCRIPTION:${escapeIcsText(event.notes)}`);
+    if (event.location) lines.push(`LOCATION:${escapeIcsText(event.location)}`);
     if (event.recurrenceRule) lines.push(`RRULE:${event.recurrenceRule}`);
     if (event.excludeDates) {
       const exdates = event.excludeDates
@@ -81,6 +83,7 @@ export type ParsedIcsEvent = {
   allDay: boolean;
   recurrenceRule: string | null;
   notes: string | null;
+  location: string | null;
   excludeDates: string | null;
 };
 
@@ -112,6 +115,7 @@ export function parseIcsEvents(icsText: string): ParsedIcsEvent[] {
       allDay: event.startDate.isDate,
       recurrenceRule: rruleProp ? rruleProp.toString() : null,
       notes: event.description || null,
+      location: event.location || null,
       excludeDates,
     });
   }

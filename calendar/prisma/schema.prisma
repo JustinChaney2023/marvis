@@ -76,6 +76,11 @@ model Event {
   // Video-call link (Zoom/Meet/whatever) shown by MeetingBanner.tsx when
   // the event's about to start — plain URL, no per-provider parsing.
   meetingUrl      String?
+  // Plain text physical/informal location ("Room 4B", "Joe's Diner") —
+  // distinct from meetingUrl above. Google Calendar has always had both
+  // as separate fields; this app conflated "where" into just the video
+  // link until now.
+  location        String?
   start           DateTime
   end             DateTime
   allDay          Boolean     @default(false)

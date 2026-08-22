@@ -35,6 +35,7 @@ export type CalendarEvent = {
   masterId: string;
   title: string;
   notes: string | null;
+  location: string | null;
   start: Date;
   end: Date;
   isRecurring: boolean;
@@ -294,6 +295,7 @@ export default function CalendarClient({
         id: match.masterId,
         title: match.title,
         notes: match.notes,
+        location: match.location,
         start: match.start,
         end: match.end,
         recurrenceRule: match.recurrenceRule,
@@ -395,6 +397,7 @@ export default function CalendarClient({
         id: event.masterId,
         title: event.title,
         notes: event.notes,
+        location: event.location,
         start: event.start,
         end: event.end,
         recurrenceRule: event.recurrenceRule,

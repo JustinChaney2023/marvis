@@ -98,6 +98,7 @@ export async function importFromGoogle(googleAccountId: string) {
           userId: auth.account.userId,
           title: item.summary ?? "(untitled)",
           notes: item.description ?? null,
+          location: item.location ?? null,
           start,
           end,
           allDay,
@@ -110,6 +111,7 @@ export async function importFromGoogle(googleAccountId: string) {
         update: {
           title: item.summary ?? "(untitled)",
           notes: item.description ?? null,
+          location: item.location ?? null,
           start,
           end,
           allDay,
@@ -170,6 +172,7 @@ export async function exportToGoogle(googleAccountId: string) {
       const body = {
         summary: event.title,
         description: event.notes ?? undefined,
+        location: event.location ?? undefined,
         start: event.allDay
           ? { date: formatYMD(event.start) }
           : { dateTime: event.start.toISOString(), timeZone },
