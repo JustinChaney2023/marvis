@@ -374,12 +374,11 @@ export async function addTaskAttachmentAction(
   const user = await requireUser();
   const task = await prisma.task.findFirst({ where: { id: taskId, userId: user.id } });
   if (!task) return;
-  // storedPath comes from the client (echoing what POST /api/uploads/attachments
-  // returned) — a server action can be called directly with any args, not
-  // just through the upload UI, so this can't be trusted without checking
-  // it's actually inside the caller's own upload directory. Otherwise a
-  // crafted call could register an attachment pointing at an arbitrary path.
-  if (!file.storedPath.startsWith(`${user.id}/`)) return;
+  // The upload route always returns "<uploaderId>/<uuid>.<ext>" — a
+  // direct call to this action (bypassing the upload route/UI) could
+  // otherwise claim any path, including another user's uploaded file or
+  // a "../" traversal outside public/uploads entirely.
+  if (!file.storedPath.startsWith(`${user.id}/`) || file.storedPath.includes("..")) return;
 
   await prisma.taskAttachment.create({ data: { taskId, ...file } });
   revalidatePath("/tasks");
