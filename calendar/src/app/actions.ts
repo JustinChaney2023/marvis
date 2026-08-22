@@ -29,6 +29,7 @@ import { generateTaskDoc, type DraftDocResult } from "@/lib/docDraft";
 import { buildShutdownSummary, type ShutdownSummary } from "@/lib/shutdown";
 import { runAutomationsForStatusChange } from "@/lib/automations";
 import { askScheduleChat, type ChatMessage, type ChatResult } from "@/lib/scheduleChat";
+import type { ChatAction } from "@/lib/chatActions";
 import { scheduleHabitsForWeek, rescheduleConflictedHabits } from "@/lib/habits";
 import { formatYMD } from "@/lib/calendar-dates";
 import { syncCalendarSubscription } from "@/lib/calendarSubscriptions";
@@ -373,6 +374,12 @@ export async function addTaskAttachmentAction(
   const user = await requireUser();
   const task = await prisma.task.findFirst({ where: { id: taskId, userId: user.id } });
   if (!task) return;
+  // storedPath comes from the client (echoing what POST /api/uploads/attachments
+  // returned) — a server action can be called directly with any args, not
+  // just through the upload UI, so this can't be trusted without checking
+  // it's actually inside the caller's own upload directory. Otherwise a
+  // crafted call could register an attachment pointing at an arbitrary path.
+  if (!file.storedPath.startsWith(`${user.id}/`)) return;
 
   await prisma.taskAttachment.create({ data: { taskId, ...file } });
   revalidatePath("/tasks");
@@ -493,6 +500,145 @@ export async function askScheduleChatAction(messages: ChatMessage[]): Promise<Ch
   const user = await requireUser();
   const { localAi, anthropicApiKey } = aiConfigFromSettings(await getAppSettings(user.id));
   return askScheduleChat(user.id, messages, localAi, anthropicApiKey);
+}
+
+const CHAT_PRIORITY_VALUE: Record<string, number> = { Low: 0, Medium: 1, High: 2, Urgent: 3 };
+
+// Splits an ISO instant into the separate date/time FormData fields
+// updateTask's dueAtDate/dueAtTime (and createTask's) actually read.
+function isoToDateAndTime(iso: string): { date: string; time: string } {
+  const d = new Date(iso);
+  return { date: formatYMD(d), time: `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}` };
+}
+
+/**
+ * Runs exactly one action the AI chat proposed and the user confirmed —
+ * see scheduleChat.ts's describeChatAction, which renders the identical
+ * fields as the card the user actually clicked Confirm on. Deliberately
+ * routes through the SAME server actions the UI itself uses
+ * (createTask/updateTask/deleteTaskAction/etc.) rather than new raw
+ * Prisma calls, so every ownership/validation check those already have
+ * (this codebase had a real IDOR bug class fixed exactly here once)
+ * applies to chat-originated mutations too, for free.
+ *
+ * updateTask/updateEvent merge onto the row's CURRENT full field set
+ * (fetched fresh here) rather than the chat's — necessarily partial —
+ * proposed fields, since those two actions replace every field from
+ * FormData; sending only "priority: High" through untouched would blank
+ * out the task's notes/project/etc.
+ */
+export async function executeChatActionAction(action: ChatAction): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireUser();
+
+  switch (action.kind) {
+    case "createTask": {
+      if (!action.title) return { ok: false, error: "Missing title." };
+      const fd = new FormData();
+      fd.set("title", action.title);
+      if (action.priority) fd.set("priority", String(CHAT_PRIORITY_VALUE[action.priority] ?? 0));
+      if (action.durationMin) fd.set("durationMin", String(action.durationMin));
+      if (action.dueAt) {
+        const { date, time } = isoToDateAndTime(action.dueAt);
+        fd.set("dueAtDate", date);
+        fd.set("dueAtTime", time);
+      }
+      await createTask(fd);
+      return { ok: true };
+    }
+
+    case "updateTask": {
+      if (!action.taskId) return { ok: false, error: "Missing task id." };
+      const task = await prisma.task.findFirst({
+        where: { id: action.taskId, userId: user.id },
+        include: { labels: true, blockedBy: true },
+      });
+      if (!task) return { ok: false, error: "Task not found." };
+      const fd = new FormData();
+      fd.set("title", action.title ?? task.title);
+      if (task.notes) fd.set("notes", task.notes);
+      fd.set("priority", String(action.priority ? (CHAT_PRIORITY_VALUE[action.priority] ?? task.priority) : task.priority));
+      fd.set("durationMin", String(action.durationMin ?? task.durationMin));
+      fd.set("energy", task.energy);
+      if (task.startAt) fd.set("startAt", task.startAt.toISOString());
+      const dueSource = action.dueAt ? new Date(action.dueAt) : task.dueAt;
+      if (dueSource) {
+        fd.set("dueAtDate", formatYMD(dueSource));
+        fd.set("dueAtTime", `${String(dueSource.getHours()).padStart(2, "0")}:${String(dueSource.getMinutes()).padStart(2, "0")}`);
+      }
+      if (task.projectId) fd.set("projectId", task.projectId);
+      if (task.assigneeId) fd.set("assigneeId", task.assigneeId);
+      if (task.timeSlotId) fd.set("timeSlotId", task.timeSlotId);
+      if (task.color) fd.set("color", task.color);
+      if (task.chunkMin) fd.set("chunkMin", String(task.chunkMin));
+      if (task.recurrenceRule) fd.set("recurrenceRule", task.recurrenceRule);
+      if (task.hardDeadline) fd.set("hardDeadline", "on");
+      fd.set("labelIds", task.labels.map((l) => l.id).join(","));
+      fd.set("blockedByIds", task.blockedBy.map((t) => t.id).join(","));
+      await updateTask(action.taskId, fd);
+      return { ok: true };
+    }
+
+    case "deleteTask": {
+      if (!action.taskId) return { ok: false, error: "Missing task id." };
+      await deleteTaskAction(action.taskId);
+      return { ok: true };
+    }
+
+    case "scheduleTask": {
+      if (!action.taskId) return { ok: false, error: "Missing task id." };
+      await scheduleTaskAction(action.taskId);
+      return { ok: true };
+    }
+
+    case "createEvent": {
+      if (!action.title || !action.startIso || !action.endIso) {
+        return { ok: false, error: "Missing title/start/end." };
+      }
+      const fd = new FormData();
+      fd.set("title", action.title);
+      fd.set("start", action.startIso);
+      fd.set("end", action.endIso);
+      if (action.location) fd.set("location", action.location);
+      await createEvent(fd);
+      return { ok: true };
+    }
+
+    case "moveEvent": {
+      if (!action.eventId || !action.startIso || !action.endIso) {
+        return { ok: false, error: "Missing event id/start/end." };
+      }
+      await moveEvent(action.eventId, action.startIso, action.endIso);
+      return { ok: true };
+    }
+
+    case "updateEvent": {
+      if (!action.eventId) return { ok: false, error: "Missing event id." };
+      const event = await prisma.event.findFirst({ where: { id: action.eventId, userId: user.id } });
+      if (!event) return { ok: false, error: "Event not found." };
+      const fd = new FormData();
+      fd.set("title", action.title ?? event.title);
+      fd.set("start", event.start.toISOString());
+      fd.set("end", event.end.toISOString());
+      if (event.recurrenceRule) fd.set("recurrenceRule", event.recurrenceRule);
+      if (event.meetingUrl) fd.set("meetingUrl", event.meetingUrl);
+      if (event.color) fd.set("color", event.color);
+      if (event.notes) fd.set("notes", event.notes);
+      fd.set("location", action.location ?? event.location ?? "");
+      if (event.locked) fd.set("locked", "on");
+      fd.set("eventType", event.eventType);
+      if (event.allDay) fd.set("allDay", "on");
+      if (event.reminderMinutes != null) fd.set("reminderMinutes", String(event.reminderMinutes));
+      if (event.googleAccountId) fd.set("googleAccountId", event.googleAccountId);
+      await updateEvent(action.eventId, fd);
+      return { ok: true };
+    }
+
+    case "deleteEvent": {
+      if (!action.eventId) return { ok: false, error: "Missing event id." };
+      await deleteEvent(action.eventId);
+      return { ok: true };
+    }
+  }
 }
 
 export async function deleteTaskAction(taskId: string) {

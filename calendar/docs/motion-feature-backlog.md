@@ -1,5 +1,56 @@
 # Motion replica — feature backlog
 
+## AI chat can now take action (2026-08-22, #55)
+`src/lib/scheduleChat.ts` was explicitly read-only — its system prompt
+said "you cannot create, edit, or delete anything." Justin decided the
+scope (full CRUD including delete) and the confirm UX (inline card, not
+auto-execute) up front; this session built it.
+
+**Model**: no new tool-use SDK plumbing — `callAiForJson` (Claude
+structured-output / local-model JSON mode) already turns one chat turn
+into one validated JSON object, so a chat reply is now
+`{ reply: string, actions: ChatAction[] }` instead of just `{ reply }`.
+`ChatAction` (new `src/lib/chatActions.ts` — client-safe, no `prisma`
+import, since `ChatClient.tsx` needs `describeChatAction` too) is one
+flat object with a `kind` enum (`createTask`/`updateTask`/`deleteTask`/
+`scheduleTask`/`createEvent`/`moveEvent`/`updateEvent`/`deleteEvent`)
+rather than a discriminated union — safer across both the Claude
+structured-output JSON Schema conversion and the local-model path.
+
+- [x] **Confirm-before-execute** — a proposed action never runs on its
+      own. `ChatClient.tsx` renders each one as a card (built from
+      `describeChatAction`, the exact same pure function the executing
+      code's inputs came from — display and execution can't drift apart
+      since neither re-derives anything from the model's prose). Confirm
+      calls the new `executeChatActionAction` in `actions.ts`; Cancel
+      just flips local state, no round-trip. Multiple proposed actions in
+      one reply are independently confirmable/cancelable.
+- [x] **Real ids in context, not name-matching at execute time** —
+      `buildScheduleContext` now includes each task/event's real id
+      (`masterId` for a recurring occurrence, not the synthetic
+      `masterId::ISO` composite) inline as `[id]`. The model must copy an
+      id it already saw, never invent or re-find one by title later —
+      ambiguous requests ("reschedule my dentist thing" with 3 matching
+      tasks) are supposed to become a clarifying question in `reply` with
+      zero proposed actions, not a guess.
+- [x] **Reuses existing trusted actions, no new mutation logic** —
+      `executeChatActionAction` calls `createTask`/`updateTask`/
+      `deleteTaskAction`/`scheduleTaskAction`/`createEvent`/`moveEvent`/
+      `updateEvent`/`deleteEvent` exactly as the real UI does, so every
+      ownership check those already have (this codebase had a real IDOR
+      bug class fixed exactly here once) covers chat-originated mutations
+      for free. `updateTask`/`updateEvent` replace every FormData field,
+      so a partial chat edit (e.g. "bump the priority") first fetches the
+      row's current full state and merges the one changed field in,
+      rather than blanking out everything else.
+- [x] Self-check: `src/lib/chatActions.test.ts` (schema validation +
+      `describeChatAction` output), chained into `npm test`.
+
+No schema change — a pending action lives in the chat UI's own React
+state until confirmed, nothing persisted.
+
+`npx tsc --noEmit`, `npm test`, `npm run build` all pass clean.
+
 ## Google Calendar parity audit, round 4 (2026-08-22)
 Fresh sweep after the queue got thin over three prior rounds. Checked
 keyboard-shortcut completeness against Google's published list (still
