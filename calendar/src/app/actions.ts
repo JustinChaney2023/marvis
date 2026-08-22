@@ -17,6 +17,7 @@ import {
 import { parseQuickCapture } from "@/lib/quickCapture";
 import { expandEvents } from "@/lib/recurrence";
 import { syncGoogleCalendar, deleteFromGoogle } from "@/lib/google-sync";
+import { listGoogleCalendars } from "@/lib/google-auth";
 import { importFromApple } from "@/lib/apple-sync";
 import { encryptSecret } from "@/lib/tokenCrypto";
 import { aiConfigFromSettings, getAppSettings, updateAppSettings } from "@/lib/settings";
@@ -1439,6 +1440,26 @@ export async function renameGoogleAccountAction(googleAccountId: string, label: 
   revalidatePath("/settings");
 }
 
+/** The calendars inside one connected Google account, for the "which calendar" picker in Settings. */
+export async function listGoogleAccountCalendarsAction(googleAccountId: string) {
+  const user = await requireUser();
+  const account = await prisma.googleAccount.findFirst({
+    where: { id: googleAccountId, userId: user.id },
+  });
+  if (!account) return null;
+  return listGoogleCalendars(account.id);
+}
+
+export async function setGoogleAccountCalendarAction(googleAccountId: string, calendarId: string) {
+  const user = await requireUser();
+  if (!calendarId.trim()) return;
+  await prisma.googleAccount.updateMany({
+    where: { id: googleAccountId, userId: user.id },
+    data: { calendarId: calendarId.trim() },
+  });
+  revalidatePath("/settings");
+}
+
 /**
  * Saves the Apple ID + app-specific password and immediately runs a sync
  * to validate them — Apple has no OAuth flow to fail fast on bad
@@ -1702,17 +1723,19 @@ function parseBookingLinkForm(formData: FormData) {
   const excludeDays = String(formData.get("excludeDays") ?? "").trim() || null;
   const rawMinNotice = Number(formData.get("minNoticeMin") ?? 60);
   const minNoticeMin = Number.isFinite(rawMinNotice) ? Math.min(Math.max(rawMinNotice, 0), 10_080) : 60;
-  return { title, durationMin, slug, excludeDays, minNoticeMin };
+  const rawMaxPerDay = String(formData.get("maxPerDay") ?? "").trim();
+  const maxPerDay = rawMaxPerDay ? Math.min(Math.max(Number(rawMaxPerDay), 1), 100) : null;
+  return { title, durationMin, slug, excludeDays, minNoticeMin, maxPerDay: Number.isFinite(maxPerDay) ? maxPerDay : null };
 }
 
 export async function createBookingLinkAction(formData: FormData) {
   const user = await requireUser();
-  const { title, durationMin, slug, excludeDays, minNoticeMin } = parseBookingLinkForm(formData);
+  const { title, durationMin, slug, excludeDays, minNoticeMin, maxPerDay } = parseBookingLinkForm(formData);
   if (!slug || !Number.isFinite(durationMin) || durationMin < 5 || durationMin > 240) return;
 
   try {
     await prisma.bookingLink.create({
-      data: { userId: user.id, slug, title, durationMin, excludeDays, minNoticeMin, enabled: true },
+      data: { userId: user.id, slug, title, durationMin, excludeDays, minNoticeMin, maxPerDay, enabled: true },
     });
   } catch {
     // Unique constraint on slug — already taken (by this user or another).
@@ -1722,13 +1745,13 @@ export async function createBookingLinkAction(formData: FormData) {
 
 export async function updateBookingLinkAction(linkId: string, formData: FormData) {
   const user = await requireUser();
-  const { title, durationMin, slug, excludeDays, minNoticeMin } = parseBookingLinkForm(formData);
+  const { title, durationMin, slug, excludeDays, minNoticeMin, maxPerDay } = parseBookingLinkForm(formData);
   if (!slug || !Number.isFinite(durationMin) || durationMin < 5 || durationMin > 240) return;
 
   try {
     await prisma.bookingLink.updateMany({
       where: { id: linkId, userId: user.id },
-      data: { title, durationMin, slug, excludeDays, minNoticeMin },
+      data: { title, durationMin, slug, excludeDays, minNoticeMin, maxPerDay },
     });
   } catch {
     // Unique constraint on slug — already taken by another link.

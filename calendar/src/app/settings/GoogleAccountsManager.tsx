@@ -1,9 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import {
   disconnectGoogleAction,
   setDefaultGoogleAccountAction,
   renameGoogleAccountAction,
+  listGoogleAccountCalendarsAction,
+  setGoogleAccountCalendarAction,
 } from "../actions";
 import Button from "../ui/Button";
 import SyncButton from "./SyncButton";
@@ -14,7 +17,72 @@ export type ManagedGoogleAccount = {
   label: string;
   isDefault: boolean;
   lastSyncedAt: Date | null;
+  calendarId: string;
 };
+
+type GoogleCalendarOption = { id: string; summary: string; primary: boolean };
+
+// Loaded on demand (a "Change calendar" click), not up front on page
+// load — an extra Google API round-trip per connected account just to
+// populate a picker nobody may ever open isn't worth the load-time cost.
+function CalendarPicker({ account }: { account: ManagedGoogleAccount }) {
+  const [open, setOpen] = useState(false);
+  const [options, setOptions] = useState<GoogleCalendarOption[] | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = async () => {
+    setOpen(true);
+    if (options) return;
+    setIsLoading(true);
+    setError(null);
+    try {
+      const list = await listGoogleAccountCalendarsAction(account.id);
+      if (!list) {
+        setError("Couldn't load calendars for this account.");
+        return;
+      }
+      setOptions(list);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={load}
+        className="text-xs text-zinc-500 underline hover:text-zinc-700 dark:hover:text-zinc-300"
+      >
+        Change calendar ({account.calendarId})
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2 text-xs">
+      {isLoading ? (
+        <span className="text-zinc-400">Loading calendars…</span>
+      ) : error ? (
+        <span className="text-red-600 dark:text-red-400">{error}</span>
+      ) : (
+        <select
+          defaultValue={account.calendarId}
+          onChange={(e) => setGoogleAccountCalendarAction(account.id, e.target.value)}
+          className="rounded-lg border border-zinc-200 bg-white px-2 py-1 dark:border-zinc-600 dark:bg-zinc-800"
+        >
+          {options?.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.summary}
+              {c.primary ? " (primary)" : ""}
+            </option>
+          ))}
+        </select>
+      )}
+    </div>
+  );
+}
 
 const inputClass =
   "rounded-lg border border-zinc-200 bg-white px-2 py-1 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800";
@@ -49,6 +117,9 @@ export default function GoogleAccountsManager({ accounts }: { accounts: ManagedG
                 {account.email} —{" "}
                 {account.lastSyncedAt ? `synced ${account.lastSyncedAt.toLocaleString()}` : "never synced yet"}
               </p>
+              <div className="mt-1">
+                <CalendarPicker account={account} />
+              </div>
             </div>
             <div className="flex flex-shrink-0 items-center gap-2">
               {!account.isDefault && (

@@ -1,5 +1,48 @@
 # Motion replica — feature backlog
 
+## Google Calendar parity audit, round 3 (2026-08-22, #53 follow-ups)
+Fresh sweep after round 2 — checked recurring "this and following" edit
+scope, event templates/duplicate-with-modifications, calendar-wide default
+duration/color settings, Year view, side-by-side calendar comparison vs.
+this app's overlay approach, print/PDF month-view coverage, and a
+grid-based "Find a time" alternative to #45's earliest-slot auto-pick.
+Judged not worth building now: Year view and side-by-side comparison are
+real Google features this app doesn't have, but neither came up as an
+actual want and both are meaningfully large UI additions for uncertain
+value — flag for a future session if there's real demand, not filed as
+issues speculatively. A grid-based "Find a time" view is a genuine
+alternative UX to the current auto-pick, but #45's earliest-slot flow
+already fully solves the stated problem ("find a time that works") —
+adding a second, manual-eyeball UI is a nice-to-have, not a gap.
+
+Picked up both items round 2 had deferred as smaller-but-real:
+- [x] **Max bookings per day** — `BookingLink.maxPerDay` (nullable, default
+      unlimited), enforced in both `getAvailableBookingSlots` (slots for
+      an already-full day stop being offered) and `createBooking`'s
+      re-validation. Needed a small schema addition to actually count
+      "bookings for *this link*, today" rather than "every event the
+      owner has today": `Event.bookingLinkId` (nullable, `SetNull` on
+      link delete so booking history survives a link being removed).
+      Settings field in `BookingLinksManager.tsx`, same "blank = no
+      limit" pattern as `excludeDays`.
+- [x] **Picker for a non-primary calendar within a connected Google
+      account** — `GoogleAccount.calendarId` already existed and defaulted
+      to `"primary"`, just had no UI. Added `listGoogleCalendars` (new
+      `calendarList.list` call in `google-auth.ts`, same OAuth scope
+      already granted) and a lazy-loaded "Change calendar" picker per
+      account in `GoogleAccountsManager.tsx` — only calls the Google API
+      when actually opened, not on every Settings page load.
+
+Filed but deliberately **not** built this round — a real gap, but a
+recurrence-engine change risky to rush through a single unsupervised pass:
+- **#54 "This and following events" recurring edit scope** — Google's
+  third option beyond this app's existing "this event"/"all events"
+  (#40). Needs careful design on how existing exceptions/excludeDates
+  migrate across the series split; see the issue for the specific
+  failure mode to avoid.
+
+`npx tsc --noEmit`, `npm test`, `npm run build` all pass clean.
+
 ## Google Calendar parity audit, round 2 (2026-08-22, #53)
 Fresh sweep after the overnight session + this morning's #46/#31/#52,
 looking at areas not explicitly checked before: Google Tasks parity

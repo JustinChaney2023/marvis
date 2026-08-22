@@ -147,6 +147,13 @@ model Event {
   subscriptionId       String?
   subscription         CalendarSubscription? @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
   subscriptionEventUid String?
+  // Set when this event was created by a visitor through a public
+  // BookingLink — lets a link's own "max bookings per day" cap count
+  // just its own bookings, not every event on the owner's calendar that
+  // happens to land that day. SetNull (not Cascade): deleting the link
+  // shouldn't retroactively delete history of who already booked.
+  bookingLinkId   String?
+  bookingLink     BookingLink? @relation(fields: [bookingLinkId], references: [id], onDelete: SetNull)
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 
@@ -598,6 +605,12 @@ model BookingLink {
   // the same thing. 60 = the same "at least an hour's notice" default
   // most scheduling tools ship with.
   minNoticeMin Int      @default(60)
+  // Caps how many bookings this link will accept in a single (owner-
+  // timezone) calendar day — Google Appointment Schedules' "limit N
+  // bookings per day," for a high-traffic booking page. Null (default)
+  // = unlimited, same as today.
+  maxPerDay   Int?
+  bookings    Event[]
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }

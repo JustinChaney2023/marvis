@@ -21,6 +21,7 @@ export type BookingLinkData = {
   enabled: boolean;
   excludeDays: string | null;
   minNoticeMin: number;
+  maxPerDay: number | null;
 };
 
 function LinkFields({ defaults }: { defaults?: BookingLinkData }) {
@@ -119,6 +120,22 @@ function LinkFields({ defaults }: { defaults?: BookingLinkData }) {
           <span className="text-zinc-500">minutes before a booking can start</span>
         </div>
       </label>
+      <label className="flex flex-col gap-1 text-sm">
+        <span className="text-zinc-500">Max bookings per day</span>
+        <div className="flex items-center gap-2">
+          <input
+            type="number"
+            name="maxPerDay"
+            defaultValue={defaults?.maxPerDay ?? ""}
+            min={1}
+            max={100}
+            placeholder="Unlimited"
+            aria-label="Maximum bookings per day"
+            className="w-24 rounded-lg border border-zinc-200 bg-white px-2 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800"
+          />
+          <span className="text-zinc-500">leave blank for unlimited</span>
+        </div>
+      </label>
     </>
   );
 }
@@ -154,6 +171,7 @@ function BookingLinkRow({ link }: { link: BookingLinkData }) {
           /book/{link.slug} · {link.durationMin} min
           {link.excludeDays && ` · no ${link.excludeDays.split(",").join("/")}`}
           {link.minNoticeMin > 0 && ` · ${link.minNoticeMin}min notice`}
+          {link.maxPerDay != null && ` · max ${link.maxPerDay}/day`}
         </p>
       </div>
       <div className="flex items-center gap-2">

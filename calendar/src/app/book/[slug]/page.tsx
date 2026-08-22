@@ -18,6 +18,8 @@ export default async function PublicBookingPage(
     link.durationMin,
     link.excludeDays,
     link.minNoticeMin,
+    link.maxPerDay,
+    link.id,
   );
   const availability: BookingDay[] = raw.map((entry) => ({
     dayLabel: entry.day,

@@ -48,7 +48,7 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
   const googleAccounts = await prisma.googleAccount.findMany({
     where: { userId: user.id },
     orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
-    select: { id: true, email: true, label: true, isDefault: true, lastSyncedAt: true },
+    select: { id: true, email: true, label: true, isDefault: true, lastSyncedAt: true, calendarId: true },
   });
   const appleAccount = await prisma.appleAccount.findUnique({ where: { userId: user.id } });
   const calendarSubscriptions = await prisma.calendarSubscription.findMany({

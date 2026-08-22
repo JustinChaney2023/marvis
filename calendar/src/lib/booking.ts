@@ -7,7 +7,7 @@ import {
   windowFnForWorkingHours,
 } from "@/lib/scheduler";
 import { getAppSettings } from "@/lib/settings";
-import { getZonedDateParts } from "@/lib/timezone";
+import { getZonedDateParts, zonedWallTimeToUtc } from "@/lib/timezone";
 
 const BOOKING_HORIZON_DAYS = 14;
 const MAX_SLOTS_PER_DAY = 40; // safety cap, not a real-world limit at 15-min granularity
@@ -27,6 +27,8 @@ export async function getAvailableBookingSlots(
   durationMin: number,
   excludeDays: string | null = null,
   minNoticeMin: number = 60,
+  maxPerDay: number | null = null,
+  bookingLinkId: string | null = null,
 ): Promise<{ day: string; slots: Date[] }[]> {
   const [settings, owner] = await Promise.all([
     getAppSettings(ownerUserId),
@@ -42,6 +44,23 @@ export async function getAvailableBookingSlots(
     settings.bufferMin,
   );
   const getWindow = excludeDaysWindowFn(excludeDays, windowFnForWorkingHours(settings, timeZone), timeZone);
+
+  // Already-booked counts for this link, per owner-timezone day — only
+  // meaningful with a real link + cap; a `bookingLinkId`-less caller
+  // (the generic "share my availability" text, which isn't tied to any
+  // one link) never has a per-link limit to enforce.
+  const alreadyBookedByDay = new Map<string, number>();
+  if (maxPerDay != null && bookingLinkId) {
+    const booked = await prisma.event.findMany({
+      where: { bookingLinkId, start: { gte: now, lt: horizonEnd } },
+      select: { start: true },
+    });
+    for (const b of booked) {
+      const { year, month, day } = getZonedDateParts(b.start, timeZone);
+      const key = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+      alreadyBookedByDay.set(key, (alreadyBookedByDay.get(key) ?? 0) + 1);
+    }
+  }
 
   const byDay = new Map<string, Date[]>();
   let cursor = earliestBookable;
@@ -64,7 +83,8 @@ export async function getAvailableBookingSlots(
     const { year, month, day } = getZonedDateParts(slot.start, timeZone);
     const key = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
     const list = byDay.get(key) ?? [];
-    if (list.length < MAX_SLOTS_PER_DAY) {
+    const dayTotal = (alreadyBookedByDay.get(key) ?? 0) + list.length;
+    if (list.length < MAX_SLOTS_PER_DAY && (maxPerDay == null || dayTotal < maxPerDay)) {
       list.push(slot.start);
       byDay.set(key, list);
     }
@@ -158,6 +178,18 @@ export async function createBooking(
       return { ok: false, error: "That slot isn't available — please pick another." };
     }
 
+    if (link.maxPerDay != null) {
+      const { year, month, day } = getZonedDateParts(start, timeZone);
+      const dayStart = zonedWallTimeToUtc(year, month, day, 0, 0, timeZone);
+      const dayEnd = zonedWallTimeToUtc(year, month, day, 23, 59, timeZone);
+      const bookedToday = await prisma.event.count({
+        where: { bookingLinkId: link.id, start: { gte: dayStart, lte: dayEnd } },
+      });
+      if (bookedToday >= link.maxPerDay) {
+        return { ok: false, error: "That day is fully booked — please pick another." };
+      }
+    }
+
     const noteLines = [`Booked by: ${trimmedName}`];
     if (trimmedEmail) noteLines.push(`Email: ${trimmedEmail}`);
     if (trimmedNotes) noteLines.push("", trimmedNotes);
@@ -170,6 +202,7 @@ export async function createBooking(
         end: derived.end,
         locked: true,
         notes: noteLines.join("\n"),
+        bookingLinkId: link.id,
       },
     });
 

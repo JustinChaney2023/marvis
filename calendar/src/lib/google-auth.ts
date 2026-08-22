@@ -57,3 +57,22 @@ export async function getAuthorizedClient(googleAccountId: string) {
 
   return { client, account };
 }
+
+/**
+ * The calendars visible inside one connected Google account (e.g. its
+ * primary calendar plus a separate "Family" calendar) — lets someone
+ * point a connected account at a non-primary calendar instead of always
+ * syncing "primary". Read-only listing call, no scope beyond the
+ * already-granted full `calendar` scope.
+ */
+export async function listGoogleCalendars(googleAccountId: string) {
+  const auth = await getAuthorizedClient(googleAccountId);
+  if (!auth) return null;
+  const calendar = google.calendar({ version: "v3", auth: auth.client });
+  const res = await calendar.calendarList.list();
+  return (res.data.items ?? []).map((c) => ({
+    id: c.id ?? "",
+    summary: c.summary ?? c.id ?? "",
+    primary: c.primary ?? false,
+  }));
+}
