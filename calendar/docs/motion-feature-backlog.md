@@ -1,5 +1,59 @@
 # Motion replica — feature backlog
 
+## Motion core + advanced feature audit (2026-08-22)
+Re-centered on Motion itself after several Google-Calendar-focused
+sessions — researched Motion's actual current (2026) feature set via
+its own marketing/recent reviews (G2, Capterra-adjacent sites,
+hirekai.ai, efficient.app), cross-checked every item against this app.
+
+**Confirmed already covered, several exceeding Motion**: auto-scheduling
+with dynamic rescheduling, Reschedule-all, focus-time protection, task
+dependencies, multiple views (list/board/table/calendar/Gantt),
+AI-generated projects from a prompt (`/tasks/generate-project`), booking
+links (now with min-notice + max-per-day, ahead of Motion's own
+Appointment Schedules), time tracking (`Task.trackedMinutes`, #30),
+daily overcommitment warning (#27) and shutdown ritual (#28), an AI
+"docs" equivalent (`docDraft.ts` — task brief generation) and an AI chat
+over your own schedule/tasks (`scheduleChat.ts`, #11).
+
+**Already correctly tracked/deferred, not re-opened**: AI meeting
+notetaker (#16, needs real audio/transcription), broader native
+integrations (#20, OAuth-blocked), Outlook two-way sync (same OAuth
+blocker), "AI Employees" doing autonomous *external* work (Slack
+actions, CRM updates, drafting outreach emails) — explicitly out of
+scope per this doc's own "Explicitly out of scope" section; team
+capacity/permissions/enterprise reporting — same section, not a personal-
+app feature.
+
+Two real findings:
+- [x] **Project templates** (Motion: "Standardized Project Workflow
+      Template") — this app could *generate* a project from a prompt but
+      had no way to *save and reuse* a project's task structure. New
+      `ProjectTemplate`/`ProjectTemplateTask` models (title/notes only —
+      no dates/assignee/color, those are per-instantiation, not part of
+      the reusable shape). `saveProjectAsTemplateAction` snapshots an
+      existing project's top-level tasks (subtasks excluded, same scope
+      subtasks already have everywhere else); `createProjectFromTemplateAction`
+      instantiates a new Project + Tasks from one, reusing the exact
+      Project-plus-Tasks shape `createProjectFromPlanAction` (AI-generated
+      projects) already established. UI: "Save as template" per project
+      and a "Project templates" manager, both in Tasks page's existing
+      `<details>`-based project management section — no new page.
+- **#55 filed, not built**: this app's AI chat (`scheduleChat.ts`) is
+  explicitly read-only by design ("you cannot create, edit, or delete
+  anything" is in its own system prompt) — Motion's chat can actually
+  take action (create/reschedule via conversation). Real, distinct gap
+  from the out-of-scope "AI Employees" (this would be tool-calls into
+  this app's *own*, already-trusted server actions, not external
+  actions) — but needs a real confirm-before-execute UX design pass
+  before building, so a wrong LLM interpretation of a chat message can't
+  silently mutate data. Flagged for its own scoping session.
+
+`npx tsc --noEmit`, `npm test`, `npm run build` all pass clean. Schema
+touched (`ProjectTemplate`/`ProjectTemplateTask`, migration
+`20260822185541_add_project_templates`) — needs `npx prisma generate` +
+a dev-server restart.
+
 ## "This and following events" recurring edit scope (2026-08-22, #54)
 The item round 3 filed and deliberately deferred — Google's third
 recurring-edit option, beyond this app's existing "this event" (#40) /

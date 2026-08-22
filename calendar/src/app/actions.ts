@@ -578,6 +578,65 @@ export async function deleteProject(projectId: string) {
   revalidatePath("/tasks");
 }
 
+// Snapshots a project's current top-level tasks (title/notes only — no
+// dates, assignee, or project color, since those belong to one real run
+// of the template, not its reusable shape) into a new ProjectTemplate.
+// Subtasks aren't captured — same "one level of checklist" scope the
+// rest of this app already gives subtasks.
+export async function saveProjectAsTemplateAction(projectId: string, templateName: string) {
+  const user = await requireUser();
+  const name = templateName.trim();
+  if (!name) return;
+  const project = await prisma.project.findFirst({
+    where: { id: projectId, userId: user.id },
+    include: { tasks: { where: { parentId: null }, orderBy: { createdAt: "asc" } } },
+  });
+  if (!project) return;
+
+  await prisma.projectTemplate.create({
+    data: {
+      userId: user.id,
+      name,
+      tasks: {
+        create: project.tasks.map((t, i) => ({ title: t.title, notes: t.notes, sortOrder: i })),
+      },
+    },
+  });
+  revalidatePath("/tasks");
+}
+
+export async function deleteProjectTemplateAction(templateId: string) {
+  const user = await requireUser();
+  await prisma.projectTemplate.deleteMany({ where: { id: templateId, userId: user.id } });
+  revalidatePath("/tasks");
+}
+
+// Instantiates a saved template as a brand-new Project + Tasks — same
+// shape as createProjectFromPlanAction (AI-generated projects), just
+// sourced from a template's saved rows instead of a fresh AI call.
+export async function createProjectFromTemplateAction(templateId: string, projectName: string) {
+  const user = await requireUser();
+  const name = projectName.trim();
+  if (!name) return;
+  const template = await prisma.projectTemplate.findFirst({
+    where: { id: templateId, userId: user.id },
+    include: { tasks: { orderBy: { sortOrder: "asc" } } },
+  });
+  if (!template || template.tasks.length === 0) return;
+
+  const project = await prisma.project.create({ data: { userId: user.id, name, color: "indigo" } });
+  await prisma.task.createMany({
+    data: template.tasks.map((t) => ({
+      userId: user.id,
+      title: t.title,
+      notes: t.notes,
+      projectId: project.id,
+    })),
+  });
+
+  revalidatePath("/tasks");
+}
+
 export async function createLabel(formData: FormData) {
   const user = await requireUser();
   const name = String(formData.get("name") ?? "").trim();

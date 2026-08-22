@@ -3,15 +3,21 @@ import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth";
 import {
+  createLabel,
   createProject,
+  createProjectFromTemplateAction,
+  deleteLabel,
   deleteProject,
+  deleteProjectTemplateAction,
   rescheduleAllAction,
+  saveProjectAsTemplateAction,
   scheduleAllAction,
 } from "../actions";
 import { RepeatIcon } from "../icons";
 import NewTaskButton from "./NewTaskButton";
 import TaskRow from "./TaskRow";
 import TaskBoard from "./TaskBoard";
+import TaskTable from "./TaskTable";
 
 // Tailwind's JIT scanner needs full literal class strings in source, so
 // this can't be built as `bg-${color}-100` — every option users can pick
@@ -72,6 +78,15 @@ export default async function Home(props: PageProps<"/tasks">) {
     where: { userId: user.id },
     orderBy: { createdAt: "asc" },
   });
+  const labels = await prisma.label.findMany({
+    where: { userId: user.id },
+    orderBy: { createdAt: "asc" },
+  });
+  const projectTemplates = await prisma.projectTemplate.findMany({
+    where: { userId: user.id },
+    include: { _count: { select: { tasks: true } } },
+    orderBy: { createdAt: "asc" },
+  });
   const cookieStore = await cookies();
   const lastProjectId = cookieStore.get("lastProjectId")?.value ?? "";
   const defaultProjectId = projects.some((p) => p.id === lastProjectId)
@@ -85,7 +100,7 @@ export default async function Home(props: PageProps<"/tasks">) {
   // TaskRow displays one representative "is this scheduled" slot per
   // task (the earliest chunk, for a chunked one) plus how many chunks
   // there are in total — it doesn't need the full per-chunk list.
-  const withPrimaryEvent = <T extends { events: { start: Date; end: Date }[] }>(t: T) => ({
+  const withPrimaryEvent = <T extends { events: { start: Date; end: Date; locked: boolean }[] }>(t: T) => ({
     ...t,
     event: t.events.length > 0 ? t.events.reduce((min, e) => (e.start < min.start ? e : min)) : null,
     eventCount: t.events.length,
@@ -104,16 +119,24 @@ export default async function Home(props: PageProps<"/tasks">) {
       project: true,
       assignee: true,
       subtasks: { orderBy: { createdAt: "asc" } },
+      labels: true,
+      blockedBy: { select: { id: true, title: true, status: true } },
     },
   });
   const allOpenTasks = allOpenTasksRaw.map(withPrimaryEvent);
+  // Anything this task could depend on — every other open task, since a
+  // done task blocking nothing is already moot and its own row is
+  // filtered by TaskModal's caller (edit mode passes an otherTasks list
+  // with itself excluded below).
+  const taskOptions = allOpenTasksRaw.map((t) => ({ id: t.id, title: t.title }));
   const tasks = searchQuery
     ? allOpenTasks.filter((t) =>
         t.title.toLowerCase().includes(searchQuery.toLowerCase()),
       )
     : allOpenTasks;
   const rawView = sp?.view;
-  const view = (Array.isArray(rawView) ? rawView[0] : rawView) === "board" ? "board" : "list";
+  const viewParam = Array.isArray(rawView) ? rawView[0] : rawView;
+  const view = viewParam === "board" ? "board" : viewParam === "table" ? "table" : "list";
 
   const doneRaw = await prisma.task.findMany({
     where: { userId: user.id, status: "DONE" },
@@ -124,6 +147,8 @@ export default async function Home(props: PageProps<"/tasks">) {
       project: true,
       assignee: true,
       subtasks: { orderBy: { createdAt: "asc" } },
+      labels: true,
+      blockedBy: { select: { id: true, title: true, status: true } },
     },
   });
   const done = doneRaw.map(withPrimaryEvent);
@@ -138,7 +163,7 @@ export default async function Home(props: PageProps<"/tasks">) {
   };
 
   return (
-    <main className={`mx-auto w-full flex-1 px-6 py-12 ${view === "board" ? "max-w-6xl" : "max-w-2xl"}`}>
+    <main className={`mx-auto w-full flex-1 px-6 py-12 ${view === "board" || view === "table" ? "max-w-6xl" : "max-w-2xl"}`}>
       <div className="flex flex-wrap items-center justify-end gap-3">
         <div className="flex flex-wrap items-center gap-2">
           <form action={scheduleAllAction}>
@@ -164,12 +189,20 @@ export default async function Home(props: PageProps<"/tasks">) {
             href="/tasks/import"
             className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 shadow-sm ring-1 ring-black/5 transition-all hover:bg-zinc-50 active:scale-[0.98] dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700/60"
           >
-            Import syllabus
+            Import
+          </Link>
+          <Link
+            href="/tasks/generate-project"
+            className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 shadow-sm ring-1 ring-black/5 transition-all hover:bg-zinc-50 active:scale-[0.98] dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700/60"
+          >
+            Generate project
           </Link>
           <NewTaskButton
             projects={projects}
             assignees={assignees}
             timeSlots={timeSlots}
+            labels={labels}
+            otherTasks={taskOptions}
             defaultProjectId={defaultProjectId}
             defaultAssigneeId={myselfAssignee.id}
           />
@@ -223,6 +256,16 @@ export default async function Home(props: PageProps<"/tasks">) {
             }
           >
             Board
+          </Link>
+          <Link
+            href={viewParams("table")}
+            className={
+              view === "table"
+                ? "rounded-full bg-white px-2.5 py-1 font-medium text-zinc-900 shadow-sm dark:bg-zinc-600 dark:text-zinc-100"
+                : "rounded-full px-2.5 py-1 text-zinc-500 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100"
+            }
+          >
+            Table
           </Link>
         </div>
         <form action="/tasks" className="flex items-center">
@@ -279,6 +322,18 @@ export default async function Home(props: PageProps<"/tasks">) {
           projects={projects}
           assignees={assignees}
           timeSlots={timeSlots}
+          labels={labels}
+          otherTasks={taskOptions}
+          defaultProjectId={defaultProjectId}
+        />
+      ) : view === "table" ? (
+        <TaskTable
+          tasks={tasks}
+          projects={projects}
+          assignees={assignees}
+          timeSlots={timeSlots}
+          labels={labels}
+          otherTasks={taskOptions}
           defaultProjectId={defaultProjectId}
         />
       ) : (
@@ -290,6 +345,8 @@ export default async function Home(props: PageProps<"/tasks">) {
               projects={projects}
               assignees={assignees}
               timeSlots={timeSlots}
+              labels={labels}
+              otherTasks={taskOptions}
               defaultProjectId={defaultProjectId}
             />
           ))}
@@ -313,6 +370,14 @@ export default async function Home(props: PageProps<"/tasks">) {
                   className={`h-1.5 w-1.5 rounded-full ${PROJECT_COLOR_DOT[project.color] ?? PROJECT_COLOR_DOT.zinc}`}
                 />
                 <span className="flex-1">{project.name}</span>
+                <form action={saveProjectAsTemplateAction.bind(null, project.id, `${project.name} template`)}>
+                  <button
+                    type="submit"
+                    className="text-zinc-400 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100"
+                  >
+                    Save as template
+                  </button>
+                </form>
                 <form action={deleteProject.bind(null, project.id)}>
                   <button
                     type="submit"
@@ -326,6 +391,94 @@ export default async function Home(props: PageProps<"/tasks">) {
           </ul>
         </details>
       )}
+
+      {projectTemplates.length > 0 && (
+        <details className="mt-4 text-xs text-zinc-500">
+          <summary className="cursor-pointer transition-colors hover:text-zinc-900 dark:hover:text-zinc-100">
+            Project templates
+          </summary>
+          <ul className="mt-2 space-y-2">
+            {projectTemplates.map((template) => (
+              <li key={template.id} className="flex items-center gap-2">
+                <span className="flex-1">
+                  {template.name}{" "}
+                  <span className="text-zinc-400">
+                    ({template._count.tasks} task{template._count.tasks === 1 ? "" : "s"})
+                  </span>
+                </span>
+                <form action={createProjectFromTemplateAction.bind(null, template.id, template.name.replace(/ template$/, ""))}>
+                  <button
+                    type="submit"
+                    className="text-zinc-400 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100"
+                  >
+                    New project from this
+                  </button>
+                </form>
+                <form action={deleteProjectTemplateAction.bind(null, template.id)}>
+                  <button
+                    type="submit"
+                    className="text-zinc-400 transition-colors hover:text-red-600 dark:hover:text-red-400"
+                  >
+                    Delete
+                  </button>
+                </form>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+
+      <details className="mt-4 text-xs text-zinc-500">
+        <summary className="cursor-pointer transition-colors hover:text-zinc-900 dark:hover:text-zinc-100">
+          Manage labels
+        </summary>
+        <ul className="mt-2 space-y-1">
+          {labels.map((label) => (
+            <li key={label.id} className="flex items-center gap-2">
+              <span
+                className={`h-1.5 w-1.5 rounded-full ${PROJECT_COLOR_DOT[label.color] ?? PROJECT_COLOR_DOT.zinc}`}
+              />
+              <span className="flex-1">{label.name}</span>
+              <form action={deleteLabel.bind(null, label.id)}>
+                <button
+                  type="submit"
+                  className="text-zinc-400 transition-colors hover:text-red-600 dark:hover:text-red-400"
+                >
+                  Delete
+                </button>
+              </form>
+            </li>
+          ))}
+        </ul>
+        <form
+          action={createLabel}
+          className="mt-2 flex items-center gap-2 rounded-lg border border-zinc-200 bg-white p-2 shadow-sm dark:border-zinc-700 dark:bg-zinc-800"
+        >
+          <input
+            name="name"
+            placeholder="Label name"
+            required
+            className="min-w-0 flex-1 rounded border border-zinc-200 bg-white px-2 py-1 text-xs dark:border-zinc-600 dark:bg-zinc-800"
+          />
+          <select
+            name="color"
+            defaultValue="indigo"
+            className="rounded border border-zinc-200 bg-white px-1 py-1 text-xs dark:border-zinc-600 dark:bg-zinc-800"
+          >
+            {PROJECT_COLOR_OPTIONS.map((color) => (
+              <option key={color} value={color}>
+                {color}
+              </option>
+            ))}
+          </select>
+          <button
+            type="submit"
+            className="rounded bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-700 dark:bg-indigo-500"
+          >
+            Add
+          </button>
+        </form>
+      </details>
 
       {done.length > 0 && (
         <details className="mt-4 text-sm text-zinc-500">

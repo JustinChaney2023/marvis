@@ -37,6 +37,7 @@ model User {
   events        Event[]
   tasks         Task[]
   projects      Project[]
+  projectTemplates ProjectTemplate[]
   googleAccounts GoogleAccount[]
   appleAccount  AppleAccount?
   settings      AppSettings?
@@ -574,6 +575,30 @@ model Project {
   tasks     Task[]
   automationRules AutomationRule[]
   createdAt DateTime @default(now())
+}
+
+// A reusable task-list skeleton (Motion's "Standardized Project Workflow
+// Template") — just title/notes per task, no dates/assignee/project
+// color, since those are specific to one real run of the template, not
+// the reusable shape. Saved from an existing project's current tasks;
+// instantiated the same way AI-generated projects already are
+// (createProjectFromPlanAction's Project-plus-Tasks shape).
+model ProjectTemplate {
+  id        String                @id @default(cuid())
+  userId    String
+  user      User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  tasks     ProjectTemplateTask[]
+  createdAt DateTime              @default(now())
+}
+
+model ProjectTemplateTask {
+  id         String          @id @default(cuid())
+  templateId String
+  template   ProjectTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  title      String
+  notes      String?
+  sortOrder  Int             @default(0)
 }
 
 enum FeedbackCategory {
