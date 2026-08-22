@@ -1,6 +1,6 @@
 import { google } from "googleapis";
 import { prisma } from "@/lib/prisma";
-import { getAuthorizedClient } from "@/lib/google-auth";
+import { getAuthorizedClient, listGoogleAccounts } from "@/lib/google-auth";
 import { parseYMD, formatYMD } from "@/lib/calendar-dates";
 
 const SYNC_PAST_DAYS = 7;
@@ -29,8 +29,8 @@ function extractRRule(recurrence: string[] | null | undefined): string | null {
  * status: "cancelled" (showDeleted: true) — a deletion made directly on
  * Google, not through this app, removes the local copy on the next sync.
  */
-export async function importFromGoogle(userId: string) {
-  const auth = await getAuthorizedClient(userId);
+export async function importFromGoogle(googleAccountId: string) {
+  const auth = await getAuthorizedClient(googleAccountId);
   if (!auth) return { imported: 0, deleted: 0 };
   const calendar = google.calendar({ version: "v3", auth: auth.client });
 
@@ -62,10 +62,12 @@ export async function importFromGoogle(userId: string) {
       if (item.status === "cancelled") {
         // Deleted directly on Google (not through this app) — remove the
         // local copy so it doesn't linger here after being gone on
-        // Google. Scoped by googleEventId (unique), so this can never
-        // touch a LOCAL-sourced event.
+        // Google. Scoped to (googleAccountId, googleEventId) — unique
+        // together, not globally — so this can never touch a
+        // LOCAL-sourced event or a same-id event from a *different*
+        // connected account.
         const { count } = await prisma.event.deleteMany({
-          where: { googleEventId: item.id },
+          where: { googleAccountId: auth.account.id, googleEventId: item.id },
         });
         deleted += count;
         continue;
@@ -91,9 +93,9 @@ export async function importFromGoogle(userId: string) {
       const end = allDay ? parseYMD(endRaw) : new Date(endRaw);
 
       await prisma.event.upsert({
-        where: { googleEventId: item.id },
+        where: { googleAccountId_googleEventId: { googleAccountId: auth.account.id, googleEventId: item.id } },
         create: {
-          userId,
+          userId: auth.account.userId,
           title: item.summary ?? "(untitled)",
           notes: item.description ?? null,
           start,
@@ -101,6 +103,7 @@ export async function importFromGoogle(userId: string) {
           allDay,
           recurrenceRule: extractRRule(item.recurrence),
           source: "GOOGLE",
+          googleAccountId: auth.account.id,
           googleEventId: item.id,
           googleUpdatedAt: item.updated ? new Date(item.updated) : new Date(),
         },
@@ -137,14 +140,28 @@ export async function importFromGoogle(userId: string) {
  * bookkeeping and importFromGoogle's upserts, which made every row look
  * permanently dirty regardless of any real local edit.
  */
-export async function exportToGoogle(userId: string) {
-  const auth = await getAuthorizedClient(userId);
-  if (!auth) return { exported: 0 };
+export async function exportToGoogle(googleAccountId: string) {
+  const auth = await getAuthorizedClient(googleAccountId);
+  if (!auth || !auth.account.userId) return { exported: 0 };
   const calendar = google.calendar({ version: "v3", auth: auth.client });
 
-  const owner = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { timezone: true } });
+  const owner = await prisma.user.findUniqueOrThrow({
+    where: { id: auth.account.userId },
+    select: { timezone: true },
+  });
   const timeZone = owner.timezone ?? LOCAL_TIMEZONE;
-  const all = await prisma.event.findMany({ where: { userId } });
+  // This account's own events (explicitly tagged), plus any of this
+  // user's untagged events *if* this is their default account — an
+  // event only ever gets picked up by one connected account at a time.
+  const all = await prisma.event.findMany({
+    where: {
+      userId: auth.account.userId,
+      OR: [
+        { googleAccountId: auth.account.id },
+        ...(auth.account.isDefault ? [{ googleAccountId: null }] : []),
+      ],
+    },
+  });
   const toPush = all.filter((e) => !e.googleEventId || e.localDirty);
 
   let exported = 0;
@@ -186,6 +203,10 @@ export async function exportToGoogle(userId: string) {
           where: { id: event.id },
           data: {
             localDirty: false,
+            // Pin it to this account now — a later change to which
+            // account is "default" shouldn't reroute an event that's
+            // already been pushed somewhere.
+            googleAccountId: auth.account.id,
             googleEventId: created.data.id ?? undefined,
             googleUpdatedAt: created.data.updated
               ? new Date(created.data.updated)
@@ -213,8 +234,8 @@ export async function exportToGoogle(userId: string) {
 }
 
 /** Push local deletion of a Google-linked event before its row is removed. */
-export async function deleteFromGoogle(userId: string, googleEventId: string) {
-  const auth = await getAuthorizedClient(userId);
+export async function deleteFromGoogle(googleAccountId: string, googleEventId: string) {
+  const auth = await getAuthorizedClient(googleAccountId);
   if (!auth) return;
   const calendar = google.calendar({ version: "v3", auth: auth.client });
   try {
@@ -229,8 +250,18 @@ export async function deleteFromGoogle(userId: string, googleEventId: string) {
   }
 }
 
+/** Runs export+import against every Google account this user has connected. */
 export async function syncGoogleCalendar(userId: string) {
-  const exportResult = await exportToGoogle(userId);
-  const importResult = await importFromGoogle(userId);
-  return { ...exportResult, ...importResult };
+  const accounts = await listGoogleAccounts(userId);
+  let exported = 0;
+  let imported = 0;
+  let deleted = 0;
+  for (const account of accounts) {
+    const exportResult = await exportToGoogle(account.id);
+    const importResult = await importFromGoogle(account.id);
+    exported += exportResult.exported;
+    imported += importResult.imported;
+    deleted += importResult.deleted;
+  }
+  return { exported, imported, deleted };
 }

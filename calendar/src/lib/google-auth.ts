@@ -18,12 +18,20 @@ export function createOAuthClient() {
   return new google.auth.OAuth2(clientId, clientSecret, getRedirectUri());
 }
 
+/** Every Google account a user has connected (personal, work, etc.), default first. */
+export async function listGoogleAccounts(userId: string) {
+  return prisma.googleAccount.findMany({
+    where: { userId },
+    orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
+  });
+}
+
 /**
  * Returns an OAuth2 client with valid (refreshed if needed) credentials
- * for this user's connected GoogleAccount, or null if none is connected.
+ * for one specific connected GoogleAccount, or null if it doesn't exist.
  */
-export async function getAuthorizedClient(userId: string) {
-  const account = await prisma.googleAccount.findUnique({ where: { userId } });
+export async function getAuthorizedClient(googleAccountId: string) {
+  const account = await prisma.googleAccount.findUnique({ where: { id: googleAccountId } });
   if (!account) return null;
 
   const client = createOAuthClient();

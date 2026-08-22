@@ -113,6 +113,7 @@ export default async function Page(props: PageProps<"/">) {
   const eventTypeByMasterId = new Map(rows.map((r) => [r.id, r.eventType]));
   const reminderMinutesByMasterId = new Map(rows.map((r) => [r.id, r.reminderMinutes]));
   const notesByMasterId = new Map(rows.map((r) => [r.id, r.notes]));
+  const googleAccountIdByMasterId = new Map(rows.map((r) => [r.id, r.googleAccountId]));
   const events: CalendarEvent[] = expandEvents(rows, from, to)
     .map((o) => ({
       id: o.id,
@@ -130,6 +131,7 @@ export default async function Page(props: PageProps<"/">) {
       meetingUrl: meetingUrlByMasterId.get(o.masterId) ?? null,
       eventType: eventTypeByMasterId.get(o.masterId) ?? "DEFAULT",
       reminderMinutes: reminderMinutesByMasterId.get(o.masterId) ?? null,
+      googleAccountId: googleAccountIdByMasterId.get(o.masterId) ?? null,
     }))
     .sort((a, b) => a.start.getTime() - b.start.getTime());
 
@@ -137,6 +139,14 @@ export default async function Page(props: PageProps<"/">) {
   // my own events above. BUSY_ONLY drops the title/notes entirely rather
   // than filtering client-side, so a real title never even reaches the
   // browser for a calendar that's only supposed to show as "Busy".
+  // For EventModal's "Sync to" per-event override — only relevant once
+  // someone's connected 2+ accounts (see CalendarClient/EventModal).
+  const googleAccounts = await prisma.googleAccount.findMany({
+    where: { userId: user.id },
+    orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
+    select: { id: true, label: true },
+  });
+
   const shares = await prisma.calendarShare.findMany({
     where: { sharedWithId: user.id, hiddenByRecipient: false },
     include: { owner: { select: { id: true, name: true, email: true } } },
@@ -341,6 +351,7 @@ export default async function Page(props: PageProps<"/">) {
               events={events}
               sharedEvents={sharedEvents}
               secondaryTimezone={settings.secondaryTimezone}
+              googleAccounts={googleAccounts}
             />
           </div>
 

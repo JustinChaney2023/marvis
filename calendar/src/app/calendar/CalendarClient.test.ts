@@ -18,6 +18,7 @@ function ev(id: string, startHour: number, endHour: number) {
     meetingUrl: null,
     eventType: "DEFAULT" as const,
     reminderMinutes: null,
+    googleAccountId: null,
   };
 }
 

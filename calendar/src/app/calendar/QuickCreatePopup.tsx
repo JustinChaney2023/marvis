@@ -45,6 +45,7 @@ export default function QuickCreatePopup({ start, end, onClose, onCreatedEvent }
           eventType: "DEFAULT",
           allDay: false,
           reminderMinutes: 10,
+          googleAccountId: null,
         });
       } else {
         await createQuickTaskAction(trimmed, start.toISOString(), end.toISOString());

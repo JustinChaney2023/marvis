@@ -34,13 +34,23 @@ export async function GET(request: NextRequest) {
     const oauth2 = google.oauth2({ version: "v2", auth: client });
     const { data: userinfo } = await oauth2.userinfo.get();
 
-    // One GoogleAccount per user: replace any existing one for this user
-    // rather than trying to "update the right one".
-    await prisma.googleAccount.deleteMany({ where: { userId: user.id } });
-    await prisma.googleAccount.create({
-      data: {
+    const email = userinfo.email ?? "unknown";
+    const existingCount = await prisma.googleAccount.count({ where: { userId: user.id } });
+    // Reconnecting an already-known account (e.g. after a revoked/expired
+    // grant) updates its tokens in place instead of creating a duplicate
+    // row for the same underlying Google account.
+    await prisma.googleAccount.upsert({
+      where: { userId_email: { userId: user.id, email } },
+      create: {
         userId: user.id,
-        email: userinfo.email ?? "unknown",
+        email,
+        label: email,
+        isDefault: existingCount === 0,
+        accessToken: encryptSecret(tokens.access_token),
+        refreshToken: encryptSecret(tokens.refresh_token),
+        expiresAt: new Date(tokens.expiry_date ?? Date.now() + 3600_000),
+      },
+      update: {
         accessToken: encryptSecret(tokens.access_token),
         refreshToken: encryptSecret(tokens.refresh_token),
         expiresAt: new Date(tokens.expiry_date ?? Date.now() + 3600_000),

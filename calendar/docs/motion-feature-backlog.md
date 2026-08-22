@@ -1,5 +1,68 @@
 # Motion replica — feature backlog
 
+## Multiple connected Google accounts — personal + work (2026-08-22, #52)
+Justin explicitly asked for "connect multiple calendars from Google...
+someone's personal and someone's work" as part of a broader group-
+scheduling + Google-parity push. Also verified (no code change needed):
+**group scheduling already doesn't leak schedules** — `/meet` only offers
+people who've shared their calendar with you at *any* permission level
+(including `BUSY_ONLY`), and `findGroupSlot`/`fetchBusyIntervals` only
+ever compute start/end intervals server-side — no title/notes/location
+ever reaches the client, even transiently. Nothing to build there.
+
+Root cause confirmed by reading the code: `GoogleAccount.userId` was
+`@unique` — exactly one Google account per app-user — and the OAuth
+callback (`api/google/callback/route.ts`) `deleteMany`'d any existing
+account before creating a new one, so connecting a second account
+silently destroyed the first. `google-auth.ts`/`google-sync.ts` assumed
+exactly one account per user throughout.
+
+Product decision (Justin's call): one connected account is the
+"default" for brand-new locally-created events; a per-event "Sync to"
+override picks a different one. All connected accounts sync two-way
+(not read-only like Apple).
+
+- [x] **Schema**: dropped `@unique` on `GoogleAccount.userId` (kept the
+      FK, now one-to-many); added `label` (renameable display name,
+      defaults to the account's own email) and `isDefault` (exactly one
+      true per user, enforced in application code, not a DB constraint
+      SQLite can't express cleanly); added `@@unique([userId, email])`
+      so reconnecting the same Google account updates its tokens in
+      place instead of creating a duplicate row. `Event.googleAccountId`
+      (nullable FK, `onDelete: SetNull`) ties an event to a specific
+      account; `googleEventId`'s uniqueness moved from global to
+      `@@unique([googleAccountId, googleEventId])`. Migration backfills
+      every pre-existing Google-synced event onto its (single, by the
+      old constraint) existing account.
+- [x] **`google-auth.ts`/`google-sync.ts` rewritten per-account**:
+      `getAuthorizedClient` takes a `googleAccountId` now, not a
+      `userId`; new `listGoogleAccounts(userId)`. `importFromGoogle`/
+      `exportToGoogle`/`deleteFromGoogle` all operate on one account;
+      `syncGoogleCalendar(userId)` loops every connected account and
+      aggregates the results. An untagged (new) local event exports to
+      whichever account `isDefault` — and gets tagged with that
+      account's id the moment it's first pushed, so a later default
+      change doesn't reroute something already synced somewhere.
+- [x] **OAuth callback** no longer replaces — `upsert`s on
+      `(userId, email)`, first-ever connection becomes the default
+      automatically.
+- [x] **Settings** (`GoogleAccountsManager.tsx`): lists every connected
+      account (renameable label, "Default" badge, "Set as default",
+      "Disconnect" scoped to just that one account — promotes another to
+      default if the disconnected one was it), "Connect another Google
+      account" button.
+- [x] **`EventModal.tsx`**: a "Sync to" select, shown only with 2+
+      connected accounts (nothing to choose with 0 or 1) — picks a
+      specific account for that one event, or "Default account" (no
+      pin, follows whichever's currently default).
+
+Deliberately not built: a true "never sync this event to Google at all"
+exclusion, independent of which account is default — the ask was
+personal-vs-work account routing, not per-event opt-out; add if that
+turns out to be a real, separate want.
+
+`npx tsc --noEmit`, `npm test`, and `npm run build` all pass clean.
+
 ## Task attachments + activity log (2026-08-21, #31)
 The other "medium-large" item left for a real scoping pass, done right
 after #46. #31's original issue body was stale — 4 of its 5 items

@@ -42,7 +42,13 @@ export type EventModalEvent = {
   eventType: "DEFAULT" | "OUT_OF_OFFICE" | "FOCUS_TIME";
   allDay: boolean;
   reminderMinutes: number | null;
+  // Which connected Google account this event syncs to, if any — null
+  // means "not tied to a specific one yet" (exports to whichever account
+  // is currently default; see exportToGoogle in google-sync.ts).
+  googleAccountId: string | null;
 };
+
+export type GoogleAccountOption = { id: string; label: string };
 
 const REMINDER_MINUTES_PRESETS = [
   { value: "", label: "None" },
@@ -72,6 +78,9 @@ type Props = {
   initialEventType?: EventModalEvent["eventType"];
   event: EventModalEvent | null;
   onClose: () => void;
+  // Only meaningful with 2+ entries — see the "Sync to" field below,
+  // which stays hidden with 0 or 1 connected accounts (nothing to choose).
+  googleAccounts?: GoogleAccountOption[];
 };
 
 const WEEKDAY_SHORT_LABELS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"] as const;
@@ -97,6 +106,7 @@ export default function EventModal({
   initialEventType,
   event,
   onClose,
+  googleAccounts = [],
 }: Props) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAllDay, setIsAllDay] = useState(() => (mode === "edit" ? !!event?.allDay : false));
@@ -470,6 +480,24 @@ export default function EventModal({
               ))}
             </select>
           </label>
+
+          {googleAccounts.length > 1 && (
+            <label className="flex flex-col gap-1 text-sm">
+              <span className="text-zinc-500">Sync to</span>
+              <select
+                name="googleAccountId"
+                defaultValue={(mode === "edit" ? event?.googleAccountId : null) ?? ""}
+                className={inputClass}
+              >
+                <option value="">Default account</option>
+                {googleAccounts.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
 
           <label className="flex cursor-pointer items-center gap-2 text-sm">
             <input

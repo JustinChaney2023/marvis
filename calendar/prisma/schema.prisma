@@ -37,7 +37,7 @@ model User {
   events        Event[]
   tasks         Task[]
   projects      Project[]
-  googleAccount GoogleAccount?
+  googleAccounts GoogleAccount[]
   appleAccount  AppleAccount?
   settings      AppSettings?
   assignees     Assignee[]
@@ -125,7 +125,16 @@ model Event {
   // every sync) — localDirty is set only by actual user edits and cleared
   // once exportToGoogle successfully pushes it.
   source          EventSource @default(LOCAL)
-  googleEventId   String?     @unique
+  // Which of the user's (possibly several) connected Google accounts
+  // this event syncs to. Null = not tied to a specific account yet — an
+  // untagged LOCAL event exports to whichever account is currently
+  // isDefault (see exportToGoogle); it's tagged with that account's id
+  // the moment it's first pushed, so a later default change doesn't
+  // reroute an event that already has a home. SetNull on delete: the
+  // event just stops syncing, it isn't destroyed with the account.
+  googleAccountId String?
+  googleAccount   GoogleAccount? @relation(fields: [googleAccountId], references: [id], onDelete: SetNull)
+  googleEventId   String?
   googleUpdatedAt DateTime?
   localDirty      Boolean     @default(false)
   // CalDAV UID for Apple-synced events (src/lib/apple-sync.ts) — read-only
@@ -168,6 +177,7 @@ model Event {
   // on start. Free to add now, before rows accumulate over months.
   @@index([userId, start])
   @@unique([subscriptionId, subscriptionEventUid])
+  @@unique([googleAccountId, googleEventId])
 }
 
 /**
@@ -232,11 +242,24 @@ enum EventSource {
 
 // One connected Google account per user (was a single global row back when
 // this was single-user).
+// Several of these can now belong to one user (e.g. personal + work) —
+// see src/lib/google-sync.ts, which loops every connected account
+// independently. userId stays nullable only for the pre-multi-user
+// bootstrap adoption path in authActions.ts.
 model GoogleAccount {
   id           String    @id @default(cuid())
-  userId       String?   @unique
+  userId       String?
   user         User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
   email        String
+  // Display name distinguishing this account from a user's others (e.g.
+  // "Personal", "Work") — defaults to the Google account's own email at
+  // connect time, renameable after in Settings.
+  label        String
+  // Exactly one true per user is the app-level invariant (enforced in
+  // actions.ts, not a DB constraint SQLite can't express cleanly) — the
+  // account a brand-new local event exports to when it has no explicit
+  // Event.googleAccountId of its own.
+  isDefault    Boolean   @default(false)
   accessToken  String
   refreshToken String
   expiresAt    DateTime
@@ -246,6 +269,9 @@ model GoogleAccount {
   lastSyncedAt DateTime?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
+  events       Event[]
+
+  @@unique([userId, email])
 }
 
 // One connected Apple/iCloud CalDAV account per user — read-only overlay

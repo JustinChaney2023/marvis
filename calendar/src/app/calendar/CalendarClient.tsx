@@ -23,7 +23,7 @@ import {
   WEEKDAY_LABELS_SUN_FIRST,
   type CalendarView,
 } from "@/lib/calendar-dates";
-import EventModal, { type EventModalEvent } from "./EventModal";
+import EventModal, { type EventModalEvent, type GoogleAccountOption } from "./EventModal";
 import { useNowContext } from "./NowContext";
 import QuickCreatePopup from "./QuickCreatePopup";
 import { LockIcon, FlagIcon } from "../icons";
@@ -56,6 +56,7 @@ export type CalendarEvent = {
   // display distinction (EventBlock renders a small badge for either).
   eventType: "DEFAULT" | "OUT_OF_OFFICE" | "FOCUS_TIME";
   reminderMinutes: number | null;
+  googleAccountId: string | null;
 };
 
 // PROJECT_EVENT_COLORS/DEFAULT_EVENT_COLOR now live in @/lib/eventColors
@@ -84,6 +85,7 @@ type Props = {
   events: CalendarEvent[];
   sharedEvents?: SharedEvent[];
   secondaryTimezone?: string | null;
+  googleAccounts?: GoogleAccountOption[];
 };
 
 const HOUR_HEIGHT = 48;
@@ -274,6 +276,7 @@ export default function CalendarClient({
   events,
   sharedEvents = [],
   secondaryTimezone = null,
+  googleAccounts = [],
 }: Props) {
   // "Upcoming" (right sidebar) links to a plain event as
   // `/?view=day&start=...&edit=<eventId>` — open its editor immediately
@@ -300,6 +303,7 @@ export default function CalendarClient({
         eventType: match.eventType,
         allDay: match.allDay,
         reminderMinutes: match.reminderMinutes,
+        googleAccountId: match.googleAccountId,
       },
     };
   });
@@ -400,6 +404,7 @@ export default function CalendarClient({
         eventType: event.eventType,
         allDay: event.allDay,
         reminderMinutes: event.reminderMinutes,
+        googleAccountId: event.googleAccountId,
       },
     });
   };
@@ -608,6 +613,7 @@ export default function CalendarClient({
           initialEventType={modalState.initialEventType}
           event={null}
           onClose={closeModal}
+          googleAccounts={googleAccounts}
         />
       )}
       {modalState?.mode === "edit" && (
@@ -617,6 +623,7 @@ export default function CalendarClient({
           initialEnd={modalState.event.end}
           event={modalState.event}
           onClose={closeModal}
+          googleAccounts={googleAccounts}
         />
       )}
       {modalState?.mode === "quick" && (

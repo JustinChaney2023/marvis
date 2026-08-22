@@ -3,14 +3,13 @@ import { prisma } from "@/lib/prisma";
 import { requireUser, getCurrentSessionId } from "@/lib/auth";
 import { getAppSettings } from "@/lib/settings";
 import {
-  disconnectGoogleAction,
   connectAppleAction,
   disconnectAppleAction,
   updateAiSettingsAction,
   updateSchedulingSettingsAction,
   setUserTimezoneAction,
 } from "../actions";
-import SyncButton from "./SyncButton";
+import GoogleAccountsManager from "./GoogleAccountsManager";
 import AppleSyncButton from "./AppleSyncButton";
 import ShareAvailabilityButton from "./ShareAvailabilityButton";
 import BookingLinksManager from "./BookingLinksManager";
@@ -46,7 +45,11 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
   const passwordChanged = sp?.password_changed === "1";
   const appleError = typeof sp?.apple_error === "string" ? sp.apple_error : null;
 
-  const account = await prisma.googleAccount.findUnique({ where: { userId: user.id } });
+  const googleAccounts = await prisma.googleAccount.findMany({
+    where: { userId: user.id },
+    orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
+    select: { id: true, email: true, label: true, isDefault: true, lastSyncedAt: true },
+  });
   const appleAccount = await prisma.appleAccount.findUnique({ where: { userId: user.id } });
   const calendarSubscriptions = await prisma.calendarSubscription.findMany({
     where: { userId: user.id },
@@ -427,27 +430,8 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
       <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
         <h2 className="text-lg font-semibold">Google Calendar</h2>
 
-        {account ? (
-          <div className="mt-3 space-y-3">
-            <p className="text-sm text-zinc-600 dark:text-zinc-400">
-              Connected as <span className="font-medium">{account.email}</span>.
-              {account.lastSyncedAt
-                ? ` Last synced ${account.lastSyncedAt.toLocaleString()}.`
-                : " Never synced yet."}
-            </p>
-            <div className="flex items-center gap-3">
-              <SyncButton />
-              <form action={disconnectGoogleAction}>
-                <Button type="submit" variant="secondary">Disconnect</Button>
-              </form>
-            </div>
-            <p className="text-xs text-zinc-400">
-              Syncs the last 7 days through the next 90. Local events push to
-              Google; Google events pull in as read-synced events. Deletions
-              sync both ways — deleting here removes it on Google, and
-              deleting it on Google removes it here on the next sync.
-            </p>
-          </div>
+        {googleAccounts.length > 0 ? (
+          <GoogleAccountsManager accounts={googleAccounts} />
         ) : (
           <div className="mt-3 space-y-3">
             <p className="text-sm text-zinc-600 dark:text-zinc-400">

@@ -929,6 +929,19 @@ function notesFromFormData(formData: FormData): string | null {
   return raw || null;
 }
 
+// "" (EventModal's "Default account" option, or the field being absent
+// entirely when there's <2 connected accounts to choose between) means
+// "no explicit pin" — exportToGoogle then routes it to whichever account
+// is the user's default. A non-empty value must actually belong to this
+// user, same ownership discipline as verifyOwnedId above, just for a
+// model outside that helper's closed union.
+async function googleAccountIdFromFormData(formData: FormData, userId: string): Promise<string | null> {
+  const raw = String(formData.get("googleAccountId") ?? "").trim();
+  if (!raw) return null;
+  const owned = await prisma.googleAccount.findFirst({ where: { id: raw, userId }, select: { id: true } });
+  return owned ? raw : null;
+}
+
 // meetingUrl is rendered as a plain <a href> on the public /rsvp/[token]
 // page (and MeetingBanner) — a "javascript:" value would execute on
 // click for a guest who never signed in. <input type="url"> only
@@ -981,6 +994,7 @@ export async function createEvent(formData: FormData) {
       eventType: eventTypeFromFormData(formData),
       allDay: allDayFromFormData(formData),
       reminderMinutes: reminderMinutesFromFormData(formData),
+      googleAccountId: await googleAccountIdFromFormData(formData, user.id),
       localDirty: true,
     },
   });
@@ -1051,6 +1065,7 @@ export async function updateEvent(
       eventType: eventTypeFromFormData(formData),
       allDay: allDayFromFormData(formData),
       reminderMinutes: reminderMinutesFromFormData(formData),
+      googleAccountId: await googleAccountIdFromFormData(formData, user.id),
       localDirty: true,
     },
   });
@@ -1110,6 +1125,7 @@ export async function updateEventOccurrence(
   const end = new Date(endRaw);
   const meetingUrl = meetingUrlFromFormData(formData);
   const color = String(formData.get("color") ?? "").trim() || null;
+  const googleAccountId = await googleAccountIdFromFormData(formData, user.id);
 
   await prisma.$transaction([
     prisma.event.create({
@@ -1125,6 +1141,7 @@ export async function updateEventOccurrence(
         eventType: eventTypeFromFormData(formData),
         allDay: allDayFromFormData(formData),
         reminderMinutes: reminderMinutesFromFormData(formData),
+        googleAccountId,
         recurrenceExceptionOfId: masterId,
         recurrenceOriginalStart: new Date(normalizedOriginalStart),
         localDirty: true,
@@ -1270,7 +1287,12 @@ export async function deleteEvent(eventId: string) {
   const event = await prisma.event.findFirst({ where: { id: eventId, userId: user.id } });
   if (!event) return;
   if (event.googleEventId) {
-    await deleteFromGoogle(user.id, event.googleEventId);
+    // Untagged (pre-multi-account) rows fall back to whichever account is
+    // default — see exportToGoogle's own matching logic.
+    const targetAccountId =
+      event.googleAccountId ??
+      (await prisma.googleAccount.findFirst({ where: { userId: user.id, isDefault: true } }))?.id;
+    if (targetAccountId) await deleteFromGoogle(targetAccountId, event.googleEventId);
   }
   // Deleting the event doesn't touch the task's status — losing its slot
   // (whatever the task's status is) is enough on its own to put it back
@@ -1355,11 +1377,14 @@ const GOOGLE_AUTO_SYNC_INTERVAL_MS = 10 * 60 * 1000;
 
 export async function syncGoogleCalendarIfDueAction(): Promise<{ synced: boolean }> {
   const user = await requireUser();
-  const account = await prisma.googleAccount.findUnique({ where: { userId: user.id } });
-  if (!account) return { synced: false };
-  const due =
-    !account.lastSyncedAt ||
-    Date.now() - account.lastSyncedAt.getTime() > GOOGLE_AUTO_SYNC_INTERVAL_MS;
+  const accounts = await prisma.googleAccount.findMany({ where: { userId: user.id } });
+  if (accounts.length === 0) return { synced: false };
+  // syncGoogleCalendar syncs every connected account in one pass anyway,
+  // so it's "due" the moment any one of them is stale — no per-account
+  // scheduling needed.
+  const due = accounts.some(
+    (a) => !a.lastSyncedAt || Date.now() - a.lastSyncedAt.getTime() > GOOGLE_AUTO_SYNC_INTERVAL_MS,
+  );
   if (!due) return { synced: false };
 
   await syncGoogleCalendar(user.id);
@@ -1369,9 +1394,48 @@ export async function syncGoogleCalendarIfDueAction(): Promise<{ synced: boolean
   return { synced: true };
 }
 
-export async function disconnectGoogleAction() {
+/** Disconnects one specific Google account (not all of a user's accounts). */
+export async function disconnectGoogleAction(googleAccountId: string) {
   const user = await requireUser();
-  await prisma.googleAccount.deleteMany({ where: { userId: user.id } });
+  const account = await prisma.googleAccount.findFirst({
+    where: { id: googleAccountId, userId: user.id },
+  });
+  if (!account) return;
+  await prisma.googleAccount.delete({ where: { id: account.id } });
+  if (account.isDefault) {
+    // Keep the "exactly one default, if any account exists" invariant —
+    // promote whichever's left (oldest first, an arbitrary but stable
+    // pick) rather than leaving the user with zero default accounts.
+    const next = await prisma.googleAccount.findFirst({
+      where: { userId: user.id },
+      orderBy: { createdAt: "asc" },
+    });
+    if (next) await prisma.googleAccount.update({ where: { id: next.id }, data: { isDefault: true } });
+  }
+  revalidatePath("/settings");
+}
+
+export async function setDefaultGoogleAccountAction(googleAccountId: string) {
+  const user = await requireUser();
+  const account = await prisma.googleAccount.findFirst({
+    where: { id: googleAccountId, userId: user.id },
+  });
+  if (!account) return;
+  await prisma.$transaction([
+    prisma.googleAccount.updateMany({ where: { userId: user.id }, data: { isDefault: false } }),
+    prisma.googleAccount.update({ where: { id: account.id }, data: { isDefault: true } }),
+  ]);
+  revalidatePath("/settings");
+}
+
+export async function renameGoogleAccountAction(googleAccountId: string, label: string) {
+  const user = await requireUser();
+  const trimmed = label.trim();
+  if (!trimmed) return;
+  await prisma.googleAccount.updateMany({
+    where: { id: googleAccountId, userId: user.id },
+    data: { label: trimmed },
+  });
   revalidatePath("/settings");
 }
 
