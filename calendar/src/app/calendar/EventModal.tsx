@@ -6,6 +6,7 @@ import {
   deleteEvent,
   updateEvent,
   updateEventOccurrence,
+  updateEventFollowing,
   deleteEventOccurrence,
   addEventGuestAction,
   removeEventGuestAction,
@@ -147,7 +148,7 @@ export default function EventModal({
   // raw recurring occurrence (isEditingRecurring below). Defaults to the
   // series-wide behavior this app already had, so it's opt-in rather
   // than a surprise change to existing muscle memory.
-  const [editScope, setEditScope] = useState<"series" | "occurrence">("series");
+  const [editScope, setEditScope] = useState<"series" | "occurrence" | "following">("series");
 
   type Guest = { id: string; email: string; status: "PENDING" | "ACCEPTED" | "DECLINED" | "TENTATIVE" };
   const [guests, setGuests] = useState<Guest[]>([]);
@@ -247,6 +248,8 @@ export default function EventModal({
       } else if (event) {
         if (isEditingRecurring && editScope === "occurrence") {
           await updateEventOccurrence(event.id, event.start.toISOString(), formData);
+        } else if (isEditingRecurring && editScope === "following") {
+          await updateEventFollowing(event.id, event.start.toISOString(), formData);
         } else if (isEditingRecurring) {
           // "All events" from a specific occurrence — see updateEvent's
           // own comment for why the pre-edit occurrence start has to be
@@ -559,7 +562,7 @@ export default function EventModal({
           <div className="border-t border-zinc-200 pt-4 dark:border-zinc-700">
             {isEditingRecurring && (
               <div className="mb-3 inline-flex items-center gap-1 rounded-full bg-zinc-100 p-1 text-xs dark:bg-zinc-700">
-                {(["occurrence", "series"] as const).map((scope) => (
+                {(["occurrence", "following", "series"] as const).map((scope) => (
                   <button
                     key={scope}
                     type="button"
@@ -570,7 +573,7 @@ export default function EventModal({
                         : "rounded-full px-3 py-1 text-zinc-500 dark:text-zinc-400"
                     }
                   >
-                    {scope === "occurrence" ? "This event" : "All events"}
+                    {scope === "occurrence" ? "This event" : scope === "following" ? "This and following" : "All events"}
                   </button>
                 ))}
               </div>
@@ -583,6 +586,13 @@ export default function EventModal({
             ) : (
             <label className="flex flex-col gap-1 text-sm">
               <span className="text-zinc-500">Repeat</span>
+              {editScope === "following" && (
+                <p className="mb-1 text-xs text-zinc-500">
+                  Splits the series here — earlier occurrences keep their
+                  old pattern, this and every occurrence after it become a
+                  new series with whatever you set below.
+                </p>
+              )}
               <select
                 value={recurrenceSelection}
                 onChange={(e) => {

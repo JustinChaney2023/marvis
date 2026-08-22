@@ -1,5 +1,54 @@
 # Motion replica — feature backlog
 
+## "This and following events" recurring edit scope (2026-08-22, #54)
+The item round 3 filed and deliberately deferred — Google's third
+recurring-edit option, beyond this app's existing "this event" (#40) /
+"all events" pair.
+
+Model: splits the series at the edited occurrence's original start.
+- [x] **`Event.recurrenceEndsBefore`** (new nullable `DateTime` column) —
+      an exclusive cutoff checked in `expandEventOccurrences`
+      (`recurrence.ts`): the old master stops generating occurrences
+      on/after this instant. Deliberately *not* an RRULE `UNTIL` clause —
+      `UNTIL` is a literal UTC instant per RFC 5545, but this app's own
+      recurrence math (`buildLocalRRule`) treats every rule field as
+      local-wall-clock-relabeled-as-UTC for DST correctness; round-
+      tripping a real UTC instant through that scheme on a non-UTC server
+      would silently shift it by the zone offset. A plain column sidesteps
+      that whole class of bug instead of fighting it.
+- [x] **`updateEventFollowing(masterId, originalStartIso, formData)`**
+      (`actions.ts`) — sets `recurrenceEndsBefore` on the old master,
+      creates a new master at the (possibly edited) occurrence's start
+      carrying the form's edits and the *same* recurrence pattern (or a
+      new one, if the user changed Repeat — the split point is exactly
+      where "start a different pattern from here on" naturally belongs).
+      Any pre-existing single-occurrence exceptions (#40) dated on/after
+      the split point get reassigned to the new master (`recurrenceExceptionOfId`)
+      and re-excluded on it — otherwise the new master would regenerate a
+      raw occurrence at that slot, duplicating the still-existing
+      exception row.
+- [x] **Degenerate case**: splitting at the series' own anchor date is
+      just "all events" with extra steps (nothing before it exists to
+      preserve) — delegates straight to the existing `updateEvent` rather
+      than creating a redundant, zero-occurrence old master.
+- [x] **`EventModal.tsx`**: the "This event"/"All events" toggle (shown
+      only when editing a raw recurring occurrence) is now three-way,
+      with a short explainer under Repeat when "This and following" is
+      selected.
+- [x] New test coverage in `recurrence.test.ts` for the cutoff filter,
+      including combined with a pre-existing `excludeDates` entry.
+
+Deliberately **not** built this pass: **delete-scope** ("delete this and
+following," Google's parallel option). The ask was specifically the edit-
+scope gap; delete still only supports "this occurrence" or "whole series"
+(existing, correctly-labeled behavior in the UI — not silently wrong,
+just narrower). Worth a quick follow-up (reuses the same
+`recurrenceEndsBefore` field — trivial once someone wants it) but not
+bundled in here to keep this change reviewable on its own.
+
+`npx tsc --noEmit`, `npm test`, `npm run build` all pass clean. Schema
+touched — needs `npx prisma generate` + a dev-server restart.
+
 ## Google Calendar parity audit, round 3 (2026-08-22, #53 follow-ups)
 Fresh sweep after round 2 — checked recurring "this and following" edit
 scope, event templates/duplicate-with-modifications, calendar-wide default

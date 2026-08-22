@@ -66,6 +66,9 @@ export type RecurringEventSource = {
   // (which shows up on its own as an ordinary one-off row wherever
   // `events` gets queried — no splicing needed here, just exclusion).
   excludeDates?: string | null;
+  // "This and following events" split (#54) — an occurrence starting on
+  // or after this instant belongs to a different master row instead.
+  recurrenceEndsBefore?: Date | null;
 };
 
 function parseExcludedStarts(excludeDates: string | null | undefined): Set<number> {
@@ -129,9 +132,11 @@ export function expandEventOccurrences(
   );
   const starts = fakeStarts.map(fromFakeUTC);
   const excluded = parseExcludedStarts(event.excludeDates);
+  const endsBefore = event.recurrenceEndsBefore?.getTime();
 
   return starts
     .filter((s) => !excluded.has(s.getTime()))
+    .filter((s) => endsBefore === undefined || s.getTime() < endsBefore)
     .map((s) => ({
       id: `${event.id}::${s.toISOString()}`,
       masterId: event.id,

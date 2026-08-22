@@ -165,6 +165,19 @@ model Event {
   // notifications, the main grid) gets the exclusion for free with no
   // per-caller plumbing.
   excludeDates    String?
+  // "This and following events" split (Google's third recurring-edit
+  // scope, beyond this app's existing this-event/all-events pair).
+  // Exclusive cutoff: an occurrence starting on/after this instant no
+  // longer generates from *this* master — a new master row picks up the
+  // series from there instead (see updateEventFollowing in actions.ts).
+  // Deliberately a plain DateTime column, not an RRULE UNTIL clause:
+  // UNTIL is stored/parsed as a literal UTC instant per RFC 5545, but
+  // this app's own recurrence math (buildLocalRRule in recurrence.ts)
+  // treats every rule field as "local wall-clock time relabeled as UTC"
+  // for DST correctness — round-tripping a real UTC instant through that
+  // scheme on a non-UTC server would silently shift it. A plain filter
+  // in expandEventOccurrences sidesteps that entirely.
+  recurrenceEndsBefore DateTime?
   // Set on the override row itself (not the master) when this event
   // replaces one occurrence of another recurring event's series — a
   // plain one-off Event otherwise, editable/deletable through the

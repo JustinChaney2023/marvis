@@ -1157,6 +1157,111 @@ export async function updateEventOccurrence(
   revalidatePath("/");
 }
 
+/**
+ * "This and following events" (#54) — Google's third recurring-edit
+ * scope. Splits the series at `originalStartIso`: the existing master
+ * stops producing occurrences from that point on (`recurrenceEndsBefore`,
+ * see the schema comment for why this isn't an RRULE UNTIL clause), and a
+ * brand-new master row picks up the *same* recurrence pattern from the
+ * edited occurrence's (possibly moved) start, carrying the form's edits.
+ *
+ * If the split point IS the series' own anchor (`master.start`), there's
+ * nothing before it to preserve — that's just "all events" with extra
+ * steps, so this delegates straight to `updateEvent` instead of creating
+ * a redundant, ends-immediately old master.
+ *
+ * Any single-occurrence exceptions (#40, `recurrenceExceptionOfId`) dated
+ * on/after the split point belong to the new series now, not the old
+ * one — reassigned to the new master, and re-excluded on it (otherwise
+ * the new master would regenerate a raw occurrence at that same slot,
+ * duplicating the still-existing exception row).
+ */
+export async function updateEventFollowing(
+  masterId: string,
+  originalStartIso: string,
+  formData: FormData,
+) {
+  const user = await requireUser();
+  const normalizedOriginalStart = normalizeExcludedStart(originalStartIso);
+  if (!normalizedOriginalStart) return;
+  const master = await prisma.event.findFirst({
+    where: { id: masterId, userId: user.id, recurrenceRule: { not: null } },
+  });
+  if (!master) return;
+
+  const splitPoint = new Date(normalizedOriginalStart);
+  if (splitPoint.getTime() === master.start.getTime()) {
+    await updateEvent(masterId, formData, originalStartIso);
+    return;
+  }
+
+  const title = String(formData.get("title") ?? "").trim();
+  const startRaw = String(formData.get("start") ?? "");
+  const endRaw = String(formData.get("end") ?? "");
+  if (!title || !startRaw || !endRaw) return;
+
+  const start = new Date(startRaw);
+  const end = new Date(endRaw);
+  // The form's Repeat select is always present and submitted for this
+  // scope (same as "all events" — see EventModal), so this reflects the
+  // user's actual choice, including deliberately picking "Doesn't
+  // repeat" to end the series here — no fallback to the old master's
+  // rule, that would silently override that choice.
+  const recurrenceRule = recurrenceRuleFromFormData(formData);
+  const meetingUrl = meetingUrlFromFormData(formData);
+  const color = String(formData.get("color") ?? "").trim() || null;
+  const googleAccountId = await googleAccountIdFromFormData(formData, user.id);
+
+  const movingExceptions = await prisma.event.findMany({
+    where: { recurrenceExceptionOfId: masterId, recurrenceOriginalStart: { gte: splitPoint } },
+    select: { id: true, recurrenceOriginalStart: true },
+  });
+
+  await prisma.$transaction(async (tx) => {
+    const newMaster = await tx.event.create({
+      data: {
+        userId: user.id,
+        title,
+        start,
+        end,
+        recurrenceRule,
+        meetingUrl,
+        color,
+        notes: notesFromFormData(formData),
+        locked: lockedFromFormData(formData),
+        eventType: eventTypeFromFormData(formData),
+        allDay: allDayFromFormData(formData),
+        reminderMinutes: reminderMinutesFromFormData(formData),
+        googleAccountId,
+        localDirty: true,
+      },
+    });
+
+    let newExcludeDates: string | null = null;
+    for (const exception of movingExceptions) {
+      newExcludeDates = withExcludedStart(
+        newExcludeDates,
+        exception.recurrenceOriginalStart!.toISOString(),
+      );
+    }
+    await Promise.all([
+      tx.event.update({
+        where: { id: masterId },
+        data: { recurrenceEndsBefore: splitPoint },
+      }),
+      tx.event.updateMany({
+        where: { id: { in: movingExceptions.map((e) => e.id) } },
+        data: { recurrenceExceptionOfId: newMaster.id },
+      }),
+      newExcludeDates
+        ? tx.event.update({ where: { id: newMaster.id }, data: { excludeDates: newExcludeDates } })
+        : Promise.resolve(),
+    ]);
+  });
+
+  revalidatePath("/");
+}
+
 /** Delete just one occurrence of a recurring series — a pure EXDATE, no override row. */
 export async function deleteEventOccurrence(masterId: string, originalStartIso: string) {
   const user = await requireUser();

@@ -127,4 +127,50 @@ import {
   assert.equal(parseCustomWeeklyDays("FREQ=WEEKLY;INTERVAL=2;BYDAY=MO"), null);
 }
 
+// recurrenceEndsBefore (#54, "this and following"): the master stops
+// generating occurrences at/after the cutoff, earlier ones stay intact.
+{
+  const start = new Date(2026, 7, 3, 9, 0); // Monday
+  const cutoff = new Date(2026, 7, 17, 9, 0); // the 3rd occurrence
+  const occ = expandEventOccurrences(
+    {
+      id: "m1",
+      title: "Standup",
+      start,
+      end: new Date(2026, 7, 3, 9, 30),
+      recurrenceRule: "FREQ=WEEKLY",
+      allDay: false,
+      recurrenceEndsBefore: cutoff,
+    },
+    new Date(2026, 7, 3, 0, 0),
+    new Date(2026, 8, 7, 0, 0), // 5 weeks later
+  );
+  const days = occ.map((o) => o.start.getDate());
+  assert.deepEqual(days, [3, 10]);
+}
+
+// recurrenceEndsBefore combines with excludeDates (a pre-existing
+// exception before the cutoff still gets excluded from the old master).
+{
+  const start = new Date(2026, 7, 3, 9, 0);
+  const excluded = new Date(2026, 7, 10, 9, 0);
+  const cutoff = new Date(2026, 7, 17, 9, 0);
+  const occ = expandEventOccurrences(
+    {
+      id: "m1",
+      title: "Standup",
+      start,
+      end: new Date(2026, 7, 3, 9, 30),
+      recurrenceRule: "FREQ=WEEKLY",
+      allDay: false,
+      excludeDates: excluded.toISOString(),
+      recurrenceEndsBefore: cutoff,
+    },
+    new Date(2026, 7, 3, 0, 0),
+    new Date(2026, 8, 7, 0, 0),
+  );
+  const days = occ.map((o) => o.start.getDate());
+  assert.deepEqual(days, [3]);
+}
+
 console.log("recurrence.test.ts: all checks passed");
