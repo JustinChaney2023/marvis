@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  extractDocxTextAction,
   extractSyllabusDatesAction,
   importSyllabusTasksAction,
   type SyllabusTaskInput,
@@ -35,10 +36,57 @@ export default function SyllabusImportClient({
   const [isExtracting, setIsExtracting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [rows, setRows] = useState<ReviewRow[] | null>(null);
+  const [fileName, setFileName] = useState<string | null>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
   const [projectId, setProjectId] = useState("");
   const [assigneeId, setAssigneeId] = useState("");
   const [isImporting, setIsImporting] = useState(false);
   const [importedCount, setImportedCount] = useState<number | null>(null);
+
+  // Plain FileReader for .txt/.md — no server round-trip needed. .docx is
+  // a zip of XML, unreadable via readAsText, so that one goes through
+  // extractDocxTextAction instead. Legacy .doc/PDF still aren't handled
+  // (proprietary/binary formats without a lightweight pure-JS reader) —
+  // rejected with a clear message rather than silently feeding garbage
+  // into the AI extraction.
+  const TEXT_FILE_EXTENSIONS = [".txt", ".md", ".markdown"];
+  const [isReadingFile, setIsReadingFile] = useState(false);
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same file name later
+    if (!file) return;
+    setFileError(null);
+    const lowerName = file.name.toLowerCase();
+    if (lowerName.endsWith(".docx")) {
+      setIsReadingFile(true);
+      try {
+        const formData = new FormData();
+        formData.set("file", file);
+        const result = await extractDocxTextAction(formData);
+        if (!result.ok) {
+          setFileError(result.error);
+          return;
+        }
+        setText(result.text);
+        setFileName(file.name);
+      } catch {
+        setFileError("Couldn't read that file. Try pasting the text instead.");
+      } finally {
+        setIsReadingFile(false);
+      }
+      return;
+    }
+    const isTextFile = TEXT_FILE_EXTENSIONS.some((ext) => lowerName.endsWith(ext));
+    if (!isTextFile) {
+      setFileError("Only .txt/.md/.docx files can be read directly — for a legacy .doc or PDF, open it and paste the text instead.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => setText(typeof reader.result === "string" ? reader.result : "");
+    reader.onerror = () => setFileError("Couldn't read that file. Try pasting the text instead.");
+    reader.readAsText(file);
+    setFileName(file.name);
+  };
 
   const handleExtract = async () => {
     setIsExtracting(true);
@@ -96,12 +144,31 @@ export default function SyllabusImportClient({
       {!rows && (
         <>
           <label className="flex flex-col gap-1 text-sm">
+            <span className="text-zinc-500">
+              Upload a file <span className="text-zinc-400">(.txt/.md/.docx — fills in the text below)</span>
+            </span>
+            <input
+              type="file"
+              accept=".txt,.md,.markdown,.docx,text/plain,text/markdown,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              onChange={handleFileChange}
+              disabled={isReadingFile}
+              className="text-sm text-zinc-500 file:mr-3 file:rounded-lg file:border-0 file:bg-zinc-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-zinc-700 hover:file:bg-zinc-200 dark:file:bg-zinc-700 dark:file:text-zinc-200 dark:hover:file:bg-zinc-600"
+            />
+            {isReadingFile && <span className="text-xs text-zinc-400">Reading file…</span>}
+            {fileName && !fileError && !isReadingFile && (
+              <span className="text-xs text-zinc-400">Loaded {fileName}.</span>
+            )}
+            {fileError && (
+              <span className="text-xs text-amber-600 dark:text-amber-400">{fileError}</span>
+            )}
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
             <span className="text-zinc-500">Syllabus text</span>
             <textarea
               value={text}
               onChange={(e) => setText(e.target.value)}
               rows={12}
-              placeholder="Paste the syllabus here…"
+              placeholder="Paste the syllabus here, or upload a file above…"
               className={inputClass}
             />
           </label>
