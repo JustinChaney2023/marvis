@@ -6,6 +6,7 @@ import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth";
 import { createRateLimiter, requestIp } from "@/lib/rateLimit";
+import { generateApiToken } from "@/lib/apiTokens";
 import {
   findGroupSlot,
   rescheduleAll,
@@ -2408,4 +2409,35 @@ export async function importIcsAction(
 
   revalidatePath("/");
   return { ok: true, imported: toImport.length };
+}
+
+/**
+ * Personal API tokens (Settings -> API tokens) -- bearer-token auth for
+ * clients that can't do this app's cookie-based browser login, e.g. the
+ * Obsidian plugin (issue #60). The raw token is returned exactly once,
+ * here, at creation -- only its hash is ever persisted.
+ */
+export async function createApiTokenAction(
+  name: string,
+  expiresInDays: number | null,
+): Promise<{ id: string; rawToken: string }> {
+  const user = await requireUser();
+  const trimmed = name.trim() || "Unnamed token";
+  const { raw, hash } = generateApiToken();
+  const token = await prisma.personalAccessToken.create({
+    data: {
+      userId: user.id,
+      name: trimmed,
+      tokenHash: hash,
+      expiresAt: expiresInDays ? new Date(Date.now() + expiresInDays * 86_400_000) : null,
+    },
+  });
+  revalidatePath("/settings");
+  return { id: token.id, rawToken: raw };
+}
+
+export async function revokeApiTokenAction(tokenId: string) {
+  const user = await requireUser();
+  await prisma.personalAccessToken.deleteMany({ where: { id: tokenId, userId: user.id } });
+  revalidatePath("/settings");
 }

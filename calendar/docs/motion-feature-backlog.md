@@ -1,5 +1,49 @@
 # Motion replica — feature backlog
 
+## Personal API tokens + v1 REST API — Obsidian integration, Phase 1 (2026-08-23, #60)
+Phase 1 of a two-phase plan: this repo gets a bearer-token auth mechanism
+and a small stable API surface; Phase 2 (a real Obsidian plugin, separate
+codebase) is built against it later at
+[JustinChaney2023/marvis-obsidian](https://github.com/JustinChaney2023/marvis-obsidian)
+(private for now, goes public after this app's own release).
+
+- [x] **`PersonalAccessToken`** — `userId`, `name`, `tokenHash` (SHA-256,
+      not scrypt: a token is already a random 32-byte value, not a
+      human-chosen password, so a slow salted KDF buys nothing and would
+      make "look the row up by its hash" impossible without iterating
+      every row), `lastUsedAt`, `expiresAt` (nullable = no expiry).
+      Settings → API tokens: create (name + optional expiry, raw value
+      shown exactly once), list (created/last-used/expires), revoke.
+- [x] **`requireApiUser(request)`** (`src/lib/apiAuth.ts`) — the
+      bearer-token counterpart to `requireUser()`, for `/api/v1/*` routes
+      only. Reads `Authorization: Bearer <token>`, looks up by hash,
+      checks expiry, bumps `lastUsedAt`. Rate-limited (120 req/min,
+      keyed by token hash so rotating IPs doesn't help an attacker, falls
+      back to per-IP limiting on an invalid/unrecognized token so
+      guessing isn't a free unlimited-attempt loop either) — a leaked
+      token is a standing credential, not a single login attempt.
+- [x] **API surface** (`src/app/api/v1/`), JSON in/out, every route scoped
+      to the token's own user:
+      - `GET /api/v1/projects` → `{ projects: [{ id, name, color, notes,
+        fields: [{ key, label, fieldType, value }] }] }`
+      - `GET /api/v1/projects/:id/notes` → `{ notes }`;
+        `PUT /api/v1/projects/:id/notes` body `{ notes }` → `{ notes }`
+      - `GET /api/v1/tasks?projectId=&status=` → `{ tasks: [{ id, title,
+        notes, status, priority, dueAt, projectId }] }` (subtasks
+        excluded, same as the UI)
+      - `GET /api/v1/tasks/:id` → the task; `PATCH /api/v1/tasks/:id`
+        body any of `{ title, notes, status }` → the updated task
+      401 on a missing/invalid/expired token, 404 on a real id that
+      isn't the caller's own, 400 on a malformed body.
+
+Scoped deliberately small — exactly what a first real note-sync plugin
+needs (read/write project notes, read/write task notes+status), not a
+speculative full CRUD surface over every model in this app. Extend when
+the plugin actually needs more, not before.
+
+`npx tsc --noEmit`, `npm test`, `npm run build` all pass clean. Schema:
+migration `20260823112136_add_personal_access_tokens`.
+
 ## Syllabus import: full course scaffold (2026-08-23, #58, #59)
 Redesigned the syllabus importer from "flat assignment list into an
 existing project" into a full course scaffold, per the user's own

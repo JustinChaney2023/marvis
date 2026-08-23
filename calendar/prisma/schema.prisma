@@ -54,6 +54,26 @@ model User {
   sharesGiven             CalendarShare[] @relation("SharesGiven")
   sharesReceived          CalendarShare[] @relation("SharesReceived")
   calendarSubscriptions   CalendarSubscription[]
+  personalAccessTokens    PersonalAccessToken[]
+}
+
+// Bearer-token auth for API clients that can't do a cookie-based browser
+// login (e.g. the Obsidian plugin) — additive alongside Session, not a
+// replacement. tokenHash is a plain SHA-256 digest, not scrypt: a token
+// is already a 32-byte random value (unguessable, unlike a
+// human-chosen password), so a slow salted KDF buys nothing here and
+// would make "look up the token row by its hash" impossible without a
+// per-row salt anyway. Same accepted-plaintext-adjacent tradeoff this
+// app's own Session.token already makes.
+model PersonalAccessToken {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name       String
+  tokenHash  String    @unique
+  lastUsedAt DateTime?
+  expiresAt  DateTime?
+  createdAt  DateTime  @default(now())
 }
 
 // DB-backed sessions (not signed/stateless JWTs) — lets a logout or a

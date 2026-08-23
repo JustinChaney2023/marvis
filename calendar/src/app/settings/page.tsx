@@ -16,6 +16,7 @@ import BookingLinksManager from "./BookingLinksManager";
 import CalendarSharingManager from "./CalendarSharingManager";
 import IcsImportForm from "./IcsImportForm";
 import CalendarSubscriptionsManager from "./CalendarSubscriptionsManager";
+import ApiTokensManager from "./ApiTokensManager";
 import AutomationRulesManager from "./AutomationRulesManager";
 import HabitsManager from "./HabitsManager";
 import TimeSlotsManager from "./TimeSlotsManager";
@@ -56,6 +57,11 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
     orderBy: { createdAt: "asc" },
   });
   const settings = await getAppSettings(user.id);
+  const apiTokens = await prisma.personalAccessToken.findMany({
+    where: { userId: user.id },
+    orderBy: { createdAt: "asc" },
+    select: { id: true, name: true, createdAt: true, lastUsedAt: true, expiresAt: true },
+  });
   const bookingLinks = await prisma.bookingLink.findMany({
     where: { userId: user.id },
     orderBy: { createdAt: "asc" },
@@ -412,6 +418,18 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
             Export calendar (.ics)
           </a>
           <IcsImportForm />
+        </div>
+      </section>
+
+      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
+        <h2 className="text-lg font-semibold">API tokens</h2>
+        <p className="mt-1 text-xs text-zinc-400">
+          For external clients that can&apos;t sign in through the browser,
+          like the Obsidian plugin. Each token acts as you — treat it like a
+          password.
+        </p>
+        <div className="mt-3">
+          <ApiTokensManager tokens={apiTokens} />
         </div>
       </section>
 
