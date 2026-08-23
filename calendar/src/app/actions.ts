@@ -1859,9 +1859,10 @@ export async function addCalendarSubscriptionAction(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim().slice(0, MAX_SUBSCRIPTION_NAME_LEN);
   const url = String(formData.get("url") ?? "").trim();
   if (!name || !/^https?:\/\//i.test(url)) return;
+  const importAsTasks = formData.get("importAsTasks") === "on";
 
   const subscription = await prisma.calendarSubscription.create({
-    data: { userId: user.id, name, url },
+    data: { userId: user.id, name, url, importAsTasks },
   });
   await syncCalendarSubscription(subscription.id, user.id);
   revalidatePath("/");

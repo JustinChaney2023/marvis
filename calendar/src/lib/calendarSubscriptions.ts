@@ -2,6 +2,7 @@ import { isIP } from "node:net";
 import { lookup } from "node:dns/promises";
 import { prisma } from "@/lib/prisma";
 import { parseIcsEvents } from "@/lib/ics";
+import { scheduleTask } from "@/lib/scheduler";
 
 // Windowed the same way Apple sync is — a holiday/public calendar can
 // span decades of one-off entries; only its own recurring VEVENTs (kept
@@ -120,50 +121,88 @@ export async function syncCalendarSubscription(
     (e) => e.recurrenceRule || (e.end >= windowStart && e.start <= windowEnd),
   );
 
-  const seenUids = new Set<string>();
   let imported = 0;
-  for (const event of inScope) {
-    seenUids.add(event.uid);
-    await prisma.event.upsert({
-      where: {
-        subscriptionId_subscriptionEventUid: {
+
+  if (subscription.importAsTasks) {
+    // Task mode (e.g. a school LMS assignment feed): only `dueAt` ever
+    // re-syncs after first import — title/notes are a one-time seed the
+    // user is free to edit without a later sync silently overwriting
+    // their edits. Items no longer in the feed are left alone (an
+    // assignment the user's already started shouldn't vanish just
+    // because the upstream feed changed) — no delete pass, unlike the
+    // overlay-Event mode below.
+    for (const event of inScope) {
+      const existing = await prisma.task.findUnique({
+        where: { sourceSubscriptionId_sourceUid: { sourceSubscriptionId: subscriptionId, sourceUid: event.uid } },
+      });
+      if (existing) {
+        if (existing.dueAt?.getTime() !== event.end.getTime()) {
+          await prisma.task.update({ where: { id: existing.id }, data: { dueAt: event.end } });
+        }
+        continue;
+      }
+      const notes = [event.notes, `Imported from ${subscription.name}`]
+        .filter(Boolean)
+        .join("\n\n");
+      const task = await prisma.task.create({
+        data: {
+          userId,
+          title: event.title,
+          notes,
+          dueAt: event.end,
+          durationMin: 60,
+          sourceSubscriptionId: subscriptionId,
+          sourceUid: event.uid,
+        },
+      });
+      await scheduleTask(userId, task.id).catch(() => {});
+      imported++;
+    }
+  } else {
+    const seenUids = new Set<string>();
+    for (const event of inScope) {
+      seenUids.add(event.uid);
+      await prisma.event.upsert({
+        where: {
+          subscriptionId_subscriptionEventUid: {
+            subscriptionId,
+            subscriptionEventUid: event.uid,
+          },
+        },
+        create: {
+          userId,
+          title: event.title,
+          start: event.start,
+          end: event.end,
+          allDay: event.allDay,
+          notes: event.notes,
+          recurrenceRule: event.recurrenceRule,
+          excludeDates: event.excludeDates,
+          source: "SUBSCRIBED",
           subscriptionId,
           subscriptionEventUid: event.uid,
+          locked: true,
         },
-      },
-      create: {
-        userId,
-        title: event.title,
-        start: event.start,
-        end: event.end,
-        allDay: event.allDay,
-        notes: event.notes,
-        recurrenceRule: event.recurrenceRule,
-        excludeDates: event.excludeDates,
-        source: "SUBSCRIBED",
+        update: {
+          title: event.title,
+          start: event.start,
+          end: event.end,
+          allDay: event.allDay,
+          notes: event.notes,
+          recurrenceRule: event.recurrenceRule,
+          excludeDates: event.excludeDates,
+        },
+      });
+      imported++;
+    }
+
+    await prisma.event.deleteMany({
+      where: {
         subscriptionId,
-        subscriptionEventUid: event.uid,
-        locked: true,
-      },
-      update: {
-        title: event.title,
-        start: event.start,
-        end: event.end,
-        allDay: event.allDay,
-        notes: event.notes,
-        recurrenceRule: event.recurrenceRule,
-        excludeDates: event.excludeDates,
+        subscriptionEventUid: { notIn: [...seenUids] },
       },
     });
-    imported++;
   }
-
-  await prisma.event.deleteMany({
-    where: {
-      subscriptionId,
-      subscriptionEventUid: { notIn: [...seenUids] },
-    },
-  });
 
   await prisma.calendarSubscription.update({
     where: { id: subscriptionId },

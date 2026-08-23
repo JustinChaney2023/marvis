@@ -247,10 +247,16 @@ model CalendarSubscription {
   user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   name          String
   url           String
+  // When true, sync creates real schedulable Task rows instead of
+  // read-only overlay Events — for a feed whose items are actually work
+  // to do (e.g. a school LMS assignment feed), not just a calendar to
+  // look at (e.g. public holidays).
+  importAsTasks Boolean   @default(false)
   lastFetchedAt DateTime?
   lastError     String?
   createdAt     DateTime  @default(now())
   events        Event[]
+  tasks         Task[]
 }
 
 enum EventType {
@@ -445,6 +451,16 @@ model Task {
   // Cross-cutting tags (Motion's "Labels"), separate from Project — a
   // task can carry several, unlike the one Project it belongs to.
   labels         Label[]
+  // Set when this task was created by a task-importing CalendarSubscription
+  // sync (e.g. a Blackboard/Canvas assignment feed) — sourceUid is the
+  // feed item's stable ICS UID, used to dedup/update across re-syncs the
+  // same way Event.subscriptionEventUid does. Deleting the subscription
+  // detaches rather than deletes these tasks — a synced-in assignment is
+  // the user's own real task the moment it exists, not disposable overlay
+  // data like a subscribed calendar's Events are.
+  sourceSubscriptionId String?
+  sourceSubscription   CalendarSubscription? @relation(fields: [sourceSubscriptionId], references: [id], onDelete: SetNull)
+  sourceUid            String?
   // Self-referential many-to-many: a blocked task shouldn't be
   // auto-scheduled until everything in `blockedBy` is DONE (see the
   // sweep guard in scheduler.ts). `blocking` is just the inverse view,
@@ -460,6 +476,7 @@ model Task {
   // dueAt — same reasoning as Event's (userId, start) index above.
   @@index([userId, status])
   @@index([userId, dueAt])
+  @@unique([sourceSubscriptionId, sourceUid])
 }
 
 // A file attached to a task. No multi-account sharing exists on Task

@@ -1,5 +1,51 @@
 # Motion replica — feature backlog
 
+## Task-producing calendar subscriptions (2026-08-23, #57)
+Prompted directly by the user: they use Blackboard and want new/changed
+assignments to become a real, auto-scheduled Task, not just show up on the
+calendar — assignments trickle in through a semester rather than posting
+all at once, so the existing AI syllabus-paste import only covers the
+majority, not the live tail. Most school LMSes (Blackboard, Canvas, etc.)
+expose a personal ICS feed of assignment due dates — this app already had
+a generic "subscribe to any ICS URL" feature (#32, `CalendarSubscription`)
+but it only ever wrote read-only overlay `Event` rows (locked, like Apple
+sync), never something the auto-scheduler could act on.
+
+- [x] **`CalendarSubscription.importAsTasks`** (default false) — a
+      per-subscription toggle in Settings → Calendars. Off = unchanged
+      overlay-Event behavior (e.g. a public holidays calendar). On = each
+      feed item becomes a real `Task` instead.
+- [x] **Dedup/re-sync model** — `Task.sourceSubscriptionId` +
+      `Task.sourceUid` (the feed item's stable ICS UID), unique together,
+      mirrors how `Event.subscriptionEventUid` already dedups the
+      overlay-Event path. **Only `dueAt` re-syncs after first import** —
+      title/notes are a one-time seed. This is deliberate: a user who
+      retitles or edits the task shouldn't have those edits silently
+      clobbered by the next sync just because the upstream feed still has
+      the original text. The one thing genuinely worth staying live is
+      the deadline itself.
+- [x] **Removed-from-feed items are left alone** — no delete pass in task
+      mode (unlike overlay mode, which prunes anything no longer in the
+      feed). An assignment the user's already started working on
+      shouldn't vanish because Blackboard changed something upstream.
+- [x] New task gets `durationMin: 60` (a generic default — imported items
+      never specify a real work-time estimate), `notes` = the feed item's
+      own description/link (already parsed by `parseIcsEvents`, no parser
+      changes needed) plus a "Imported from {subscription name}" line for
+      traceability even with no link, and is immediately run through
+      `scheduleTask` so it lands on the calendar right away rather than
+      waiting for the user to notice it in the task list and hit
+      Schedule — matches what was actually asked for ("auto schedule time
+      for me to get it done before").
+- Deliberately not built: a dedicated test file for the sync logic itself
+  — it's DB/network-orchestration code with no existing test pattern in
+  this repo to extend (the repo's `*.test.ts` convention covers pure
+  functions like `scheduler.ts`/`recurrence.ts`, not `actions.ts`-shaped
+  code); relying on `tsc`+`build` plus the same manual-verification bar
+  every other `actions.ts` addition in this app's history has used.
+
+`npx tsc --noEmit`, `npm test`, `npm run build` all pass clean.
+
 ## Security + accessibility audit (2026-08-22)
 Prompted by a user-shared "20 things to check before launching" checklist
 plus an explicit ask for OWASP Top 10 and accessibility coverage. Builds on

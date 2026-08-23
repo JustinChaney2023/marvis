@@ -12,6 +12,7 @@ export type Subscription = {
   id: string;
   name: string;
   url: string;
+  importAsTasks: boolean;
   lastFetchedAt: Date | null;
   lastError: string | null;
 };
@@ -51,6 +52,11 @@ export default function CalendarSubscriptionsManager({
                     {sub.lastFetchedAt
                       ? `Synced ${sub.lastFetchedAt.toLocaleString()}`
                       : "Not synced yet"}
+                  </p>
+                )}
+                {sub.importAsTasks && (
+                  <p className="text-xs text-indigo-600 dark:text-indigo-400">
+                    Importing as schedulable tasks
                   </p>
                 )}
               </div>
@@ -93,6 +99,14 @@ export default function CalendarSubscriptionsManager({
             required
             className="w-72 rounded-lg border border-zinc-200 bg-white px-2 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800"
           />
+        </label>
+        <label className="flex max-w-xs cursor-pointer items-start gap-2 text-sm">
+          <input type="checkbox" name="importAsTasks" className="mt-0.5" />
+          <span className="text-zinc-500">
+            Create schedulable tasks (with auto-scheduled work time) instead
+            of just showing on your calendar — good for an LMS assignment
+            feed like Blackboard or Canvas.
+          </span>
         </label>
         <Button type="submit">Subscribe</Button>
       </form>
