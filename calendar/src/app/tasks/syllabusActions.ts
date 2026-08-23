@@ -4,9 +4,15 @@ import mammoth from "mammoth";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth";
-import { parseYMD } from "@/lib/calendar-dates";
+import { formatYMD, parseYMD, toLocalInputValue } from "@/lib/calendar-dates";
 import { aiConfigFromSettings, getAppSettings } from "@/lib/settings";
-import { extractSyllabusDates, type ExtractSyllabusResult } from "@/lib/syllabusExtract";
+import { buildCustomWeeklyRule, WEEKDAY_CODES, type WeekdayCode } from "@/lib/recurrence";
+import {
+  extractSyllabusDates,
+  SCHOOL_COURSE_TEMPLATE,
+  type ExtractSyllabusResult,
+} from "@/lib/syllabusExtract";
+import { createEvent, updateEventOccurrence } from "../actions";
 
 const MAX_DOCX_BYTES = 10 * 1024 * 1024;
 
@@ -54,46 +60,235 @@ export type SyllabusTaskInput = {
   dueDateYMD: string | null;
 };
 
+export type SyllabusExamInput = {
+  type: "midterm" | "final";
+  dateYMD: string | null;
+  notes: string | null;
+};
+
+export type SyllabusCourseFieldInput = {
+  key: string;
+  label: string;
+  fieldType: string;
+  value: string;
+};
+
+export type ImportSyllabusCourseInput = {
+  // Reviewed course name — used as the new Project's name, or ignored
+  // if useExistingProjectId is set.
+  courseName: string;
+  // Set to skip creating a new Project (and skip writing course-info
+  // fields, which belong to a course project, not an arbitrary existing
+  // one) — deliverables/exams still get created, scoped to this project.
+  useExistingProjectId: string | null;
+  fields: SyllabusCourseFieldInput[];
+  assigneeId: string | null;
+  tasks: SyllabusTaskInput[];
+  exams: SyllabusExamInput[];
+  // Recurring term-long class-schedule event — all optional-together;
+  // skipped whenever any piece needed to build it is missing.
+  createClassSchedule: boolean;
+  meetingDays: WeekdayCode[] | null;
+  meetingStartTime: string | null; // "HH:mm"
+  meetingEndTime: string | null;
+  meetingLocation: string | null;
+  termStartYMD: string | null;
+  termEndYMD: string | null;
+  lectureSchedule: { dateYMD: string | null; topic: string }[];
+};
+
+export type ImportSyllabusCourseResult = {
+  projectId: string;
+  taskCount: number;
+  examEventCount: number;
+  classScheduleCreated: boolean;
+  lectureNotesCount: number;
+};
+
+function combineDateTime(ymd: string, hhmm: string): Date {
+  const d = parseYMD(ymd);
+  const [h, m] = hhmm.split(":").map(Number);
+  d.setHours(h || 0, m || 0, 0, 0);
+  return d;
+}
+
+function eventFormData(fields: Record<string, string>): FormData {
+  const fd = new FormData();
+  for (const [k, v] of Object.entries(fields)) fd.set(k, v);
+  return fd;
+}
+
 /**
- * Bulk-creates tasks from reviewed/edited syllabus extraction rows. Due
- * dates are set to end-of-day (23:59) local time — a syllabus date is a
- * day, not a specific clock time, and the task list/scheduler both
- * already handle a dueAt with any time-of-day fine.
+ * Bulk-creates a full course scaffold from reviewed syllabus extraction:
+ * a Project (new, or an existing one to add into), structured course-info
+ * ProjectFields (School/Course template, new-project case only), Tasks
+ * for every included assignment, Events for included exam dates (final
+ * exam explicitly flagged as an estimate — see below), and, when
+ * requested, one recurring term-long class-schedule Event with each
+ * resolvable lecture-day's topic stamped onto that occurrence's own
+ * notes via the existing per-occurrence exception mechanism (#40).
  */
-export async function importSyllabusTasksAction(
-  items: SyllabusTaskInput[],
-  projectId: string | null,
-  assigneeId: string | null,
-): Promise<{ created: number }> {
+export async function importSyllabusCourseAction(
+  input: ImportSyllabusCourseInput,
+): Promise<ImportSyllabusCourseResult> {
   const user = await requireUser();
-  const rows = items.filter((i) => i.title.trim());
-  if (rows.length === 0) return { created: 0 };
 
-  // projectId/assigneeId are client-submitted — verify they're actually
-  // this user's own rows before attaching, same reasoning as
-  // taskFieldsFromFormData in actions.ts (an unverified id would leak
-  // another user's project/assignee name via this task's own display).
-  const [ownedProject, ownedAssignee] = await Promise.all([
-    projectId ? prisma.project.findFirst({ where: { id: projectId, userId: user.id }, select: { id: true } }) : null,
-    assigneeId ? prisma.assignee.findFirst({ where: { id: assigneeId, userId: user.id }, select: { id: true } }) : null,
-  ]);
-  const verifiedProjectId = ownedProject ? projectId : null;
-  const verifiedAssigneeId = ownedAssignee ? assigneeId : null;
+  let projectId = input.useExistingProjectId;
+  if (projectId) {
+    const owned = await prisma.project.findFirst({ where: { id: projectId, userId: user.id } });
+    if (!owned) projectId = null;
+  }
+  if (!projectId) {
+    const project = await prisma.project.create({
+      data: { userId: user.id, name: input.courseName.trim() || "Untitled course" },
+    });
+    projectId = project.id;
 
-  await prisma.task.createMany({
-    data: rows.map((item) => {
-      const dueAt = item.dueDateYMD ? parseYMD(item.dueDateYMD) : null;
-      if (dueAt) dueAt.setHours(23, 59, 0, 0);
-      return {
+    const fieldRows = input.fields
+      .filter((f) => f.value.trim())
+      .map((f, i) => ({
+        projectId: project.id,
+        key: f.key,
+        label: f.label,
+        value: f.value.trim(),
+        fieldType: f.fieldType,
+        sortOrder: i,
+      }));
+    if (fieldRows.length > 0) {
+      await prisma.projectField.createMany({ data: fieldRows });
+    }
+  }
+
+  const ownedAssignee = input.assigneeId
+    ? await prisma.assignee.findFirst({ where: { id: input.assigneeId, userId: user.id }, select: { id: true } })
+    : null;
+  const verifiedAssigneeId = ownedAssignee ? input.assigneeId : null;
+
+  const taskRows = input.tasks.filter((t) => t.title.trim());
+  if (taskRows.length > 0) {
+    await prisma.task.createMany({
+      data: taskRows.map((item) => {
+        const dueAt = item.dueDateYMD ? parseYMD(item.dueDateYMD) : null;
+        if (dueAt) dueAt.setHours(23, 59, 0, 0);
+        return {
+          userId: user.id,
+          title: item.title.trim(),
+          dueAt,
+          projectId,
+          assigneeId: verifiedAssigneeId,
+        };
+      }),
+    });
+  }
+
+  const hasClassTime = Boolean(input.meetingStartTime && input.meetingEndTime);
+  let examEventCount = 0;
+  for (const exam of input.exams) {
+    if (!exam.dateYMD) continue;
+    const title = exam.type === "final" ? "Final exam" : "Midterm exam";
+    const finalCaveat =
+      exam.type === "final"
+        ? "Estimated time — confirm the actual final exam schedule closer to the date; finals are often a different or longer slot than regular class time."
+        : null;
+    const notes = [exam.notes, finalCaveat].filter(Boolean).join("\n\n") || null;
+    const start =
+      hasClassTime
+        ? combineDateTime(exam.dateYMD, input.meetingStartTime!)
+        : (() => {
+            const d = parseYMD(exam.dateYMD!);
+            d.setHours(0, 0, 0, 0);
+            return d;
+          })();
+    const end = hasClassTime
+      ? combineDateTime(exam.dateYMD, input.meetingEndTime!)
+      : new Date(start.getTime() + 86_400_000);
+
+    await createEvent(
+      eventFormData({
+        title: `${title}${input.courseName ? ` — ${input.courseName}` : ""}`,
+        start: toLocalInputValue(start),
+        end: toLocalInputValue(end),
+        notes: notes ?? "",
+        location: input.meetingLocation ?? "",
+        allDay: hasClassTime ? "" : "on",
+      }),
+    );
+    examEventCount++;
+  }
+
+  let classScheduleCreated = false;
+  let lectureNotesCount = 0;
+  if (
+    input.createClassSchedule &&
+    input.meetingDays &&
+    input.meetingDays.length > 0 &&
+    input.meetingStartTime &&
+    input.meetingEndTime &&
+    input.termStartYMD
+  ) {
+    const termStart = parseYMD(input.termStartYMD);
+    let firstDay = new Date(termStart);
+    for (let i = 0; i < 7; i++) {
+      if (input.meetingDays.includes(WEEKDAY_CODES[firstDay.getDay()])) break;
+      firstDay = new Date(firstDay.getTime() + 86_400_000);
+    }
+    const masterStart = combineDateTime(formatYMD(firstDay), input.meetingStartTime);
+    const masterEnd = combineDateTime(formatYMD(firstDay), input.meetingEndTime);
+    const recurrenceEndsBefore = input.termEndYMD
+      ? new Date(parseYMD(input.termEndYMD).getTime() + 86_400_000)
+      : null;
+
+    const master = await prisma.event.create({
+      data: {
         userId: user.id,
-        title: item.title.trim(),
-        dueAt,
-        projectId: verifiedProjectId,
-        assigneeId: verifiedAssigneeId,
-      };
-    }),
-  });
+        title: input.courseName.trim() || "Class",
+        start: masterStart,
+        end: masterEnd,
+        recurrenceRule: buildCustomWeeklyRule(input.meetingDays),
+        recurrenceEndsBefore,
+        location: input.meetingLocation || null,
+        localDirty: true,
+      },
+    });
+    classScheduleCreated = true;
+
+    for (const lecture of input.lectureSchedule) {
+      if (!lecture.dateYMD || !lecture.topic.trim()) continue;
+      const day = parseYMD(lecture.dateYMD);
+      // Only a real occurrence of this rule (matching weekday, on/after
+      // the series start) can be turned into a single-occurrence
+      // exception — anything else would silently no-op inside
+      // updateEventOccurrence (it requires a recurring master + a valid
+      // excluded start), so skip rather than call it on a bad date.
+      if (!input.meetingDays.includes(WEEKDAY_CODES[day.getDay()])) continue;
+      if (day.getTime() < masterStart.getTime()) continue;
+
+      const occStart = combineDateTime(lecture.dateYMD, input.meetingStartTime);
+      const occEnd = combineDateTime(lecture.dateYMD, input.meetingEndTime);
+      await updateEventOccurrence(
+        master.id,
+        occStart.toISOString(),
+        eventFormData({
+          title: master.title,
+          start: toLocalInputValue(occStart),
+          end: toLocalInputValue(occEnd),
+          notes: lecture.topic.trim(),
+          location: input.meetingLocation ?? "",
+        }),
+      );
+      lectureNotesCount++;
+    }
+  }
 
   revalidatePath("/tasks");
-  return { created: rows.length };
+  revalidatePath("/");
+  return {
+    projectId,
+    taskCount: taskRows.length,
+    examEventCount,
+    classScheduleCreated,
+    lectureNotesCount,
+  };
 }
+
+export { SCHOOL_COURSE_TEMPLATE };

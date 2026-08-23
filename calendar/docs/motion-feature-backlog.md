@@ -1,5 +1,86 @@
 # Motion replica — feature backlog
 
+## Syllabus import: full course scaffold (2026-08-23, #58, #59)
+Redesigned the syllabus importer from "flat assignment list into an
+existing project" into a full course scaffold, per the user's own
+detailed spec (project notes/library, structured course info, exam
+dates with a final-exam caveat, and an auto-created class schedule with
+per-lecture-day topic notes).
+
+- [x] **`Project.notes`** (freeform, same `NotesEditor` as `Task.notes`)
+      and **`ProjectAttachment`** (mirrors `TaskAttachment` exactly,
+      reuses the existing `/api/uploads/attachments` route) — issue #58.
+      No per-project page existed before this to put them on, so:
+- [x] **New `/projects/[id]` page** — name/color header, structured
+      fields (below), the notes editor, the attachment library, and the
+      project's open tasks via the existing `TaskRow` component (same
+      props `tasks/page.tsx` already assembles — no new task-rendering
+      code). Linked from the Tasks page's "Manage projects" list.
+- [x] **`ProjectField`** — generic structured key/value rows on a
+      Project, *not* a user-facing template builder (explicitly out of
+      scope per the user's own framing — "not the whole point of this
+      pass"). One built-in template, `SCHOOL_COURSE_TEMPLATE` in
+      `syllabusExtract.ts`, a plain code constant applied by the
+      syllabus importer: instructor name/email, class location, office
+      hours, grading scale/policy, required/optional books. A different
+      template (or manual fields) could reuse the same table later
+      without a schema change — issue #58.
+- [x] **`syllabusExtract.ts` extraction schema grew** in one AI call
+      (still a single `callAiForJson` round-trip, not two) to also pull
+      `courseInfo` (the template fields above, plus course name and
+      meeting days/time/location — meeting days come back as the same
+      `WeekdayCode` short codes `buildCustomWeeklyRule` already expects,
+      no separate parsing step), `examDates` (midterm/final, kept
+      separate from the general assignments list since these become
+      *Events* at the class's regular meeting time, not Tasks), and
+      `lectureSchedule` (an optional week-by-week topic outline, only
+      returned when the syllabus actually has one — an empty array
+      otherwise, not invented) — issue #59.
+- [x] **Final exam events are explicitly flagged as an estimate** —
+      "Estimated time — confirm the actual final exam schedule closer
+      to the date; finals are often a different or longer slot than
+      regular class time" is appended to the event's notes, not
+      silently presented as fact. Exams with no class-time extracted
+      become an all-day event on the date instead of guessing a time.
+- [x] **Recurring class-schedule event, auto-created when the syllabus
+      states meeting days/time** (per the user's explicit call — not an
+      opt-in checkbox) — one master `Event` per course, `recurrenceRule`
+      built the same way the Repeat picker's Custom weekday mode always
+      has, `recurrenceEndsBefore` (from #54) set to the day after the
+      reviewed term-end date, `location` (from #56) set from the
+      extracted meeting location.
+- [x] **Per-lecture-day topic notes** — for every `lectureSchedule` item
+      with a resolvable date that actually falls on one of the class's
+      real meeting weekdays, the corresponding occurrence gets its own
+      notes stamped via the existing single-occurrence exception
+      mechanism (#40, `updateEventOccurrence`) — the exact same
+      mechanism a user already gets from manually editing "this event"
+      on a recurring series, just invoked programmatically once per
+      lecture day instead of once by hand. A date that doesn't land on
+      a real meeting weekday (bad AI extraction, or a make-up class) is
+      skipped rather than corrupting an exception onto a non-occurrence.
+- [x] Review UI (`SyllabusImportClient.tsx`) shows all of the above
+      before anything is created — editable course-info fields, an
+      editable exam-date list, a class-schedule on/off toggle (disabled
+      until meeting days/time/term-start are all present), and a
+      collapsible lecture-topic list — same "always reviewable before
+      commit" discipline this importer already had for assignments.
+      Added a **term end date** input alongside the existing term-start
+      one (previously only used for resolving "Week 3" references, now
+      also bounds the class schedule).
+      Still supports the original "add into an existing project" mode
+      (a project picker defaulting to "create a new project") — picking
+      an existing project skips writing course-info fields into it,
+      since those belong to a course, not an arbitrary existing project.
+
+Deliberately not built this pass, per the user's own answers: a
+user-facing template *builder* (one hardcoded template is enough for
+now); an opt-in toggle for the class schedule (made automatic instead).
+
+`npx tsc --noEmit`, `npm test` (new `syllabusExtract.test.ts` — the
+`SCHOOL_COURSE_TEMPLATE` shape is the one piece of this pass testable
+without a DB), and `npm run build` all pass clean.
+
 ## Task-producing calendar subscriptions (2026-08-23, #57)
 Prompted directly by the user: they use Blackboard and want new/changed
 assignments to become a real, auto-scheduled Task, not just show up on the

@@ -369,7 +369,9 @@ export default async function Home(props: PageProps<"/tasks">) {
                 <span
                   className={`h-1.5 w-1.5 rounded-full ${PROJECT_COLOR_DOT[project.color] ?? PROJECT_COLOR_DOT.zinc}`}
                 />
-                <span className="flex-1">{project.name}</span>
+                <Link href={`/projects/${project.id}`} className="flex-1 hover:underline">
+                  {project.name}
+                </Link>
                 <form action={saveProjectAsTemplateAction.bind(null, project.id, `${project.name} template`)}>
                   <button
                     type="submit"

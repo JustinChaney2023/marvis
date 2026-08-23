@@ -594,9 +594,51 @@ model Project {
   // Tailwind color family name (e.g. "indigo", "amber") used to derive
   // badge/pill classes — see PROJECT_COLORS in src/app/page.tsx.
   color     String   @default("zinc")
+  // Freeform journaling/reference notes (same NotesEditor as Task.notes).
+  // Distinct from ProjectField below, which is structured template data
+  // (e.g. a syllabus import's grading scale/office hours) — the two
+  // aren't redundant, one's a form, one's a diary.
+  notes     String?
   tasks     Task[]
+  fields      ProjectField[]
+  attachments ProjectAttachment[]
   automationRules AutomationRule[]
   createdAt DateTime @default(now())
+}
+
+// Arbitrary structured key/value fields on a Project — e.g. the
+// syllabus importer's built-in "School/Course" template (instructor
+// email, office hours, grading scale, required books, ...). Not a
+// user-facing template *builder* — templates are plain code constants
+// (see SCHOOL_COURSE_TEMPLATE in src/lib/syllabusExtract.ts) applied at
+// creation time; this table just holds the resulting rows generically
+// enough that a different template (or manual fields) could reuse it
+// later without a schema change.
+model ProjectField {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  key       String
+  label     String
+  // LIST fields (e.g. "required books") are newline-separated text —
+  // not worth a nested table for a handful of lines.
+  value     String?
+  fieldType String   @default("TEXT")
+  sortOrder Int      @default(0)
+}
+
+// Mirrors TaskAttachment exactly — see that model's comments for the
+// storage convention (random on-disk name under public/uploads/<userId>/,
+// client-supplied filename never trusted for the path).
+model ProjectAttachment {
+  id         String   @id @default(cuid())
+  projectId  String
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  filename   String
+  storedPath String
+  mimeType   String
+  sizeBytes  Int
+  createdAt  DateTime @default(now())
 }
 
 // A reusable task-list skeleton (Motion's "Standardized Project Workflow

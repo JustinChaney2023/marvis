@@ -398,6 +398,40 @@ export async function deleteTaskAttachmentAction(attachmentId: string) {
   revalidatePath("/tasks");
 }
 
+export async function updateProjectNotesAction(projectId: string, notes: string) {
+  const user = await requireUser();
+  const project = await prisma.project.findFirst({ where: { id: projectId, userId: user.id } });
+  if (!project) return;
+  await prisma.project.update({ where: { id: projectId }, data: { notes: notes.trim() || null } });
+  revalidatePath(`/projects/${projectId}`);
+}
+
+/** Registers a file already written by POST /api/uploads/attachments as this project's attachment — mirrors addTaskAttachmentAction. */
+export async function addProjectAttachmentAction(
+  projectId: string,
+  file: { filename: string; storedPath: string; mimeType: string; sizeBytes: number },
+) {
+  const user = await requireUser();
+  const project = await prisma.project.findFirst({ where: { id: projectId, userId: user.id } });
+  if (!project) return;
+  if (!file.storedPath.startsWith(`${user.id}/`) || file.storedPath.includes("..")) return;
+
+  await prisma.projectAttachment.create({ data: { projectId, ...file } });
+  revalidatePath(`/projects/${projectId}`);
+}
+
+export async function deleteProjectAttachmentAction(attachmentId: string) {
+  const user = await requireUser();
+  const attachment = await prisma.projectAttachment.findFirst({
+    where: { id: attachmentId, project: { userId: user.id } },
+  });
+  if (!attachment) return;
+
+  await prisma.projectAttachment.delete({ where: { id: attachmentId } });
+  await unlink(path.join(process.cwd(), "public", "uploads", attachment.storedPath)).catch(() => {});
+  revalidatePath(`/projects/${attachment.projectId}`);
+}
+
 export async function createSubtaskAction(parentId: string, title: string) {
   const user = await requireUser();
   const trimmed = title.trim();
