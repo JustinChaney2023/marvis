@@ -213,3 +213,4 @@ out/
 *.tsbuildinfo
 .env*.local
 
+/marvis-obsidian/
