@@ -214,3 +214,5 @@ out/
 .env*.local
 
 /marvis-obsidian/
+/marvis-spec/
+/marvis-vault/
