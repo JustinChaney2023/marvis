@@ -7,6 +7,8 @@ import { requireUser } from "@/lib/auth";
 import { formatYMD, parseYMD, toLocalInputValue } from "@/lib/calendar-dates";
 import { aiConfigFromSettings, getAppSettings } from "@/lib/settings";
 import { buildCustomWeeklyRule, WEEKDAY_CODES, type WeekdayCode } from "@/lib/recurrence";
+import { convertToMarkdown } from "@/lib/markitdown";
+import { MAX_CONVERT_BYTES, isWithinSizeLimit, pickConverter } from "@/lib/documentConvert";
 import {
   extractSyllabusDates,
   SCHOOL_COURSE_TEMPLATE,
@@ -14,35 +16,51 @@ import {
 } from "@/lib/syllabusExtract";
 import { createEvent, updateEventOccurrence } from "../actions";
 
-const MAX_DOCX_BYTES = 10 * 1024 * 1024;
-
 /**
- * .docx is a zip of XML, not readable via the client-side FileReader
- * path .txt/.md use — extracted server-side instead. mammoth reads only
- * the document body text (no headers/footers/embedded objects), which
- * is exactly what the AI extraction step below wants: plain prose, not
- * markup.
+ * Turns an uploaded file into plain text for the AI extraction step.
+ *
+ * .txt/.md never reach here — the client reads those itself. .docx stays on
+ * mammoth in-process rather than going through the converter service: it
+ * already works with nothing configured, and regressing a working offline
+ * path into a service dependency would be a straight downgrade. Everything
+ * else (PDF and friends) needs the markitdown service.
  */
-export async function extractDocxTextAction(
+export async function extractFileTextAction(
   formData: FormData,
 ): Promise<{ ok: true; text: string } | { ok: false; error: string }> {
-  await requireUser();
+  const user = await requireUser();
   const file = formData.get("file");
   if (!(file instanceof File)) return { ok: false, error: "No file provided." };
-  if (file.size === 0 || file.size > MAX_DOCX_BYTES) {
-    return { ok: false, error: "File must be under 10MB." };
+  if (!isWithinSizeLimit(file.size)) {
+    return { ok: false, error: `File must be non-empty and under ${MAX_CONVERT_BYTES / (1024 * 1024)}MB.` };
   }
-  if (!file.name.toLowerCase().endsWith(".docx")) {
-    return { ok: false, error: "Only .docx files are supported here — for a legacy .doc or PDF, open it and paste the text instead." };
+
+  const converter = pickConverter(file.name);
+  if (converter === null || converter === "text") {
+    return { ok: false, error: "That file type isn't supported — paste the text instead." };
   }
-  try {
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const { value } = await mammoth.extractRawText({ buffer });
-    if (!value.trim()) return { ok: false, error: "Couldn't find any text in that file." };
-    return { ok: true, text: value };
-  } catch {
-    return { ok: false, error: "Couldn't read that .docx file — it may be corrupted." };
+
+  const buffer = Buffer.from(await file.arrayBuffer());
+
+  if (converter === "docx") {
+    try {
+      const { value } = await mammoth.extractRawText({ buffer });
+      if (!value.trim()) return { ok: false, error: "Couldn't find any text in that file." };
+      return { ok: true, text: value };
+    } catch {
+      return { ok: false, error: "Couldn't read that .docx file — it may be corrupted." };
+    }
   }
+
+  const { markitdownUrl } = await getAppSettings(user.id);
+  if (!markitdownUrl) {
+    return {
+      ok: false,
+      error:
+        "PDFs and other documents need the conversion service. Set it up in Settings → AI (see docs/markitdown-setup.md), or paste the text instead.",
+    };
+  }
+  return convertToMarkdown(buffer, file.name, file.type || "application/octet-stream", markitdownUrl);
 }
 
 export async function extractSyllabusDatesAction(

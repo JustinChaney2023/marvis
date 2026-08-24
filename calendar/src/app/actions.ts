@@ -28,6 +28,7 @@ import {
   updateAppSettings,
 } from "@/lib/settings";
 import { listTranscribeModels } from "@/lib/transcribe";
+import { testMarkitdownEndpoint } from "@/lib/markitdown";
 import {
   isLocalEndpoint,
   pickModelId,
@@ -2211,8 +2212,20 @@ export async function updateAiSettingsAction(formData: FormData) {
     transcribeUrl: String(formData.get("transcribeUrl") ?? "").trim() || null,
     transcribeModel: String(formData.get("transcribeModel") ?? "").trim() || null,
     transcribeApiKey: updatedSecret(formData, "transcribeApiKey", "clearTranscribeApiKey"),
+    markitdownUrl: String(formData.get("markitdownUrl") ?? "").trim() || null,
   });
   revalidatePath("/settings");
+}
+
+/** Connection test for the document-conversion service (Settings → AI). */
+export async function testMarkitdownEndpointAction(
+  url: string,
+): Promise<{ ok: boolean; error: string | null }> {
+  await requireUser();
+  const trimmed = url.trim();
+  if (!trimmed) return { ok: false, error: "Enter a converter URL first." };
+  const result = await testMarkitdownEndpoint(trimmed);
+  return { ok: result.ok, error: result.ok ? null : result.error };
 }
 
 /**

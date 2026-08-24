@@ -620,6 +620,12 @@ model AppSettings {
   // Same encryption-at-rest treatment as localAiApiKey; null for an
   // unauthenticated local whisper server.
   transcribeApiKey   String?
+  // Document -> Markdown service (markitdown) used by the syllabus importer
+  // for PDFs and other binary formats. No model or key: it is a stateless
+  // local converter with nothing to authenticate against, unlike the
+  // transcription endpoint which may be a paid hosted API. Null = .txt/.md
+  // and .docx still import exactly as before, and PDF says what's missing.
+  markitdownUrl      String?
   updatedAt          DateTime @updatedAt
 }
 

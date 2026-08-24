@@ -22,6 +22,7 @@ import AutomationRulesManager from "./AutomationRulesManager";
 import HabitsManager from "./HabitsManager";
 import TimeSlotsManager from "./TimeSlotsManager";
 import TranscriptionSettings from "./TranscriptionSettings";
+import MarkitdownSettings from "./MarkitdownSettings";
 import SettingsTabs from "./SettingsTabs";
 import Button from "../ui/Button";
 import {
@@ -338,6 +339,7 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
             hasApiKey={Boolean(settings.transcribeApiKey)}
             realtimeFactor={transcribeRealtimeFactor}
           />
+          <MarkitdownSettings markitdownUrl={settings.markitdownUrl ?? ""} />
           <div>
             <Button type="submit">Save</Button>
           </div>

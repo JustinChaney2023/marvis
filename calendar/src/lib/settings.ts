@@ -27,6 +27,7 @@ export async function updateAppSettings(
     transcribeUrl?: string | null;
     transcribeModel?: string | null;
     transcribeApiKey?: string | null;
+    markitdownUrl?: string | null;
   },
 ) {
   return prisma.appSettings.upsert({

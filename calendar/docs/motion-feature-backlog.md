@@ -1,5 +1,52 @@
 # Motion replica — feature backlog
 
+## PDF/document import via markitdown (2026-08-24, #61)
+The syllabus importer handled `.txt`/`.md` (client-side `FileReader`) and
+`.docx` (server-side `mammoth`), but **not PDF — the format most syllabi
+actually arrive in.** Users were told to copy-paste. Closed generally
+rather than one format at a time.
+
+- [x] **markitdown as a service container** (`markitdown/`) — Microsoft's
+      converter (PDF, PPTX, XLSX, HTML, EPUB, CSV, …). It ships a CLI and
+      an MCP server but **no HTTP endpoint**, and Microsoft publishes a
+      Dockerfile but no image, so `server.py` is a ~60-line FastAPI wrapper
+      exposing `POST /convert` + `GET /health`, built from a local
+      Dockerfile with `markitdown[all]==0.1.7` pinned.
+- [x] **Hardened by default** — parses untrusted documents with a large
+      parser dependency tree, so: unprivileged user, all capabilities
+      dropped, `no-new-privileges`, read-only rootfs with tmpfs `/tmp`.
+      The wrapper stages uploads to a temp file and calls markitdown's
+      narrowest entry point, never one that can fetch a URL (its own README
+      warns it does I/O with the calling process's privileges).
+- [x] **`src/lib/documentConvert.ts`** — `pickConverter()` decides
+      text/docx/markitdown from the filename, shared by client and server
+      so the two can't disagree about what's supported. `.zip` and
+      audio/video are deliberately excluded (archive recursion is
+      surprising reach for a file picker; audio belongs to the recordings
+      pipeline).
+- [x] **`.docx` deliberately stays on `mammoth`** in-process — it already
+      works with nothing configured, and routing it through the service
+      would regress a working offline path into a service dependency.
+- [x] **`markitdownUrl` in Settings → AI** with a connection test. No model
+      or API key, unlike transcription: it's a stateless local converter
+      with nothing to authenticate against. Unset = `.txt`/`.md`/`.docx`
+      behave exactly as before and PDF says what's missing, same "clear
+      setup message, not an error" contract the AI features use.
+
+**Honest limitation, documented in the UI and the setup guide: there is no
+OCR.** markitdown extracts text already present in a document; it doesn't
+read pixels. A scanned handout or a photo of a syllabus yields nothing.
+Its OCR plugin needs an LLM vision client, deliberately not enabled — it
+would make output depend on image contents unpredictably and ship documents
+to a third party.
+
+Not done, noted rather than silently skipped: **extract-text-from-attachment
+for `TaskAttachment`/`ProjectAttachment`.** Both already accept PDFs, and
+`convertToMarkdown()` is generic enough to reuse — but nothing consumes that
+text yet, so it'd be speculative. Add it when a feature actually wants it.
+
+Setup: [`docs/markitdown-setup.md`](../../docs/markitdown-setup.md).
+
 ## Recorder UI — #16 complete (2026-08-24)
 The last piece of the recording feature: capture, and the surfaces for
 reading what comes back. Backend, config, setup tooling and context

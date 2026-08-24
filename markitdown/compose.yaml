@@ -1,0 +1,42 @@
+# Document -> Markdown service for Marvis (PDF, PPTX, XLSX, HTML, EPUB...).
+# Setup guide: ../docs/markitdown-setup.md
+#
+# Built from the local Dockerfile because Microsoft publishes no image and
+# their Dockerfile is CLI-only. Versions are pinned inside the Dockerfile.
+#
+# Usage:
+#   docker compose up -d --build
+
+name: marvis-markitdown
+
+services:
+  markitdown:
+    build:
+      context: .
+    restart: unless-stopped
+    ports:
+      # Binds 0.0.0.0 so the machine running Marvis can reach it over
+      # Tailscale. That also exposes it to every other network this host is
+      # on — pair it with a firewall rule, see the security note in
+      # ../docs/markitdown-setup.md.
+      - "${MARKITDOWN_PORT:-8080}:8080"
+    environment:
+      MARKITDOWN_MAX_BYTES: "${MARKITDOWN_MAX_BYTES:-26214400}"
+    # Conversion is pure CPU on a local temp file; the service never needs
+    # to originate outbound connections. Dropping capabilities and blocking
+    # privilege escalation is cheap insurance around a big parser tree.
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    # Writable /tmp is required (uploads are staged there), so the root fs
+    # is read-only with tmpfs mounted over /tmp instead of leaving it open.
+    read_only: true
+    tmpfs:
+      - /tmp:size=128m
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=3).status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
