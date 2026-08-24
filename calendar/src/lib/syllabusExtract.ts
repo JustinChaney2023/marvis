@@ -14,6 +14,12 @@ const ExtractedItemSchema = z.object({
 
 const CourseInfoSchema = z.object({
   courseName: z.string().nullable(),
+  // Course/section identifier ("CNT A 290 Section 75111") and term
+  // ("Fall 2026") — stated on essentially every syllabus, and the only
+  // way to tell two semesters of the same course apart later.
+  courseCode: z.string().nullable(),
+  term: z.string().nullable(),
+  creditHours: z.string().nullable(),
   instructorName: z.string().nullable(),
   instructorEmail: z.string().nullable(),
   // Short weekday codes (WEEKDAY_CODES), e.g. ["MO","WE","FR"] — plugs
@@ -28,12 +34,33 @@ const CourseInfoSchema = z.object({
   officeHoursLocation: z.string().nullable(),
   gradingScale: z.string().nullable(),
   gradingPolicy: z.string().nullable(),
+  // Consequential policies students actually need to look up mid-term.
+  // latePolicy is the single most-referenced fact in most syllabi;
+  // aiPolicy is increasingly load-bearing and varies wildly per course.
+  latePolicy: z.string().nullable(),
+  aiPolicy: z.string().nullable(),
+  // Accounts/software required to do the work at all — actionable in a
+  // way the rest of the boilerplate isn't.
+  requiredTechnology: z.array(z.string()).nullable(),
   requiredBooks: z.array(z.string()).nullable(),
   optionalBooks: z.array(z.string()).nullable(),
+  // Free prose that has no structured home: course description, learning
+  // outcomes, how the course is delivered. Written to Project.notes,
+  // which the importer previously left empty.
+  courseSummary: z.string().nullable(),
 });
 
 const ExamDateSchema = z.object({
-  type: z.enum(["midterm", "final"]),
+  // The syllabus's own wording ("Midterm 2", "Unit Exam 3", "Final
+  // Exam"). Carried verbatim because `type` alone can't distinguish two
+  // midterms, and deriving a title from a two-value enum turned every
+  // exam into an indistinguishable "Midterm exam"/"Final exam".
+  title: z.string(),
+  // Kept alongside `title` only because "final" drives the
+  // confirm-the-real-time caveat downstream — it's a classification
+  // hint, not the exam's identity. "other" covers quizzes, practicals,
+  // and anything that is neither.
+  type: z.enum(["midterm", "final", "other"]),
   date: z.string().nullable(),
   notes: z.string().nullable(),
 });
@@ -72,26 +99,7 @@ export type { LocalAiConfig };
 
 const MAX_SYLLABUS_CHARS = 20_000;
 
-// The syllabus importer's one built-in ProjectField template — a plain
-// code constant, not a user-facing template builder (explicitly out of
-// scope). `key` matches a CourseInfo field name 1:1 so the import action
-// can map them mechanically; `list` fields join with "\n".
-export const SCHOOL_COURSE_TEMPLATE: {
-  key: keyof CourseInfo;
-  label: string;
-  fieldType: "TEXT" | "LONG_TEXT" | "EMAIL" | "LIST";
-}[] = [
-  { key: "instructorName", label: "Instructor", fieldType: "TEXT" },
-  { key: "instructorEmail", label: "Instructor email", fieldType: "EMAIL" },
-  { key: "meetingLocation", label: "Class location", fieldType: "TEXT" },
-  { key: "officeHoursDays", label: "Office hours (days)", fieldType: "TEXT" },
-  { key: "officeHoursTime", label: "Office hours (time)", fieldType: "TEXT" },
-  { key: "officeHoursLocation", label: "Office hours (location)", fieldType: "TEXT" },
-  { key: "gradingScale", label: "Grade scale", fieldType: "LONG_TEXT" },
-  { key: "gradingPolicy", label: "Grading policy", fieldType: "LONG_TEXT" },
-  { key: "requiredBooks", label: "Required books", fieldType: "LIST" },
-  { key: "optionalBooks", label: "Optional books", fieldType: "LIST" },
-];
+export { SCHOOL_COURSE_TEMPLATE } from "./courseTemplate";
 
 /**
  * Pulls a full course scaffold out of pasted syllabus text: graded
@@ -126,9 +134,16 @@ export async function extractSyllabusDates(
     `Today's date is ${formatYMD(referenceDate)}. ${termNote} ` +
     "Resolve every date you can to YYYY-MM-DD in the syllabus's academic year — infer the year from context (term dates, other explicit dates in the text) rather than defaulting to the current year. " +
     "If a date genuinely can't be resolved, leave it null and say why in notes.\n\n" +
-    "For `items`: graded deliverables only (assignments, quizzes, exams, projects, dated readings) — skip office hours, policy text, and general course info here, those go in courseInfo.\n" +
-    "For `courseInfo`: pull whatever is stated (course name, instructor name/email, meeting days as short weekday codes SU/MO/TU/WE/TH/FR/SA, meeting start/end time as HH:mm 24-hour, meeting location, office hours, grading scale, grading policy, required/optional books). Leave any field null rather than guessing if the syllabus doesn't state it.\n" +
-    "For `examDates`: midterm(s) and final exam specifically, separate from the general `items` list, each as {type, date, notes}.\n" +
+    "For `items`: graded deliverables (assignments, labs, quizzes, knowledge checks, discussion posts, projects, dated readings) AND hard administrative deadlines the student must not miss (add/drop deadline, withdrawal deadline, \"all work submitted by\" dates). " +
+    "Do NOT put exams here — every exam belongs in `examDates` instead, or it will be created twice. " +
+    "Skip office hours, policy prose, and general course info here; those go in courseInfo.\n" +
+    "For `courseInfo`: pull whatever is stated (course name, course code/section, term, credit hours, instructor name/email, meeting days as short weekday codes SU/MO/TU/WE/TH/FR/SA, meeting start/end time as HH:mm 24-hour, meeting location, office hours, grading scale, grading policy, late-work policy, AI-use policy, required technology/software/accounts, required/optional books). " +
+    "Set `courseSummary` to a short plain-prose summary of what the course is and how it's delivered, including learning outcomes if listed. " +
+    "Leave any field null rather than guessing if the syllabus doesn't state it.\n" +
+    "For `examDates`: EVERY exam the syllabus lists — all midterms, unit exams, practicals, and the final — each as {title, type, date, notes}. " +
+    "Set `title` to the syllabus's own wording verbatim (\"Midterm 2\", \"Unit Exam 3\", \"Final Exam\") so two exams of the same type stay distinguishable. " +
+    "Set `type` to \"final\" ONLY for the actual final exam, \"midterm\" for midterm-style exams, and \"other\" for anything else. Do not label a midterm as final. " +
+    "Set `date` ONLY to a date the syllabus actually states for that exam. If it names a week or a range rather than a day, or says the time is TBD, leave `date` null and explain in `notes` — never pick a plausible-looking day, because a wrong exam date on a calendar is worse than a missing one.\n" +
     "For `lectureSchedule`: only if the syllabus has an actual week-by-week or day-by-day list of lecture topics — one entry per session, {date, topic}. Return an empty array if there's no such outline, don't invent one.";
 
   const result = await callAiForJson({
@@ -140,8 +155,8 @@ export async function extractSyllabusDates(
     maxTokens: 8000,
     shapeHint:
       '{"items": [{"title": string, "dueDate": string|null, "notes": string|null}], ' +
-      '"courseInfo": {"courseName": string|null, "instructorName": string|null, "instructorEmail": string|null, "meetingDays": string[]|null, "meetingStartTime": string|null, "meetingEndTime": string|null, "meetingLocation": string|null, "officeHoursDays": string|null, "officeHoursTime": string|null, "officeHoursLocation": string|null, "gradingScale": string|null, "gradingPolicy": string|null, "requiredBooks": string[]|null, "optionalBooks": string[]|null}, ' +
-      '"examDates": [{"type": "midterm"|"final", "date": string|null, "notes": string|null}], ' +
+      '"courseInfo": {"courseName": string|null, "courseCode": string|null, "term": string|null, "creditHours": string|null, "instructorName": string|null, "instructorEmail": string|null, "meetingDays": string[]|null, "meetingStartTime": string|null, "meetingEndTime": string|null, "meetingLocation": string|null, "officeHoursDays": string|null, "officeHoursTime": string|null, "officeHoursLocation": string|null, "gradingScale": string|null, "gradingPolicy": string|null, "latePolicy": string|null, "aiPolicy": string|null, "requiredTechnology": string[]|null, "requiredBooks": string[]|null, "optionalBooks": string[]|null, "courseSummary": string|null}, ' +
+      '"examDates": [{"title": string, "type": "midterm"|"final"|"other", "date": string|null, "notes": string|null}], ' +
       '"lectureSchedule": [{"date": string|null, "topic": string}]}',
   });
 

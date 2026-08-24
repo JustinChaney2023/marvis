@@ -6,11 +6,11 @@ import {
   extractFileTextAction,
   extractSyllabusDatesAction,
   importSyllabusCourseAction,
-  SCHOOL_COURSE_TEMPLATE,
   type SyllabusCourseFieldInput,
   type SyllabusExamInput,
   type SyllabusTaskInput,
 } from "../syllabusActions";
+import { SCHOOL_COURSE_TEMPLATE } from "@/lib/courseTemplate";
 import { WEEKDAY_CODES, type WeekdayCode } from "@/lib/recurrence";
 import {
   IMPORT_FILE_ACCEPT,
@@ -67,6 +67,7 @@ export default function SyllabusImportClient({
   // Review state — null until extraction succeeds.
   const [rows, setRows] = useState<ReviewRow[] | null>(null);
   const [courseName, setCourseName] = useState("");
+  const [courseSummary, setCourseSummary] = useState("");
   const [fields, setFields] = useState<SyllabusCourseFieldInput[]>([]);
   const [exams, setExams] = useState<ExamRow[]>([]);
   const [lectures, setLectures] = useState<LectureRow[]>([]);
@@ -146,6 +147,7 @@ export default function SyllabusImportClient({
         })),
       );
       setCourseName(result.courseInfo.courseName ?? "");
+      setCourseSummary(result.courseInfo.courseSummary ?? "");
       setFields(
         SCHOOL_COURSE_TEMPLATE.map((f) => {
           const raw = result.courseInfo[f.key];
@@ -153,7 +155,7 @@ export default function SyllabusImportClient({
           return { key: f.key, label: f.label, fieldType: f.fieldType, value };
         }),
       );
-      setExams(result.examDates.map((e) => ({ type: e.type, dateYMD: e.date, notes: e.notes, include: true })));
+      setExams(result.examDates.map((e) => ({ title: e.title, type: e.type, dateYMD: e.date, notes: e.notes, include: true })));
       setLectures(
         result.lectureSchedule.map((l) => ({ dateYMD: l.date, topic: l.topic, include: true })),
       );
@@ -201,10 +203,11 @@ export default function SyllabusImportClient({
       const result = await importSyllabusCourseAction({
         courseName,
         useExistingProjectId: useExistingProjectId || null,
+        courseSummary: courseSummary.trim() || null,
         fields: useExistingProjectId ? [] : fields,
         assigneeId: assigneeId || null,
         tasks,
-        exams: exams.filter((e) => e.include).map((e) => ({ type: e.type, dateYMD: e.dateYMD, notes: e.notes })),
+        exams: exams.filter((e) => e.include).map((e) => ({ title: e.title, type: e.type, dateYMD: e.dateYMD, notes: e.notes })),
         createClassSchedule: createClassSchedule && Boolean(canCreateClassSchedule),
         meetingDays: meetingDays.length > 0 ? meetingDays : null,
         meetingStartTime: meetingStartTime || null,
@@ -325,6 +328,22 @@ export default function SyllabusImportClient({
           </div>
 
           {!useExistingProjectId && (
+            <label className="flex flex-col gap-1 text-sm">
+              <span className="text-zinc-500">
+                Course summary{" "}
+                <span className="text-zinc-400">(saved as the project&apos;s notes)</span>
+              </span>
+              <textarea
+                value={courseSummary}
+                onChange={(e) => setCourseSummary(e.target.value)}
+                rows={4}
+                placeholder="What the course covers and how it's delivered."
+                className={inputClass}
+              />
+            </label>
+          )}
+
+          {!useExistingProjectId && (
             <div className="grid grid-cols-2 gap-3 rounded-xl border border-zinc-200 p-3 dark:border-zinc-700">
               {fields.map((f, i) => (
                 <label key={f.key} className="flex flex-col gap-1 text-sm">
@@ -394,8 +413,25 @@ export default function SyllabusImportClient({
               {exams.map((exam, i) => (
                 <div key={i} className="flex flex-wrap items-center gap-2 rounded-xl border border-zinc-200 bg-white p-3 text-sm dark:border-zinc-700 dark:bg-zinc-800">
                   <input type="checkbox" checked={exam.include} onChange={(e) => updateExam(i, { include: e.target.checked })} className="h-4 w-4" aria-label="Include" />
-                  <span className="w-20 flex-shrink-0 capitalize text-zinc-500">{exam.type}</span>
-                  <input type="date" value={exam.dateYMD ?? ""} onChange={(e) => updateExam(i, { dateYMD: e.target.value || null })} className={`${inputClass} flex-1`} />
+                  <input
+                    type="text"
+                    value={exam.title}
+                    onChange={(e) => updateExam(i, { title: e.target.value })}
+                    placeholder="Exam name"
+                    aria-label="Exam name"
+                    className={`${inputClass} flex-1`}
+                  />
+                  <select
+                    value={exam.type}
+                    onChange={(e) => updateExam(i, { type: e.target.value as ExamRow["type"] })}
+                    aria-label="Exam type"
+                    className={`${inputClass} w-28 flex-shrink-0`}
+                  >
+                    <option value="midterm">Midterm</option>
+                    <option value="final">Final</option>
+                    <option value="other">Other</option>
+                  </select>
+                  <input type="date" value={exam.dateYMD ?? ""} onChange={(e) => updateExam(i, { dateYMD: e.target.value || null })} className={`${inputClass} flex-1`} aria-label="Exam date" />
                   {exam.type === "final" && (
                     <span className="w-full text-xs text-amber-600 dark:text-amber-400">
                       Will be marked as an estimated time — final exam slots are often confirmed later.

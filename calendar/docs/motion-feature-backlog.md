@@ -1,5 +1,51 @@
 # Motion replica — feature backlog
 
+## Syllabus import audit against a real syllabus (2026-08-24)
+Audited the importer against CNT A290 (AWS Cloud Foundations, Fall 2026)
+and its actual imported result, rather than reasoning about the code.
+
+**Dates were correct.** All 44 tasks landed on the syllabus's own Monday
+week dates; "all work submitted by Wednesday" resolved to Dec 9 correctly.
+An earlier UTC-formatted dump made them look off by one — they weren't.
+
+**Real bugs found and fixed:**
+- [x] **The final exam was created twice** — once as a Task, once as an
+      Event. Root cause was a contradiction in the extraction prompt:
+      `items` said to include "exams", while `examDates` said exams were
+      "separate from the general items list". The model reasonably did
+      both. `items` now explicitly excludes exams.
+- [x] **Invented exam date.** The syllabus lists the final under weeks 14
+      and 15 and never names a day; the extractor produced Dec 16, a week
+      after finals week. The prompt now requires `date` to be null unless
+      the syllabus states an actual date — a wrong exam date on a calendar
+      is worse than a missing one.
+- [x] **Flat 30-minute durations.** The importer never set `durationMin`,
+      so Prisma's default gave a 2-hour lab and a 20-minute knowledge
+      check identical blocks. That isn't cosmetic: `durationMin` is a
+      direct auto-scheduler input, so a whole course of them
+      under-reserves study time by hours a week. New
+      `src/lib/taskDuration.ts` estimates from the title (labs 90m, exams
+      90–120m, quizzes 20m, discussions 30m, admin deadlines 15m), with
+      `taskDuration.test.ts` covering the real titles from this import
+      plus the specificity ordering that keeps "Assignment 15 - Lab 4"
+      scoring as a lab.
+- [x] **Administrative deadlines were dropped.** "Add/Drop Deadline Sept 4"
+      and "Oct 30 Withdrawal Deadline" appear in the schedule table and
+      produced nothing. `items` now covers hard administrative deadlines.
+- [x] **Course facts with nowhere to go.** Added `courseCode`, `term`,
+      `creditHours`, `latePolicy`, `aiPolicy`, `requiredTechnology` to the
+      School/Course template, and `courseSummary` → `Project.notes`,
+      which the importer previously always left empty.
+
+**Left alone deliberately:** week 8 ("More Module 6 / Assignments
+Continued / Same as previous week") still produces no tasks. That's
+correct — it duplicates week 7's work rather than adding any — but it
+means a week silently vanishes, which is only confusing if you go looking
+for it. Existing imported data was not modified; these changes affect
+future imports only. Justin's current AWS project still has the duplicate
+final exam and flat durations, which are faster to fix by hand than to
+re-import.
+
 ## PDF/document import via markitdown (2026-08-24, #61)
 The syllabus importer handled `.txt`/`.md` (client-side `FileReader`) and
 `.docx` (server-side `mammoth`), but **not PDF — the format most syllabi

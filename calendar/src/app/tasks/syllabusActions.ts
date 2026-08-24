@@ -7,6 +7,7 @@ import { requireUser } from "@/lib/auth";
 import { formatYMD, parseYMD, toLocalInputValue } from "@/lib/calendar-dates";
 import { aiConfigFromSettings, getAppSettings } from "@/lib/settings";
 import { buildCustomWeeklyRule, WEEKDAY_CODES, type WeekdayCode } from "@/lib/recurrence";
+import { estimateTaskMinutes } from "@/lib/taskDuration";
 import { convertToMarkdown } from "@/lib/markitdown";
 import { MAX_CONVERT_BYTES, isWithinSizeLimit, pickConverter } from "@/lib/documentConvert";
 import {
@@ -78,8 +79,14 @@ export type SyllabusTaskInput = {
   dueDateYMD: string | null;
 };
 
+/** Free prose for Project.notes — course description, outcomes, delivery. */
+export type SyllabusNotesInput = string | null;
+
 export type SyllabusExamInput = {
-  type: "midterm" | "final";
+  // The syllabus's own name for it — carries the exam's identity, since
+  // `type` can't tell two midterms apart.
+  title: string;
+  type: "midterm" | "final" | "other";
   dateYMD: string | null;
   notes: string | null;
 };
@@ -99,6 +106,8 @@ export type ImportSyllabusCourseInput = {
   // fields, which belong to a course project, not an arbitrary existing
   // one) — deliverables/exams still get created, scoped to this project.
   useExistingProjectId: string | null;
+  // Free prose -> Project.notes (course description, outcomes, delivery).
+  courseSummary: SyllabusNotesInput;
   fields: SyllabusCourseFieldInput[];
   assigneeId: string | null;
   tasks: SyllabusTaskInput[];
@@ -158,7 +167,11 @@ export async function importSyllabusCourseAction(
   }
   if (!projectId) {
     const project = await prisma.project.create({
-      data: { userId: user.id, name: input.courseName.trim() || "Untitled course" },
+      data: {
+        userId: user.id,
+        name: input.courseName.trim() || "Untitled course",
+        notes: input.courseSummary?.trim() || null,
+      },
     });
     projectId = project.id;
 
@@ -188,10 +201,14 @@ export async function importSyllabusCourseAction(
       data: taskRows.map((item) => {
         const dueAt = item.dueDateYMD ? parseYMD(item.dueDateYMD) : null;
         if (dueAt) dueAt.setHours(23, 59, 0, 0);
+        const title = item.title.trim();
         return {
           userId: user.id,
-          title: item.title.trim(),
+          title,
           dueAt,
+          // Beats Prisma's flat 30m default, which fed the auto-scheduler
+          // the same block size for a 2-hour lab and a 20-minute quiz.
+          durationMin: estimateTaskMinutes(title),
           projectId,
           assigneeId: verifiedAssigneeId,
         };
@@ -203,7 +220,10 @@ export async function importSyllabusCourseAction(
   let examEventCount = 0;
   for (const exam of input.exams) {
     if (!exam.dateYMD) continue;
-    const title = exam.type === "final" ? "Final exam" : "Midterm exam";
+    // The reviewed title, not a label derived from `type` — deriving it
+    // collapsed "Midterm 1"/"Midterm 2" into two identical calendar
+    // entries with no way to tell which was which.
+    const title = exam.title.trim() || (exam.type === "final" ? "Final exam" : "Exam");
     const finalCaveat =
       exam.type === "final"
         ? "Estimated time — confirm the actual final exam schedule closer to the date; finals are often a different or longer slot than regular class time."
@@ -309,4 +329,3 @@ export async function importSyllabusCourseAction(
   };
 }
 
-export { SCHOOL_COURSE_TEMPLATE };
