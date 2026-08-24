@@ -5,6 +5,9 @@ import { requireUser } from "@/lib/auth";
 import TaskRow, { type TaskRowData } from "../../tasks/TaskRow";
 import ProjectNotesEditor from "./ProjectNotesEditor";
 import ProjectAttachments from "./ProjectAttachments";
+import ProjectVocabulary from "./ProjectVocabulary";
+import RecordingsList from "../../recordings/RecordingsList";
+import { buildTranscriptionPrompt, listRecordings } from "@/lib/recordings";
 
 const PROJECT_COLOR_DOT: Record<string, string> = {
   zinc: "bg-zinc-400",
@@ -57,6 +60,14 @@ export default async function ProjectDetailPage({
   }));
   const taskOptions = tasksRaw.map((t) => ({ id: t.id, title: t.title }));
 
+  const [recordings, promptPreview] = await Promise.all([
+    listRecordings(user.id, { projectId: id }),
+    // The project-level hint, without any single event's topic — that's
+    // added per recording once one is attached to a specific lecture.
+    buildTranscriptionPrompt({ projectId: id, eventId: null }),
+  ]);
+  const vocabulary = project.fields.find((f) => f.key === "transcriptionVocabulary")?.value ?? "";
+
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 px-6 py-12">
       <Link href="/tasks" className="text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100">
@@ -86,6 +97,28 @@ export default async function ProjectDetailPage({
       <section className="mt-6">
         <h2 className="text-sm font-semibold text-zinc-500">Library</h2>
         <ProjectAttachments projectId={project.id} attachments={project.attachments} />
+      </section>
+
+      <section className="mt-6">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold text-zinc-500">Recordings</h2>
+          <Link
+            href={`/recordings?projectId=${project.id}`}
+            className="text-sm text-indigo-600 hover:underline dark:text-indigo-400"
+          >
+            Record for this project →
+          </Link>
+        </div>
+        <RecordingsList recordings={recordings} />
+      </section>
+
+      <section className="mt-6">
+        <h2 className="text-sm font-semibold text-zinc-500">Transcription vocabulary</h2>
+        <ProjectVocabulary
+          projectId={project.id}
+          initialVocabulary={vocabulary}
+          promptPreview={promptPreview}
+        />
       </section>
 
       <section className="mt-8">

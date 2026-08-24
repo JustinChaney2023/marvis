@@ -525,6 +525,34 @@ export async function createTasksFromRecordingAction(
   return { created: rows.length };
 }
 
+/**
+ * Extra vocabulary for this project's recordings — lab equipment, guest
+ * lecturers, jargon the syllabus never named. Stored as the ProjectField
+ * buildTranscriptionPrompt already reads (EXTRA_VOCAB_KEY there), so this
+ * is the writer that field was always waiting on. Blank removes the row
+ * rather than leaving an empty field cluttering the project's details.
+ */
+export async function updateProjectVocabularyAction(projectId: string, vocabulary: string) {
+  const user = await requireUser();
+  const project = await prisma.project.findFirst({ where: { id: projectId, userId: user.id } });
+  if (!project) return;
+
+  const key = "transcriptionVocabulary";
+  const value = vocabulary.trim();
+  const existing = await prisma.projectField.findFirst({ where: { projectId, key } });
+
+  if (!value) {
+    if (existing) await prisma.projectField.delete({ where: { id: existing.id } });
+  } else if (existing) {
+    await prisma.projectField.update({ where: { id: existing.id }, data: { value } });
+  } else {
+    await prisma.projectField.create({
+      data: { projectId, key, label: "Transcription vocabulary", value, fieldType: "LONG_TEXT", sortOrder: 99 },
+    });
+  }
+  revalidatePath(`/projects/${projectId}`);
+}
+
 export async function updateProjectNotesAction(projectId: string, notes: string) {
   const user = await requireUser();
   const project = await prisma.project.findFirst({ where: { id: projectId, userId: user.id } });

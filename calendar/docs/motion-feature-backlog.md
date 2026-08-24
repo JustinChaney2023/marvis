@@ -1,5 +1,57 @@
 # Motion replica — feature backlog
 
+## Recorder UI — #16 complete (2026-08-24)
+The last piece of the recording feature: capture, and the surfaces for
+reading what comes back. Backend, config, setup tooling and context
+prompting all shipped earlier; this closes #16.
+
+- [x] **`RecordingCapture`** — in-browser recording *and* file upload in one
+      component, because both end the same way (POST to
+      `/api/uploads/recordings`, then `createRecordingAction`). Format is
+      chosen by feature-testing `MediaRecorder.isTypeSupported` in
+      preference order (`pickRecorderMimeType`) rather than hardcoding
+      Opus-in-WebM, which Safari can't record at all; every candidate is a
+      type the upload route already accepts, so a browser can't capture a
+      full lecture into a format the server then refuses. Audio is
+      collected in 5s slices rather than one blob at `stop()` — bounds
+      memory across an hour, and a crash leaves what was captured. A
+      `beforeunload` guard blocks a stray tab close mid-capture, the
+      elapsed clock answers "is this still recording?", and stopping
+      releases the mic tracks so the browser's own indicator goes dark.
+      Denied permission gets an actionable message.
+- [x] **`/recordings`** — capture plus the list. Rows in a processing state
+      poll via `router.refresh()` every 5s, reusing the server component's
+      existing query instead of duplicating it client-side; polling stops
+      when nothing is in flight. FAILED rows show `errorMessage` and a
+      Retry wired to `retryRecordingAction`. Expanding a row loads the
+      detail: audio player, notes rendered through the existing
+      `renderMarkdown`, collapsible raw transcript.
+- [x] **Action items → tasks** — the extracted items are editable, with
+      per-item include checkboxes, and only what's on screen is sent to
+      `createTasksFromRecordingAction`. Closes the loop this feature exists
+      for: lecture or meeting → notes → action items → auto-scheduled tasks.
+- [x] **Entry points** — "Record" on an event links to
+      `/recordings?eventId=…` (a link, not an embedded recorder: a capture
+      that dies when the modal closes is unacceptable for a lecture), which
+      attaches the recording to that event and so picks up its lecture-day
+      topic as transcription context. Project pages list their own
+      recordings and link to record for the project. `/recordings` is in
+      the main nav.
+- [x] **Transcription vocabulary editor** — `buildTranscriptionPrompt` has
+      always read a `transcriptionVocabulary` ProjectField that nothing
+      wrote; `updateProjectVocabularyAction` is that writer (blank deletes
+      the row rather than leaving an empty field). Alongside it, a
+      read-only preview of the exact prompt the transcriber receives —
+      a hidden prompt silently shaping every transcript is worse than one
+      you can read.
+
+Tested: `pickRecorderMimeType` and `formatDuration` in
+`recordingFormat.test.ts` (kept in their own client-safe module, since
+`recordings.ts` imports prisma and can't enter a client bundle — same
+split as `chatActions.ts`). The rest is interactive UI verified by
+compilation and `next build` only; this repo has no browser test harness
+and adding one for this wasn't worth it.
+
 ## Transcription context prompting (2026-08-24, #16)
 Whisper accepts an initial prompt that biases decoding toward whatever
 vocabulary you hand it. This app already extracts course name, instructor,

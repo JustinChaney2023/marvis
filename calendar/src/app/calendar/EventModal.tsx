@@ -689,6 +689,15 @@ export default function EventModal({
                   >
                     Export .ics
                   </a>
+                  {/* Links out rather than embedding the recorder here: a
+                      capture that dies when this modal closes is exactly
+                      the failure mode a lecture recorder can't have. */}
+                  <a
+                    href={`/recordings?eventId=${event?.id}`}
+                    className="text-xs text-zinc-500 underline hover:text-zinc-700 dark:hover:text-zinc-300"
+                  >
+                    Record
+                  </a>
                 </div>
                 {isEditingRecurring && (
                   <span className="text-xs text-zinc-500">
