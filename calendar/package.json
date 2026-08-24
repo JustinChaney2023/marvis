@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "tsx src/lib/scheduler.test.ts && tsx src/lib/recurrence.test.ts && tsx src/lib/quickCapture.test.ts && tsx src/lib/calendar-dates.test.ts && tsx src/lib/taskRecurrence.test.ts && tsx src/lib/ics.test.ts && tsx src/lib/timezone.test.ts && tsx src/lib/chatActions.test.ts && tsx src/lib/syllabusExtract.test.ts && tsx src/lib/apiTokens.test.ts && tsx src/lib/recordings.test.ts && tsx src/app/calendar/CalendarClient.test.ts",
+    "test": "tsx src/lib/scheduler.test.ts && tsx src/lib/recurrence.test.ts && tsx src/lib/quickCapture.test.ts && tsx src/lib/calendar-dates.test.ts && tsx src/lib/taskRecurrence.test.ts && tsx src/lib/ics.test.ts && tsx src/lib/timezone.test.ts && tsx src/lib/chatActions.test.ts && tsx src/lib/syllabusExtract.test.ts && tsx src/lib/apiTokens.test.ts && tsx src/lib/recordings.test.ts && tsx src/lib/hardware.test.ts && tsx src/app/calendar/CalendarClient.test.ts",
     "test:e2e": "playwright test"
   },
   "dependencies": {

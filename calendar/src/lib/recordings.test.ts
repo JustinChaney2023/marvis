@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { audioExtensionFor, canRetry, chunkTranscript } from "./recordings";
+import { audioExtensionFor, canRetry, chunkTranscript, realtimeFactor } from "./recordings";
 
 // --- MIME matching ---
 assert.equal(audioExtensionFor("audio/webm"), "webm");
@@ -54,5 +54,23 @@ assert.equal(
   "a run stranded by a server restart becomes retryable",
 );
 assert.equal(canRetry("SUMMARIZING", ageAgo, now), true);
+
+
+// --- Measured throughput ---
+// Nothing measurable yet -> no number at all, rather than a fabricated one.
+assert.equal(realtimeFactor([]), null);
+assert.equal(realtimeFactor([{ durationSec: null, transcribeMs: 5_000 }]), null);
+assert.equal(realtimeFactor([{ durationSec: 600, transcribeMs: null }]), null);
+
+// 600s of audio in 60s of wall clock = 10x realtime.
+assert.equal(realtimeFactor([{ durationSec: 600, transcribeMs: 60_000 }]), 10);
+
+// Summed, not averaged per-recording: a 50-minute lecture must outweigh a
+// 1-minute memo instead of counting equally.
+const mixed = realtimeFactor([
+  { durationSec: 3_000, transcribeMs: 300_000 }, // 10x, the long one
+  { durationSec: 60, transcribeMs: 30_000 }, // 2x, a short outlier
+]);
+assert.ok(mixed !== null && mixed > 9 && mixed < 10, `long recording dominates, got ${mixed}`);
 
 console.log("recordings.test.ts: all checks passed");

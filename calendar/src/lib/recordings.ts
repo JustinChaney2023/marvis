@@ -70,6 +70,31 @@ export function canRetry(status: RecordingStatus, updatedAt: Date, now: Date): b
   return now.getTime() - updatedAt.getTime() > STUCK_AFTER_MS;
 }
 
+// Enough samples to smooth out one anomalous run, few enough that a
+// recent endpoint/model change shows up quickly.
+const THROUGHPUT_SAMPLES = 5;
+
+/**
+ * How many seconds of audio the configured endpoint transcribes per second
+ * of wall clock, from the user's own recent recordings. Summed rather than
+ * averaged per-recording so a 50-minute lecture counts for more than a
+ * 2-minute voice memo. Null when nothing measurable has run yet — a
+ * fabricated number here would be worse than an empty space, and a server
+ * that doesn't report duration never yields one.
+ */
+export function realtimeFactor(
+  samples: { durationSec: number | null; transcribeMs: number | null }[],
+): number | null {
+  const usable = samples
+    .filter((s) => s.durationSec && s.transcribeMs && s.transcribeMs > 0)
+    .slice(0, THROUGHPUT_SAMPLES);
+  if (usable.length === 0) return null;
+  const audioSec = usable.reduce((sum, s) => sum + (s.durationSec ?? 0), 0);
+  const wallSec = usable.reduce((sum, s) => sum + (s.transcribeMs ?? 0), 0) / 1000;
+  if (wallSec <= 0) return null;
+  return audioSec / wallSec;
+}
+
 const NotesSchema = z.object({
   summary: z.string(),
   keyPoints: z.array(z.string()),
@@ -208,6 +233,7 @@ export async function processRecording(recordingId: string): Promise<void> {
       data: {
         transcript: transcribed.text,
         durationSec: transcribed.durationSec,
+        transcribeMs: transcribed.transcribeMs,
         status: "SUMMARIZING",
       },
     });
@@ -269,6 +295,17 @@ export async function listRecordings(
     },
     orderBy: { createdAt: "desc" },
   });
+}
+
+/** Measured endpoint throughput from this user's recent completed recordings, or null if nothing measurable has run. */
+export async function getRealtimeFactor(userId: string): Promise<number | null> {
+  const samples = await prisma.recording.findMany({
+    where: { userId, status: "DONE", durationSec: { not: null }, transcribeMs: { not: null } },
+    orderBy: { createdAt: "desc" },
+    take: THROUGHPUT_SAMPLES,
+    select: { durationSec: true, transcribeMs: true },
+  });
+  return realtimeFactor(samples);
 }
 
 export async function getRecording(userId: string, id: string) {

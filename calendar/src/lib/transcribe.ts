@@ -11,8 +11,78 @@ import { assertNotLinkLocal } from "@/lib/aiClient";
 export type TranscribeConfig = { url: string; model: string; apiKey?: string | null };
 
 export type TranscribeResult =
-  | { ok: true; text: string; durationSec: number | null }
+  | { ok: true; text: string; durationSec: number | null; transcribeMs: number }
   | { ok: false; error: string };
+
+export type ModelListResult = { ok: true; models: string[] } | { ok: false; error: string };
+
+/**
+ * Lists the model ids an endpoint actually serves, via the OpenAI-compatible
+ * `GET /v1/models` that faster-whisper-server, LocalAI, and OpenAI all
+ * implement. Doubles as the connection test: the failure modes are exactly
+ * the ones worth telling a self-hoster apart — host unreachable, reached
+ * but rejected the key, reached but isn't OpenAI-compatible.
+ *
+ * Not every server implements it, so a failure here is a hint, never a
+ * reason to block saving a config.
+ */
+export async function listTranscribeModels(config: {
+  url: string;
+  apiKey?: string | null;
+}): Promise<ModelListResult> {
+  const base = config.url.replace(/\/+$/, "");
+  try {
+    await assertNotLinkLocal(config.url);
+  } catch {
+    return { ok: false, error: "Refusing to contact a link-local address." };
+  }
+
+  let res: Response;
+  try {
+    res = await fetch(`${base}/models`, {
+      headers: config.apiKey ? { Authorization: `Bearer ${config.apiKey}` } : {},
+      signal: AbortSignal.timeout(15_000),
+    });
+  } catch (err) {
+    return {
+      ok: false,
+      error: `Couldn't reach ${base} at all — check the host is up and the address is right (${
+        err instanceof Error ? err.message : "network error"
+      }).`,
+    };
+  }
+
+  if (res.status === 401 || res.status === 403) {
+    return {
+      ok: false,
+      error: `Reached ${base}, but it rejected the API key (${res.status}). A local whisper server usually needs no key at all.`,
+    };
+  }
+  if (!res.ok) {
+    return { ok: false, error: `Reached ${base}, but /models returned ${res.status}.` };
+  }
+
+  try {
+    const parsed = (await res.json()) as { data?: unknown };
+    const models = Array.isArray(parsed.data)
+      ? parsed.data
+          .map((m) => (m && typeof m === "object" ? (m as { id?: unknown }).id : null))
+          .filter((id): id is string => typeof id === "string" && id.length > 0)
+      : [];
+    if (models.length === 0) {
+      return {
+        ok: false,
+        error: `Reached ${base}, but the response wasn't an OpenAI-compatible model list. Enter the model name manually — transcription can still work.`,
+      };
+    }
+    return { ok: true, models: models.sort() };
+  } catch {
+    return {
+      ok: false,
+      error: `Reached ${base}, but it didn't return JSON — this may not be an OpenAI-compatible endpoint.`,
+    };
+  }
+}
 
 // An hour of audio through a CPU-only whisper build genuinely takes tens
 // of minutes; a 2-minute timeout (the local-AI chat default) would fail
@@ -38,6 +108,7 @@ export async function transcribeAudio(
   config: TranscribeConfig,
 ): Promise<TranscribeResult> {
   const endpoint = `${config.url.replace(/\/+$/, "")}/audio/transcriptions`;
+  const startedAt = Date.now();
   try {
     await assertNotLinkLocal(config.url);
 
@@ -74,6 +145,10 @@ export async function transcribeAudio(
       ok: true,
       text: parsed.text.trim(),
       durationSec: typeof parsed.duration === "number" ? Math.round(parsed.duration) : null,
+      // Times only this call, not summarization — "how fast is your whisper
+      // endpoint" is a question about the endpoint, and folding in a
+      // separate AI service's latency would answer a different one.
+      transcribeMs: Date.now() - startedAt,
     };
   } catch (err) {
     console.error("transcribeAudio failed:", err);

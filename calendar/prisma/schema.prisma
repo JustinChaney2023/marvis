@@ -724,6 +724,12 @@ model Recording {
   // doesn't decode it, so this stays null unless a transcription backend
   // reports a duration.
   durationSec  Int?
+  // Wall-clock milliseconds the transcription call itself took (not
+  // summarization). With durationSec this gives a real measured
+  // "N× realtime" for the configured endpoint, instead of guessing
+  // throughput from a synthetic benchmark that wouldn't reflect the
+  // user's actual hardware or network path.
+  transcribeMs Int?
   // Both optional and independent: a recording can hang off a class/
   // meeting event, a course project, both, or neither. SetNull so
   // deleting the event/project doesn't destroy the recording itself.

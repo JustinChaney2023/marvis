@@ -1,5 +1,65 @@
 # Motion replica — feature backlog
 
+## Transcription: model discovery, throughput, hardware scan (2026-08-24, #16)
+Follow-up to the recording backend below. The model name was a free-text
+field you had to already know the answer to, with no way to tell whether
+the endpoint was even reachable.
+
+The framing that drove the design: **the machine transcribing is usually
+not the machine running this app.** Justin runs the app on a laptop and
+whisper on a desktop over Tailscale, so the obvious "scan this PC's GPU
+and pick a model" feature would confidently describe the wrong hardware.
+Everything below is arranged so the endpoint is the source of truth and
+the local scan is the narrow special case.
+
+- [x] **Model discovery** — `listTranscribeModels()` in `transcribe.ts`
+      queries the endpoint's OpenAI-compatible `GET /v1/models` (which
+      faster-whisper-server, LocalAI, and OpenAI all implement) and
+      populates a dropdown. The free-text input stays: not every server
+      implements `/v1/models`, and a working model id must remain
+      enterable regardless. Discovery failure is an inline hint, never a
+      block on saving.
+- [x] **Connection test** — the same call doubles as the test, with the
+      failure modes a self-hoster actually needs told apart: host
+      unreachable vs. reached-but-rejected-the-key (401/403) vs.
+      reached-but-not-OpenAI-compatible.
+- [x] **Measured throughput, not a synthetic benchmark** — new
+      `Recording.transcribeMs` times the transcription call alone (not
+      summarization — "how fast is your endpoint" is a question about the
+      endpoint). `realtimeFactor()` sums audio-seconds over wall-seconds
+      across the last 5 completed recordings, so a 50-minute lecture
+      weighs more than a 2-minute memo. Settings shows "about 8× realtime
+      — a 50-minute lecture takes roughly 6 minutes", and shows nothing at
+      all until there's real data. A server that never reports `duration`
+      never produces a factor, which is the honest outcome.
+- [x] **Local hardware scan, deliberately gated** — offered only when
+      `isLocalEndpoint()` says the configured URL resolves to this
+      machine (loopback, or an address on one of its own interfaces).
+      Remote endpoints get an explicit "transcription runs on a different
+      machine, so a scan here wouldn't describe the machine doing the
+      work" instead. `nvidia-smi` via `execFile` with a fixed argument
+      list (no shell, no interpolation); a missing binary or non-zero exit
+      just means "no NVIDIA GPU", never an error.
+      Tiers: ≥10GB VRAM → `large-v3`; 5–10GB → `distil-large-v3` (medium
+      as fallback); <5GB → `small`; no GPU but ≥8 cores and ≥16GB RAM →
+      `small`; weaker → `base`. Always a suggestion with its reasoning
+      shown and a "Use this" button — never auto-applied. `pickModelId()`
+      resolves a size to a real id from the discovered list, since servers
+      name the same model differently (`Systran/faster-whisper-large-v3`
+      vs `whisper-1`).
+- [x] **Inline setup docs** in Settings covering the Tailscale case
+      (`http://100.x.x.x:8000/v1`, model `Systran/faster-whisper-small`,
+      no key) and the hosted case (`https://api.openai.com/v1`,
+      `whisper-1`, key). The config is provider-agnostic: anything
+      implementing `/v1/audio/transcriptions` works, and that's all it
+      claims.
+
+Schema: `Recording.transcribeMs` (migration
+`20260824011953_add_recording_transcribe_ms`). `npx tsc --noEmit`,
+`npm test` (new `hardware.test.ts` covering the tiers, id matching, and
+locality check; `realtimeFactor` cases added to `recordings.test.ts`), and
+`npm run build` all pass clean.
+
 ## Lecture/meeting recordings — backend pipeline (2026-08-24, #16)
 The "AI meeting notetaker" that had been deferred since 2026-08-19 for
 needing "a real recording/transcription pipeline, not just a Claude API

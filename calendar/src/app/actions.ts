@@ -21,7 +21,20 @@ import { syncGoogleCalendar, deleteFromGoogle } from "@/lib/google-sync";
 import { listGoogleCalendars } from "@/lib/google-auth";
 import { importFromApple } from "@/lib/apple-sync";
 import { encryptSecret } from "@/lib/tokenCrypto";
-import { aiConfigFromSettings, getAppSettings, updateAppSettings } from "@/lib/settings";
+import {
+  aiConfigFromSettings,
+  getAppSettings,
+  transcribeConfigFromSettings,
+  updateAppSettings,
+} from "@/lib/settings";
+import { listTranscribeModels } from "@/lib/transcribe";
+import {
+  isLocalEndpoint,
+  pickModelId,
+  recommendWhisperModel,
+  scanHardware,
+  type HardwareScan,
+} from "@/lib/hardware";
 import { createBooking, getAvailableBookingSlots } from "@/lib/booking";
 import { nextTaskOccurrence } from "@/lib/taskRecurrence";
 import { generateSubtasks, type GenerateSubtasksResult } from "@/lib/subtaskGenerate";
@@ -2172,6 +2185,54 @@ export async function updateAiSettingsAction(formData: FormData) {
     transcribeApiKey: updatedSecret(formData, "transcribeApiKey", "clearTranscribeApiKey"),
   });
   revalidatePath("/settings");
+}
+
+/**
+ * Connection test + model discovery for the transcription endpoint, and
+ * whether that endpoint is this machine (which decides if a local hardware
+ * scan means anything at all).
+ *
+ * `typedApiKey` is whatever is currently in the form field, so the test
+ * reflects an unsaved edit; blank falls back to the saved key.
+ */
+export async function testTranscribeEndpointAction(
+  url: string,
+  typedApiKey: string,
+): Promise<{ ok: boolean; models: string[]; isLocal: boolean; error: string | null }> {
+  const user = await requireUser();
+  const trimmedUrl = url.trim();
+  if (!trimmedUrl) {
+    return { ok: false, models: [], isLocal: false, error: "Enter a speech-to-text URL first." };
+  }
+
+  const saved = transcribeConfigFromSettings(await getAppSettings(user.id));
+  const apiKey = typedApiKey.trim() || saved?.apiKey || null;
+
+  const [result, isLocal] = await Promise.all([
+    listTranscribeModels({ url: trimmedUrl, apiKey }),
+    isLocalEndpoint(trimmedUrl),
+  ]);
+  return {
+    ok: result.ok,
+    models: result.ok ? result.models : [],
+    isLocal,
+    error: result.ok ? null : result.error,
+  };
+}
+
+/**
+ * Hardware of the machine running this app, with a suggested Whisper model.
+ * Only meaningful when transcription runs here too — the caller is
+ * responsible for not offering this for a remote endpoint, since a
+ * recommendation derived from the wrong machine is worse than none.
+ */
+export async function scanHardwareAction(
+  availableModels: string[] = [],
+): Promise<{ scan: HardwareScan; suggestion: string; reason: string }> {
+  await requireUser();
+  const scan = await scanHardware();
+  const { preferences, reason } = recommendWhisperModel(scan);
+  return { scan, suggestion: pickModelId(preferences, availableModels), reason };
 }
 
 const SHARE_AVAILABILITY_MAX_SLOTS = 8;
