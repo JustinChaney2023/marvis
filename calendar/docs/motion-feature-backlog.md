@@ -1,5 +1,111 @@
 # Motion replica — feature backlog
 
+## Lecture/meeting recordings — backend pipeline (2026-08-24, #16)
+The "AI meeting notetaker" that had been deferred since 2026-08-19 for
+needing "a real recording/transcription pipeline, not just a Claude API
+call." That's still true, but the pipeline shrank: everything downstream
+of transcription already exists (event notes #48, project notes/library
+#58, Obsidian sync #60, `callAiForJson`, tasks → auto-scheduling), so the
+genuinely new work was capture + speech-to-text only.
+
+**This entry covers the backend/pipeline only** — the recorder/upload UI
+is a separate follow-up pass, so there's no way to create a recording
+from the web UI yet (the API and server actions both work). Issue #16
+stays open until that lands.
+
+- [x] **`Recording` model** — `title`, `audioPath` (same
+      `<userId>/<uuid>.<ext>` convention as attachments), `mimeType`,
+      `sizeBytes`, `durationSec?`, optional `eventId`/`projectId` (both
+      `SetNull` — a recording outlives the event it was attached to),
+      `transcript`, `summary` (markdown), `actionItems` (JSON, held for
+      review), `status`, `errorMessage`. Migration
+      `20260824005909_add_recordings`.
+- [x] **`RecordingStatus`**: `UPLOADED → TRANSCRIBING → SUMMARIZING →
+      DONE`, or `FAILED` with an `errorMessage` explaining why — a bare
+      FAILED is useless to someone who has to go fix their own whisper
+      endpoint.
+- [x] **Transcription config** (`AppSettings.transcribeUrl` /
+      `transcribeModel` / `transcribeApiKey`, the last encrypted at rest
+      like every other key here) — the same `{url, model, apiKey}` shape
+      as `localAi*`, and for the same reason: local whisper servers
+      (`faster-whisper-server`, `whisper.cpp` server mode, LocalAI) and
+      OpenAI's hosted Whisper all speak the identical OpenAI-compatible
+      `/v1/audio/transcriptions` dialect, so self-hosted vs. paid is a
+      URL swap, not a second code path. Configured in Settings → AI,
+      separately from the text model, because **Claude has no
+      speech-to-text endpoint** — Anthropic/local AI still does the
+      *summarize* half.
+
+      Concrete local setup: run `faster-whisper-server` (Docker,
+      exposes `:8000/v1`), then set URL `http://localhost:8000/v1` and
+      model `Systran/faster-whisper-large-v3`, API key blank. For
+      OpenAI's hosted equivalent: `https://api.openai.com/v1`, model
+      `whisper-1`, plus a key.
+- [x] **SSRF policy matches the local-AI path deliberately** — localhost
+      and LAN targets are *allowed* (a self-hosted whisper box is the
+      main use case); only the cloud-metadata link-local range is
+      refused, via the same `assertNotLinkLocal` helper `aiClient.ts`
+      already used (now exported rather than duplicated). The stricter
+      public-only rule used for ICS subscriptions would break the
+      feature's primary use case and is not applied here.
+- [x] **Pipeline** (`src/lib/recordings.ts`): `processRecording()` walks
+      the statuses, saving the transcript *before* summarizing so a
+      summarization failure doesn't waste the expensive half. Every
+      failure path lands as `FAILED` + message; it never throws.
+      Kicked off fire-and-forget by `startProcessing()` — transcribing
+      an hour of audio far outlives any HTTP request, and this app has no
+      job queue. A run stranded mid-flight by a server restart becomes
+      retryable after 10 minutes untouched (`canRetry`), rather than
+      being wedged forever; `ponytail:` comment marks the ceiling.
+- [x] **Long transcripts chunk, never truncate** — a ~50-minute lecture
+      (~45k chars) fits one pass, so the common case stays a single call.
+      Beyond 60k chars it splits on word boundaries, summarizes each
+      part, then runs a merge pass; action items from every section are
+      unioned and deduped rather than trusting the merge pass to repeat
+      them. Dropping the back half of a lecture is the exact failure this
+      feature exists to prevent.
+- [x] **Notes prompt adapts to the recording** — asked to classify first,
+      then write lecture notes (concepts/definitions/examples,
+      exam-relevant flags) or meeting notes (decisions, owners, open
+      questions) accordingly, rather than forcing meeting shape onto a
+      lecture. Told explicitly that transcripts are machine-generated and
+      contain mishearings.
+- [x] **Action items → real Tasks** is user-triggered and reviewable
+      (`createTasksFromRecordingAction` takes the *edited* items back
+      from the client), never automatic on completion — same
+      review-before-commit rule as the syllabus importer, since an LLM
+      misreading a transcript shouldn't quietly populate a task list.
+      Created tasks inherit the recording's project and flow into
+      auto-scheduling like any other task.
+- [x] **Upload route** `POST /api/uploads/recordings` — 300MB cap (an
+      hour of Opus is ~30MB, but an uncompressed WAV of the same lecture
+      is far bigger), streamed to disk via `Readable.fromWeb` rather than
+      buffering the whole file in memory like the 20MB attachment route
+      does. MIME matching ignores `;codecs=` parameters — browser
+      `MediaRecorder` always emits `audio/webm;codecs=opus`, which an
+      exact-match lookup would reject.
+- [x] **Server actions + `/api/v1`, sharing one lib layer** so ownership
+      rules live in exactly one place:
+      - `GET /api/v1/recordings?eventId=&projectId=` →
+        `{recordings: [{id, title, status, errorMessage, durationSec,
+        eventId, projectId, createdAt}]}`
+      - `POST /api/v1/recordings` — body `{audioPath, mimeType,
+        sizeBytes, title?, eventId?, projectId?}` → `201 {id}`; registers
+        an already-uploaded file (two-step, same as the web UI) and
+        starts processing
+      - `GET /api/v1/recordings/:id` → the above plus `transcript`,
+        `summary`, `actionItems`
+      - `DELETE /api/v1/recordings/:id` → `204`, removes the audio file
+        from disk too
+      Per the JARVIS-module principle (#60): standalone-usable *and*
+      fully drivable over `/api/v1`.
+
+Not built this pass: recorder/upload UI (in-browser `MediaRecorder` +
+file upload), a `/recordings` page, and surfacing recordings on the
+event/project pages. Consent handling (surfacing a syllabus's stated
+recording policy) also belongs with that UI pass, since it's a
+point-of-capture concern.
+
 ## Personal API tokens + v1 REST API — Obsidian integration, Phase 1 (2026-08-23, #60)
 Phase 1 of a two-phase plan: this repo gets a bearer-token auth mechanism
 and a small stable API surface; Phase 2 (a real Obsidian plugin, separate

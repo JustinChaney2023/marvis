@@ -329,6 +329,61 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
               )}
             </label>
           </div>
+          <div className="flex flex-col gap-3 border-t border-zinc-200 pt-3 dark:border-zinc-700">
+            <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              Transcription{" "}
+              <span className="font-normal text-zinc-400">
+                (for lecture/meeting recordings)
+              </span>
+            </p>
+            <label className="flex flex-col gap-1 text-sm">
+              <span className="text-zinc-500">Speech-to-text URL</span>
+              <input
+                type="url"
+                name="transcribeUrl"
+                defaultValue={settings.transcribeUrl ?? ""}
+                placeholder="http://localhost:8000/v1 or https://api.openai.com/v1"
+                className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800"
+              />
+              <span className="text-xs text-zinc-400">
+                An OpenAI-compatible base URL exposing{" "}
+                <code className="rounded bg-zinc-100 px-1 py-0.5 dark:bg-zinc-700">/audio/transcriptions</code>.
+                A local <code className="rounded bg-zinc-100 px-1 py-0.5 dark:bg-zinc-700">faster-whisper-server</code>{" "}
+                or <code className="rounded bg-zinc-100 px-1 py-0.5 dark:bg-zinc-700">whisper.cpp</code> server works, so
+                does OpenAI&apos;s hosted Whisper. Claude has no
+                speech-to-text endpoint, so this is configured separately
+                from the model above.
+              </span>
+            </label>
+            <label className="flex flex-col gap-1 text-sm">
+              <span className="text-zinc-500">Transcription model</span>
+              <input
+                type="text"
+                name="transcribeModel"
+                defaultValue={settings.transcribeModel ?? ""}
+                placeholder="Systran/faster-whisper-large-v3 or whisper-1"
+                className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-sm">
+              <span className="text-zinc-500">
+                API key <span className="text-zinc-400">(leave blank for a local whisper server with no auth)</span>
+              </span>
+              <input
+                type="password"
+                name="transcribeApiKey"
+                placeholder={settings.transcribeApiKey ? "•••••••• (saved — leave blank to keep)" : "sk-..."}
+                autoComplete="off"
+                className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800"
+              />
+              {settings.transcribeApiKey && (
+                <label className="flex items-center gap-1.5 text-xs text-zinc-500">
+                  <input type="checkbox" name="clearTranscribeApiKey" />
+                  Clear saved key
+                </label>
+              )}
+            </label>
+          </div>
           <div>
             <Button type="submit">Save</Button>
           </div>

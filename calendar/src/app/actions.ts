@@ -34,6 +34,15 @@ import type { ChatAction } from "@/lib/chatActions";
 import { scheduleHabitsForWeek, rescheduleConflictedHabits } from "@/lib/habits";
 import { formatYMD } from "@/lib/calendar-dates";
 import { syncCalendarSubscription } from "@/lib/calendarSubscriptions";
+import {
+  createRecording,
+  deleteRecording,
+  listRecordings,
+  getRecording,
+  parseActionItems,
+  retryRecording,
+  type RecordingActionItem,
+} from "@/lib/recordings";
 import { randomBytes } from "node:crypto";
 import { isEmailConfigured, sendEmail } from "@/lib/email";
 import { unlink } from "node:fs/promises";
@@ -397,6 +406,110 @@ export async function deleteTaskAttachmentAction(attachmentId: string) {
   // now-orphaned DB row the user already asked to delete.
   await unlink(path.join(process.cwd(), "public", "uploads", attachment.storedPath)).catch(() => {});
   revalidatePath("/tasks");
+}
+
+// --- Recordings (#16) — thin wrappers over src/lib/recordings.ts, which
+// /api/v1/recordings also calls, so ownership rules live in one place. ---
+
+/** Registers a file already written by POST /api/uploads/recordings and starts transcription. */
+export async function createRecordingAction(input: {
+  title: string;
+  audioPath: string;
+  mimeType: string;
+  sizeBytes: number;
+  eventId?: string | null;
+  projectId?: string | null;
+}) {
+  const user = await requireUser();
+  const result = await createRecording(user.id, input);
+  revalidatePath("/recordings");
+  return result;
+}
+
+export async function listRecordingsAction(filter?: { eventId?: string | null; projectId?: string | null }) {
+  const user = await requireUser();
+  const recordings = await listRecordings(user.id, filter ?? {});
+  return recordings.map((r) => ({
+    id: r.id,
+    title: r.title,
+    status: r.status,
+    errorMessage: r.errorMessage,
+    durationSec: r.durationSec,
+    eventId: r.eventId,
+    projectId: r.projectId,
+    createdAt: r.createdAt,
+  }));
+}
+
+export async function getRecordingAction(id: string) {
+  const user = await requireUser();
+  const recording = await getRecording(user.id, id);
+  if (!recording) return null;
+  return {
+    id: recording.id,
+    title: recording.title,
+    status: recording.status,
+    errorMessage: recording.errorMessage,
+    durationSec: recording.durationSec,
+    audioPath: recording.audioPath,
+    transcript: recording.transcript,
+    summary: recording.summary,
+    actionItems: parseActionItems(recording.actionItems),
+    eventId: recording.eventId,
+    projectId: recording.projectId,
+    createdAt: recording.createdAt,
+  };
+}
+
+export async function deleteRecordingAction(id: string) {
+  const user = await requireUser();
+  await deleteRecording(user.id, id);
+  revalidatePath("/recordings");
+}
+
+export async function retryRecordingAction(id: string) {
+  const user = await requireUser();
+  const result = await retryRecording(user.id, id);
+  revalidatePath("/recordings");
+  return result;
+}
+
+/**
+ * Turns *reviewed* action items into real tasks. Takes the items back
+ * from the client rather than reading Recording.actionItems directly, so
+ * what the user edited/deselected on screen is exactly what gets
+ * created — the same review-before-commit contract as syllabus import,
+ * because an LLM misreading a transcript shouldn't quietly fill someone's
+ * task list.
+ */
+export async function createTasksFromRecordingAction(
+  recordingId: string,
+  items: RecordingActionItem[],
+): Promise<{ created: number }> {
+  const user = await requireUser();
+  const recording = await getRecording(user.id, recordingId);
+  if (!recording) return { created: 0 };
+
+  const rows = items.filter((i) => i.title.trim());
+  if (rows.length === 0) return { created: 0 };
+
+  await prisma.task.createMany({
+    data: rows.map((item) => {
+      // Same end-of-day convention as syllabus import: a date pulled out
+      // of speech is a day, not a clock time.
+      const dueAt = item.dueDate ? new Date(`${item.dueDate}T00:00:00`) : null;
+      if (dueAt && !Number.isNaN(dueAt.getTime())) dueAt.setHours(23, 59, 0, 0);
+      return {
+        userId: user.id,
+        title: item.title.trim(),
+        dueAt: dueAt && !Number.isNaN(dueAt.getTime()) ? dueAt : null,
+        projectId: recording.projectId,
+      };
+    }),
+  });
+
+  revalidatePath("/tasks");
+  return { created: rows.length };
 }
 
 export async function updateProjectNotesAction(projectId: string, notes: string) {
@@ -2054,6 +2167,9 @@ export async function updateAiSettingsAction(formData: FormData) {
     localAiModel,
     localAiApiKey: updatedSecret(formData, "localAiApiKey", "clearLocalAiApiKey"),
     anthropicApiKey: updatedSecret(formData, "anthropicApiKey", "clearAnthropicApiKey"),
+    transcribeUrl: String(formData.get("transcribeUrl") ?? "").trim() || null,
+    transcribeModel: String(formData.get("transcribeModel") ?? "").trim() || null,
+    transcribeApiKey: updatedSecret(formData, "transcribeApiKey", "clearTranscribeApiKey"),
   });
   revalidatePath("/settings");
 }

@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { decryptSecret } from "@/lib/tokenCrypto";
 import type { LocalAiConfig } from "@/lib/aiClient";
+import type { TranscribeConfig } from "@/lib/transcribe";
 
 export async function getAppSettings(userId: string) {
   return prisma.appSettings.upsert({
@@ -23,6 +24,9 @@ export async function updateAppSettings(
     localAiModel?: string | null;
     localAiApiKey?: string | null;
     anthropicApiKey?: string | null;
+    transcribeUrl?: string | null;
+    transcribeModel?: string | null;
+    transcribeApiKey?: string | null;
   },
 ) {
   return prisma.appSettings.upsert({
@@ -53,5 +57,15 @@ export function aiConfigFromSettings(
           }
         : null,
     anthropicApiKey: settings.anthropicApiKey ? decryptSecret(settings.anthropicApiKey) : null,
+  };
+}
+
+/** Speech-to-text counterpart to aiConfigFromSettings. Null = not configured yet. */
+export function transcribeConfigFromSettings(settings: AppSettingsRow): TranscribeConfig | null {
+  if (!settings.transcribeUrl || !settings.transcribeModel) return null;
+  return {
+    url: settings.transcribeUrl,
+    model: settings.transcribeModel,
+    apiKey: settings.transcribeApiKey ? decryptSecret(settings.transcribeApiKey) : null,
   };
 }

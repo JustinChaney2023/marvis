@@ -108,7 +108,7 @@ function isLinkLocalAddress(ip: string): boolean {
 // real SSRF path to instance credentials on any cloud deployment. Checked
 // against the resolved address, not the hostname string, so a DNS name
 // that merely resolves to a link-local address is caught too.
-async function assertNotLinkLocal(url: string): Promise<void> {
+export async function assertNotLinkLocal(url: string): Promise<void> {
   const hostname = new URL(url).hostname;
   const addresses = isIP(hostname)
     ? [hostname]

@@ -55,6 +55,7 @@ model User {
   sharesReceived          CalendarShare[] @relation("SharesReceived")
   calendarSubscriptions   CalendarSubscription[]
   personalAccessTokens    PersonalAccessToken[]
+  recordings              Recording[]
 }
 
 // Bearer-token auth for API clients that can't do a cookie-based browser
@@ -180,6 +181,7 @@ model Event {
   // shouldn't retroactively delete history of who already booked.
   bookingLinkId   String?
   bookingLink     BookingLink? @relation(fields: [bookingLinkId], references: [id], onDelete: SetNull)
+  recordings      Recording[]
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 
@@ -603,6 +605,21 @@ model AppSettings {
   // treatment as localAiApiKey. Falls back to the env var when unset, so
   // an existing single-key .env setup keeps working unchanged.
   anthropicApiKey    String?
+  // Speech-to-text endpoint for recordings (#16) — same {url, model,
+  // apiKey} shape as localAi* above, and for the same reason: local
+  // whisper servers (whisper.cpp server mode, faster-whisper-server,
+  // LocalAI) and OpenAI's hosted Whisper all speak the identical
+  // OpenAI-compatible /v1/audio/transcriptions dialect, so pointing at a
+  // self-hosted box vs. a paid API is a URL change, not a code path.
+  // Claude is deliberately absent here — Anthropic has no STT endpoint;
+  // the *summarize* half of the pipeline uses the localAi/anthropic
+  // config above as normal. Null = recordings can be uploaded but not
+  // transcribed, surfaced as a clear setup message rather than an error.
+  transcribeUrl      String?
+  transcribeModel    String?
+  // Same encryption-at-rest treatment as localAiApiKey; null for an
+  // unauthenticated local whisper server.
+  transcribeApiKey   String?
   updatedAt          DateTime @updatedAt
 }
 
@@ -622,6 +639,7 @@ model Project {
   tasks     Task[]
   fields      ProjectField[]
   attachments ProjectAttachment[]
+  recordings  Recording[]
   automationRules AutomationRule[]
   createdAt DateTime @default(now())
 }
@@ -683,6 +701,61 @@ model ProjectTemplateTask {
   title      String
   notes      String?
   sortOrder  Int             @default(0)
+}
+
+// A lecture/meeting audio recording and everything derived from it (#16):
+// uploaded (or browser-recorded) audio -> transcript -> AI notes ->
+// reviewable action items the user can turn into real, auto-scheduled
+// Tasks. Processing is fire-and-forget after upload (see processRecording
+// in src/lib/recordings.ts) since transcribing an hour of audio far
+// outlives any reasonable HTTP request.
+model Recording {
+  id           String          @id @default(cuid())
+  userId       String
+  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title        String
+  // Same "<userId>/<uuid>.<ext>" convention as TaskAttachment.storedPath,
+  // relative to public/uploads/ — the client-supplied filename never
+  // builds the on-disk path.
+  audioPath    String
+  mimeType     String
+  sizeBytes    Int
+  // Only known once something actually reads the audio; the upload path
+  // doesn't decode it, so this stays null unless a transcription backend
+  // reports a duration.
+  durationSec  Int?
+  // Both optional and independent: a recording can hang off a class/
+  // meeting event, a course project, both, or neither. SetNull so
+  // deleting the event/project doesn't destroy the recording itself.
+  eventId      String?
+  event        Event?          @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  projectId    String?
+  project      Project?        @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  transcript   String?
+  // Human-readable markdown notes (summary + key points) — this is what
+  // syncs out to Obsidian and reads like actual lecture/meeting notes.
+  summary      String?
+  // JSON array of {title, dueDate} the AI pulled out, held for review.
+  // Deliberately NOT auto-created as Tasks: an LLM misreading a
+  // transcript shouldn't silently populate someone's task list, same
+  // review-before-commit rule the syllabus importer follows.
+  actionItems  String?
+  status       RecordingStatus @default(UPLOADED)
+  // Why a FAILED row failed — a status with no explanation is unusable
+  // for a self-hosted user who has to fix their own whisper endpoint.
+  errorMessage String?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  @@index([userId, createdAt])
+}
+
+enum RecordingStatus {
+  UPLOADED
+  TRANSCRIBING
+  SUMMARIZING
+  DONE
+  FAILED
 }
 
 enum FeedbackCategory {
