@@ -1,5 +1,52 @@
 # Motion replica — feature backlog
 
+## Transcription context prompting (2026-08-24, #16)
+Whisper accepts an initial prompt that biases decoding toward whatever
+vocabulary you hand it. This app already extracts course name, instructor,
+textbook titles and per-lecture topics from syllabi, so feeding those in is
+domain adaptation with no training whatsoever — and it's the one accuracy
+win no generic Whisper install can replicate, because it depends on data
+only this app has.
+
+- [x] **`buildTranscriptionPrompt`** gathers a recording's project name,
+      instructor, book titles and its linked event's title/notes (where the
+      syllabus importer stamps that day's lecture topic — the single most
+      recording-specific vocabulary available).
+- [x] **Prose, not a keyword dump.** The prompt is decoded as if it were
+      speech preceding the audio, so full sentences bias better than a
+      comma-separated term list.
+- [x] **Deliberately excluded**: grading policy, grade scale, office hours,
+      instructor email, room number. Prose and trivia, not words anyone
+      says aloud — including them would spend a tight budget biasing the
+      decoder toward vocabulary that never occurs in the audio.
+- [x] **Budget handled by construction, not by truncation.** The limit is
+      ~224 tokens (half the 448-token decoder window) and implementations
+      disagree about *which end* they cut when you exceed it. Rather than
+      bet on that, the builder caps each variable-length part (notes, book
+      list) and then the whole string, so the server never truncates at
+      all. Char budget is deliberately pessimistic — names and titles
+      tokenize worse than plain prose.
+- [x] **Optional by definition, so a rejection can't cost a lecture.** If a
+      server 4xx's with the `prompt` field, `transcribeAudio` retries once
+      without it. Only for 4xx: a 5xx or timeout won't be fixed by sending
+      less, and retrying an hour of audio there just doubles the wait
+      before the same failure.
+- [x] **Same context reused as a notes glossary.** The summarization pass
+      is told those are the correct spellings, so terms Whisper still
+      fumbles come out right in the notes. It corrects only what it
+      *writes* — `Recording.transcript` stays the verbatim machine output,
+      because a record silently rewritten is no longer evidence of what
+      the transcriber actually heard.
+
+Deferred, not silently dropped: a per-project **editable** vocabulary
+override. `buildTranscriptionPrompt` already reads a
+`transcriptionVocabulary` ProjectField, but nothing writes it — project
+fields render read-only today, so making them editable belongs with the
+recorder UI pass rather than growing a one-off editor here. Likewise the
+read-only prompt preview: there is no recordings UI yet to host it, and
+`formatTranscriptionPrompt` is exported and pure, so that pass is a render
+away.
+
 ## Transcription: model discovery, throughput, hardware scan (2026-08-24, #16)
 Follow-up to the recording backend below. The model name was a free-text
 field you had to already know the answer to, with no way to tell whether

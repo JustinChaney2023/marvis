@@ -133,7 +133,10 @@ better recording setup before a heavier model.
 
 Marvis also feeds course context (instructor name, textbook titles, lecture
 topics from your syllabus) to the transcriber, which helps with exactly the
-proper nouns Whisper otherwise mangles.
+proper nouns Whisper otherwise mangles. This only applies to recordings
+attached to a project or event — a standalone recording has no context to
+draw on. The same terms are given to the model that writes your notes, so
+anything Whisper still garbles gets spelled correctly there.
 
 `STT_MODEL_TTL=-1` in the generated `.env` keeps the model loaded so every
 recording doesn't pay the load cost again. If you need that VRAM back for

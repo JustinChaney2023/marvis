@@ -1,5 +1,11 @@
 import assert from "node:assert/strict";
-import { audioExtensionFor, canRetry, chunkTranscript, realtimeFactor } from "./recordings";
+import {
+  audioExtensionFor,
+  canRetry,
+  chunkTranscript,
+  formatTranscriptionPrompt,
+  realtimeFactor,
+} from "./recordings";
 
 // --- MIME matching ---
 assert.equal(audioExtensionFor("audio/webm"), "webm");
@@ -72,5 +78,59 @@ const mixed = realtimeFactor([
   { durationSec: 60, transcribeMs: 30_000 }, // 2x, a short outlier
 ]);
 assert.ok(mixed !== null && mixed > 9 && mixed < 10, `long recording dominates, got ${mixed}`);
+
+// --- Transcription context prompt ---
+// A recording attached to nothing has no context to offer, and an empty
+// hint must be absent rather than an empty string the server would send.
+assert.equal(formatTranscriptionPrompt({}), null);
+assert.equal(formatTranscriptionPrompt({ projectName: "  ", eventNotes: "" }), null);
+
+const full = formatTranscriptionPrompt({
+  projectName: "Organic Chemistry II",
+  instructor: "Dr. Aoife Nwachukwu",
+  books: ["Clayden, Organic Chemistry", "Vollhardt & Schore"],
+  eventTitle: "Lecture 12",
+  eventNotes: "Pericyclic reactions and the Diels-Alder mechanism",
+});
+assert.ok(full !== null);
+// The whole point: the proper nouns whisper mangles are all present.
+for (const term of ["Organic Chemistry II", "Aoife Nwachukwu", "Diels-Alder", "Clayden"]) {
+  assert.ok(full.includes(term), `prompt should carry "${term}", got: ${full}`);
+}
+// Prose, not a keyword dump — it's decoded as if it were prior speech.
+assert.ok(full.startsWith("This is a recording from Organic Chemistry II, taught by Dr. Aoife Nwachukwu."));
+
+// Prose fields are excluded by the caller, but a caller that passes only
+// a course still gets a usable hint rather than a malformed one.
+assert.equal(
+  formatTranscriptionPrompt({ projectName: "Linear Algebra" }),
+  "This is a recording from Linear Algebra.",
+);
+assert.equal(formatTranscriptionPrompt({ instructor: "Dr. Vance" }), "The speaker is Dr. Vance.");
+
+// An event with no project still contributes the most recording-specific
+// vocabulary there is — that day's topic.
+const eventOnly = formatTranscriptionPrompt({ eventTitle: "Standup", eventNotes: "Kafka migration" });
+assert.equal(eventOnly, "Topic: Standup — Kafka migration.");
+
+// Budget: a runaway notes field must not blow past the prompt limit, and
+// what survives must still be intact words rather than a severed token.
+const huge = formatTranscriptionPrompt({
+  projectName: "Seminar",
+  eventNotes: "alpha bravo ".repeat(500),
+});
+assert.ok(huge !== null && huge.length <= 700, `prompt must stay under budget, got ${huge?.length}`);
+assert.ok(!/\balph$|\bbrav$/.test(huge), "must not truncate mid-word");
+
+// A long book list is capped rather than crowding out everything else.
+const manyBooks = formatTranscriptionPrompt({
+  projectName: "History",
+  books: ["One", "Two", "Three", "Four", "Five"],
+});
+assert.ok(manyBooks !== null && !manyBooks.includes("Four"), "book list is capped");
+
+// Newlines from a LIST-type ProjectField must not survive into the hint.
+const multiline = formatTranscriptionPrompt({ eventNotes: "line one\nline two" });
+assert.equal(multiline, "Topic: line one line two.");
 
 console.log("recordings.test.ts: all checks passed");

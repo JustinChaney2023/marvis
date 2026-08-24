@@ -106,6 +106,7 @@ export async function transcribeAudio(
   storedPath: string,
   mimeType: string,
   config: TranscribeConfig,
+  prompt?: string | null,
 ): Promise<TranscribeResult> {
   const endpoint = `${config.url.replace(/\/+$/, "")}/audio/transcriptions`;
   const startedAt = Date.now();
@@ -114,20 +115,37 @@ export async function transcribeAudio(
 
     const absolute = path.join(process.cwd(), "public", "uploads", storedPath);
     const bytes = await readFile(absolute);
-    const form = new FormData();
-    form.set("file", new Blob([bytes], { type: mimeType }), path.basename(storedPath));
-    form.set("model", config.model);
-    // Asking for verbose_json gets a duration back for free where the
-    // backend supports it; a server that only knows plain json still
-    // returns { text }, which the parsing below handles either way.
-    form.set("response_format", "verbose_json");
+    const buildForm = (withPrompt: boolean) => {
+      const form = new FormData();
+      form.set("file", new Blob([bytes], { type: mimeType }), path.basename(storedPath));
+      form.set("model", config.model);
+      // Asking for verbose_json gets a duration back for free where the
+      // backend supports it; a server that only knows plain json still
+      // returns { text }, which the parsing below handles either way.
+      form.set("response_format", "verbose_json");
+      // "prompt" is the OpenAI-compatible field name; servers map it onto
+      // whisper's own initial_prompt argument.
+      if (withPrompt && prompt) form.set("prompt", prompt);
+      return form;
+    };
 
-    const res = await fetch(endpoint, {
-      method: "POST",
-      headers: config.apiKey ? { Authorization: `Bearer ${config.apiKey}` } : {},
-      body: form,
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-    });
+    const send = (withPrompt: boolean) =>
+      fetch(endpoint, {
+        method: "POST",
+        headers: config.apiKey ? { Authorization: `Bearer ${config.apiKey}` } : {},
+        body: buildForm(withPrompt),
+        signal: AbortSignal.timeout(TIMEOUT_MS),
+      });
+
+    let res = await send(true);
+    // The hint is optional by definition, so a server that rejects the
+    // field shouldn't cost the user a whole lecture's transcription —
+    // drop it and try once more. Only for 4xx: a 5xx or a timeout won't
+    // be fixed by sending less, and retrying an hour of audio on those
+    // just doubles the wait before the same failure.
+    if (!res.ok && prompt && res.status >= 400 && res.status < 500) {
+      res = await send(false);
+    }
 
     if (!res.ok) {
       const body = await res.text().catch(() => "");

@@ -95,6 +95,115 @@ export function realtimeFactor(
   return audioSec / wallSec;
 }
 
+// --- Transcription context prompting ---
+//
+// Whisper accepts an initial prompt that biases decoding toward the
+// supplied vocabulary — the cheapest possible domain adaptation, and one
+// no generic whisper install can do, because it needs this app's own
+// syllabus data. It's bounded by half the 448-token decoder window
+// (~224 tokens), and implementations disagree about which end they cut
+// when you exceed that. Rather than bet on it, everything below keeps
+// the prompt under budget so the server never has to truncate at all.
+// ~3.5 chars/token is deliberately pessimistic: names and book titles
+// tokenize worse than plain prose.
+const PROMPT_MAX_CHARS = 700;
+const NOTES_MAX_CHARS = 300;
+const MAX_BOOKS = 3;
+
+/** ProjectField keys that carry actual spoken vocabulary. */
+const INSTRUCTOR_KEY = "instructorName";
+const BOOK_KEYS = ["requiredBooks", "optionalBooks"];
+// Nothing writes this yet — ProjectFields render read-only today, so an
+// editable override ships with the recorder UI pass. Reading it now
+// costs one lookup and means that pass is a UI change only.
+const EXTRA_VOCAB_KEY = "transcriptionVocabulary";
+// Deliberately absent: gradingPolicy, gradingScale, officeHours*,
+// instructorEmail, meetingLocation. Those are prose or trivia, not
+// words anyone says aloud — feeding them in would spend the budget
+// biasing the decoder toward vocabulary that never occurs in the audio.
+
+export type PromptSource = {
+  projectName?: string | null;
+  instructor?: string | null;
+  books?: string[];
+  extraVocabulary?: string | null;
+  eventTitle?: string | null;
+  eventNotes?: string | null;
+};
+
+const collapse = (s: string) => s.replace(/\s+/g, " ").trim();
+
+function clip(text: string, max: number): string {
+  const flat = collapse(text);
+  if (flat.length <= max) return flat;
+  const cut = flat.slice(0, max);
+  const space = cut.lastIndexOf(" ");
+  return (space > max / 2 ? cut.slice(0, space) : cut).trim();
+}
+
+/**
+ * Builds the natural-language hint sent to the transcriber. Prose, not a
+ * comma-separated keyword dump: the prompt is decoded as if it were
+ * preceding speech, so text shaped like real sentences biases better
+ * than a bare term list. Returns null when there's nothing worth saying.
+ */
+export function formatTranscriptionPrompt(src: PromptSource): string | null {
+  const sentences: string[] = [];
+  const course = src.projectName?.trim();
+  const instructor = src.instructor?.trim();
+
+  if (course && instructor) sentences.push(`This is a recording from ${course}, taught by ${instructor}.`);
+  else if (course) sentences.push(`This is a recording from ${course}.`);
+  else if (instructor) sentences.push(`The speaker is ${instructor}.`);
+
+  const topic = [src.eventTitle?.trim(), src.eventNotes ? clip(src.eventNotes, NOTES_MAX_CHARS) : ""]
+    .filter(Boolean)
+    .join(" — ");
+  if (topic) sentences.push(`Topic: ${collapse(topic)}.`);
+
+  const extra = src.extraVocabulary ? collapse(src.extraVocabulary) : "";
+  if (extra) sentences.push(`Terms that may come up: ${extra}.`);
+
+  const books = (src.books ?? []).map(collapse).filter(Boolean).slice(0, MAX_BOOKS);
+  if (books.length > 0) sentences.push(`References: ${books.join("; ")}.`);
+
+  if (sentences.length === 0) return null;
+  const prompt = sentences.join(" ");
+  return prompt.length <= PROMPT_MAX_CHARS ? prompt : clip(prompt, PROMPT_MAX_CHARS);
+}
+
+/** Splits a LIST-type ProjectField (newline-separated) into entries. */
+const splitList = (value: string | null) =>
+  (value ?? "").split("\n").map((l) => l.trim()).filter(Boolean);
+
+/** Gathers a recording's course/lecture context into a transcriber hint. */
+export async function buildTranscriptionPrompt(recording: {
+  projectId: string | null;
+  eventId: string | null;
+}): Promise<string | null> {
+  const [project, event] = await Promise.all([
+    recording.projectId
+      ? prisma.project.findUnique({
+          where: { id: recording.projectId },
+          select: { name: true, fields: { select: { key: true, value: true } } },
+        })
+      : null,
+    recording.eventId
+      ? prisma.event.findUnique({ where: { id: recording.eventId }, select: { title: true, notes: true } })
+      : null,
+  ]);
+
+  const fieldValue = (key: string) => project?.fields.find((f) => f.key === key)?.value ?? null;
+  return formatTranscriptionPrompt({
+    projectName: project?.name,
+    instructor: fieldValue(INSTRUCTOR_KEY),
+    books: BOOK_KEYS.flatMap((k) => splitList(fieldValue(k))),
+    extraVocabulary: fieldValue(EXTRA_VOCAB_KEY),
+    eventTitle: event?.title,
+    eventNotes: event?.notes,
+  });
+}
+
 const NotesSchema = z.object({
   summary: z.string(),
   keyPoints: z.array(z.string()),
@@ -136,7 +245,17 @@ export async function summarizeTranscript(
   transcript: string,
   localAi: Parameters<typeof callAiForJson>[0]["localAi"],
   anthropicApiKey: string | null,
+  glossary?: string | null,
 ): Promise<SummarizeResult> {
+  // Second use of the same context the transcriber got: whisper biases
+  // toward these terms but still fumbles some, so the model that writes
+  // the notes gets told what the right spellings are. It corrects only
+  // what it writes — Recording.transcript stays the verbatim machine
+  // output, because a record you've silently rewritten is no longer
+  // evidence of what the transcriber actually heard.
+  const system = glossary
+    ? `${NOTES_SYSTEM} Context for this recording: ${glossary} Names, titles and terms from that context are the correct spellings — when the transcript garbles one, use the correct form in your notes.`
+    : NOTES_SYSTEM;
   const shapeHint =
     '{"summary": string, "keyPoints": [string, ...], "actionItems": [{"title": string, "dueDate": string|null}, ...]}';
   const call = (system: string, userContent: string) =>
@@ -152,7 +271,7 @@ export async function summarizeTranscript(
 
   const chunks = chunkTranscript(transcript);
   if (chunks.length === 1) {
-    const result = await call(NOTES_SYSTEM, chunks[0]);
+    const result = await call(system, chunks[0]);
     if (!result.ok) return result;
     return { ok: true, summary: renderNotes(result.data), actionItems: result.data.actionItems };
   }
@@ -161,7 +280,7 @@ export async function summarizeTranscript(
   const actionItems: RecordingActionItem[] = [];
   for (const [i, chunk] of chunks.entries()) {
     const result = await call(
-      `${NOTES_SYSTEM} This is part ${i + 1} of ${chunks.length} of one long recording — cover only this part; another pass will combine them.`,
+      `${system} This is part ${i + 1} of ${chunks.length} of one long recording — cover only this part; another pass will combine them.`,
       chunk,
     );
     if (!result.ok) return result;
@@ -170,7 +289,7 @@ export async function summarizeTranscript(
   }
 
   const combined = await call(
-    `${NOTES_SYSTEM} You are given the section notes from one long recording, in order. Merge them into a single coherent set of notes — deduplicate, keep the through-line, don't just concatenate.`,
+    `${system} You are given the section notes from one long recording, in order. Merge them into a single coherent set of notes — deduplicate, keep the through-line, don't just concatenate.`,
     partials.join("\n\n---\n\n"),
   );
   if (!combined.ok) return combined;
@@ -222,7 +341,15 @@ export async function processRecording(recordingId: string): Promise<void> {
       where: { id: recordingId },
       data: { status: "TRANSCRIBING", errorMessage: null },
     });
-    const transcribed = await transcribeAudio(recording.audioPath, recording.mimeType, transcribeConfig);
+    // Gathered once, used twice: as whisper's decoding hint, then as the
+    // glossary the notes are written against.
+    const contextPrompt = await buildTranscriptionPrompt(recording);
+    const transcribed = await transcribeAudio(
+      recording.audioPath,
+      recording.mimeType,
+      transcribeConfig,
+      contextPrompt,
+    );
     if (!transcribed.ok) {
       await fail(recordingId, transcribed.error);
       return;
@@ -239,7 +366,7 @@ export async function processRecording(recordingId: string): Promise<void> {
     });
 
     const { localAi, anthropicApiKey } = aiConfigFromSettings(settings);
-    const notes = await summarizeTranscript(transcribed.text, localAi, anthropicApiKey);
+    const notes = await summarizeTranscript(transcribed.text, localAi, anthropicApiKey, contextPrompt);
     if (!notes.ok) {
       // The transcript is already saved above — a summarization failure
       // leaves the expensive half of the work intact and retryable.
