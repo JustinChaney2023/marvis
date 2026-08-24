@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
 import {
+  computeRange,
+  dayWeekdayLabel,
   defaultNewEventTimes,
   HOUR_END,
   HOUR_START,
   overlapsDay,
+  startOfWeek,
 } from "./calendar-dates";
 
 // Normal daytime case: rounds up to the next 30-min mark, no clamping.
@@ -80,6 +83,36 @@ import {
   assert.equal(overlapsDay(meeting, new Date(2026, 7, 20)), true);
   assert.equal(overlapsDay(meeting, new Date(2026, 7, 19)), false);
   assert.equal(overlapsDay(meeting, new Date(2026, 7, 21)), false);
+}
+
+// startOfWeek — Sunday is day 1 of the week, everywhere in the app
+{
+  const wednesday = new Date(2026, 7, 19); // Aug 19, 2026 is a Wednesday
+  const sunday = startOfWeek(wednesday);
+  assert.equal(sunday.getDay(), 0);
+  assert.equal(sunday.getDate(), 16); // the Sunday before that Wednesday
+
+  // a Sunday is already the start of its own week
+  assert.equal(startOfWeek(sunday).getTime(), sunday.getTime());
+}
+
+// computeRange — week/month views both start their day list on Sunday
+{
+  const week = computeRange("week", new Date(2026, 7, 19));
+  assert.equal(week.days.length, 7);
+  assert.equal(week.days[0].getDay(), 0);
+  assert.equal(week.days[6].getDay(), 6);
+
+  const month = computeRange("month", new Date(2026, 7, 19));
+  assert.equal(month.days[0].getDay(), 0);
+  assert.equal(month.days[month.days.length - 1].getDay(), 6);
+}
+
+// dayWeekdayLabel matches the same Sunday-first convention
+{
+  assert.equal(dayWeekdayLabel(new Date(2026, 7, 16)), "Sun");
+  assert.equal(dayWeekdayLabel(new Date(2026, 7, 19)), "Wed");
+  assert.equal(dayWeekdayLabel(new Date(2026, 7, 22)), "Sat");
 }
 
 console.log("calendar-dates.test.ts: all checks passed");

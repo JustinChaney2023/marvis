@@ -13,6 +13,8 @@ export default function TaskBoard({
   projects,
   assignees,
   timeSlots,
+  labels,
+  otherTasks,
   defaultProjectId,
 }: {
   tasks: TaskRowData[];
@@ -20,6 +22,8 @@ export default function TaskBoard({
   projects: { id: string; name: string; color: string }[];
   assignees: { id: string; name: string; type: "HUMAN" | "AI" }[];
   timeSlots: { id: string; name: string }[];
+  labels: { id: string; name: string; color: string }[];
+  otherTasks: { id: string; title: string }[];
   defaultProjectId: string;
 }) {
   const byStatus: Record<TaskStatus, TaskRowData[]> = {
@@ -50,6 +54,8 @@ export default function TaskBoard({
                 projects={projects}
                 assignees={assignees}
                 timeSlots={timeSlots}
+                labels={labels}
+                otherTasks={otherTasks}
                 defaultProjectId={defaultProjectId}
               />
             ))}

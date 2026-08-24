@@ -12,7 +12,13 @@ export default function FeedbackButton() {
   const [sent, setSent] = useState(false);
   const pathname = usePathname();
 
-  if (pathname === "/login" || pathname === "/signup" || pathname.startsWith("/book/")) {
+  if (
+    pathname === "/login" ||
+    pathname === "/signup" ||
+    pathname === "/forgot-password" ||
+    pathname === "/reset-password" ||
+    pathname.startsWith("/book/")
+  ) {
     return null;
   }
 

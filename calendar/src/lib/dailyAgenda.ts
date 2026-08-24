@@ -100,6 +100,7 @@ const AgendaTextSchema = z.object({ summary: z.string() });
 export async function generateDailyAgendaText(
   facts: DailyAgendaFacts,
   localAi: LocalAiConfig | null,
+  anthropicApiKey: string | null = null,
 ): Promise<string> {
   const template = templateText(facts);
   if (facts.meetingCount === 0 && facts.deepWorkCount === 0 && facts.overdueCount === 0) {
@@ -113,6 +114,7 @@ export async function generateDailyAgendaText(
     userContent: template,
     schema: AgendaTextSchema,
     localAi,
+    anthropicApiKey,
     maxTokens: 200,
     shapeHint: '{"summary": string}',
   });

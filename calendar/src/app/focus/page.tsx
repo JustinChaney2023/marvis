@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth";
-import { getAppSettings } from "@/lib/settings";
+import { aiConfigFromSettings, getAppSettings } from "@/lib/settings";
 import { buildTodayFacts, generateDailyAgendaText } from "@/lib/dailyAgenda";
 import FocusClient, { type FocusTask } from "./FocusClient";
 import ShutdownRitual from "./ShutdownRitual";
@@ -8,13 +8,9 @@ import ShutdownRitual from "./ShutdownRitual";
 export default async function FocusPage() {
   const user = await requireUser();
 
-  const settings = await getAppSettings(user.id);
-  const localAi =
-    settings.localAiUrl && settings.localAiModel
-      ? { url: settings.localAiUrl, model: settings.localAiModel }
-      : null;
+  const { localAi, anthropicApiKey } = aiConfigFromSettings(await getAppSettings(user.id));
   const facts = await buildTodayFacts(user.id);
-  const agendaText = await generateDailyAgendaText(facts, localAi);
+  const agendaText = await generateDailyAgendaText(facts, localAi, anthropicApiKey);
 
   const scheduled = await prisma.task.findMany({
     where: { userId: user.id, events: { some: {} }, parentId: null },

@@ -4,7 +4,11 @@ import type { z } from "zod";
 import { isIP } from "node:net";
 import { lookup } from "node:dns/promises";
 
-export type LocalAiConfig = { url: string; model: string };
+// "Local" is a slight misnomer now — this same shape also covers hosted
+// OpenAI-compatible APIs (MiniMax, etc.) that need a Bearer token, not
+// just an unauthenticated local Ollama/LM Studio endpoint. apiKey is
+// optional since local endpoints typically have no auth of their own.
+export type LocalAiConfig = { url: string; model: string; apiKey?: string | null };
 
 export type AiJsonResult<T> = { ok: true; data: T } | { ok: false; error: string };
 
@@ -34,6 +38,7 @@ export async function callAiForJson<T>({
   userContent,
   schema,
   localAi,
+  anthropicApiKey,
   maxTokens = 4000,
   shapeHint,
 }: {
@@ -41,6 +46,10 @@ export async function callAiForJson<T>({
   userContent: string;
   schema: z.ZodType<T>;
   localAi: LocalAiConfig | null;
+  // Per-account override of ANTHROPIC_API_KEY (Settings → AI), so this
+  // works without the server's .env ever having a key at all. Ignored
+  // when localAi is set.
+  anthropicApiKey?: string | null;
   maxTokens?: number;
   // A one-line plain-English description of the required JSON shape,
   // appended to the prompt for local models — Claude gets exact shape
@@ -50,7 +59,7 @@ export async function callAiForJson<T>({
   if (localAi) {
     return callLocalAi({ system, userContent, schema, localAi, shapeHint });
   }
-  return callClaude({ system, userContent, schema, maxTokens });
+  return callClaude({ system, userContent, schema, maxTokens, apiKey: anthropicApiKey ?? null });
 }
 
 async function callClaude<T>({
@@ -58,20 +67,23 @@ async function callClaude<T>({
   userContent,
   schema,
   maxTokens,
+  apiKey,
 }: {
   system: string;
   userContent: string;
   schema: z.ZodType<T>;
   maxTokens: number;
+  apiKey: string | null;
 }): Promise<AiJsonResult<T>> {
-  if (!process.env.ANTHROPIC_API_KEY) {
+  const key = apiKey || process.env.ANTHROPIC_API_KEY;
+  if (!key) {
     return {
       ok: false,
-      error: "ANTHROPIC_API_KEY isn't set — add it to .env, or configure a local AI in Settings.",
+      error: "No Claude API key set — add one in Settings → AI, or set ANTHROPIC_API_KEY in .env.",
     };
   }
 
-  const client = new Anthropic();
+  const client = new Anthropic({ apiKey: key });
   try {
     const response = await client.messages.parse({
       model: "claude-opus-5",
@@ -136,7 +148,10 @@ async function callLocalAi<T>({
     await assertNotLinkLocal(localAi.url);
     const res = await fetch(endpoint, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(localAi.apiKey ? { Authorization: `Bearer ${localAi.apiKey}` } : {}),
+      },
       body: JSON.stringify({
         model: localAi.model,
         messages: [

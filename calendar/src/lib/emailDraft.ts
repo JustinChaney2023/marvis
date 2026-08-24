@@ -22,6 +22,7 @@ export async function generateEmailDraft(
   projectName: string | null,
   dueAt: Date | null,
   localAi: LocalAiConfig | null,
+  anthropicApiKey: string | null = null,
 ): Promise<DraftEmailResult> {
   const title = taskTitle.trim();
   if (!title) return { ok: false, error: "The task needs a title first." };
@@ -45,6 +46,7 @@ export async function generateEmailDraft(
     userContent: context,
     schema: EmailDraftSchema,
     localAi,
+    anthropicApiKey,
     maxTokens: 800,
     shapeHint: '{"subject": string, "body": string}',
   });

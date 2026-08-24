@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   toggleTaskDone,
   scheduleTaskAction,
@@ -22,6 +23,8 @@ import { STATUS_BADGE, STATUS_LABEL, type TaskStatus } from "./taskStatus";
 type Project = { id: string; name: string };
 type Assignee = { id: string; name: string; type: "HUMAN" | "AI" };
 type TimeSlot = { id: string; name: string };
+type Label = { id: string; name: string; color: string };
+type TaskOption = { id: string; title: string };
 
 type Subtask = { id: string; title: string; status: TaskStatus };
 
@@ -47,9 +50,11 @@ export type TaskRowData = {
   assignee: { name: string; type: "HUMAN" | "AI" } | null;
   // The earliest chunk, for a chunked task — see withPrimaryEvent in
   // tasks/page.tsx. eventCount > 1 means it's split into that many.
-  event: { start: Date } | null;
+  event: { start: Date; locked: boolean } | null;
   eventCount: number;
   subtasks: Subtask[];
+  labels: Label[];
+  blockedBy: { id: string; title: string; status: TaskStatus }[];
 };
 
 function toDateInputValue(d: Date): string {
@@ -82,15 +87,23 @@ export default function TaskRow({
   projects,
   assignees,
   timeSlots,
+  labels,
+  otherTasks,
   defaultProjectId,
 }: {
   task: TaskRowData;
   projects: Project[];
   assignees: Assignee[];
   timeSlots: TimeSlot[];
+  labels: Label[];
+  otherTasks: TaskOption[];
   defaultProjectId: string;
 }) {
-  const [editing, setEditing] = useState(false);
+  // Deep-link from the calendar's "Upcoming" list — `/tasks?edit=<id>`
+  // opens this task's own edit modal immediately instead of just landing
+  // on the list.
+  const searchParams = useSearchParams();
+  const [editing, setEditing] = useState(() => searchParams.get("edit") === task.id);
   const [expanded, setExpanded] = useState(false);
   const [newSubtask, setNewSubtask] = useState("");
   const [isAddingSubtask, setIsAddingSubtask] = useState(false);
@@ -164,7 +177,11 @@ export default function TaskRow({
     color: task.color,
     hardDeadline: task.hardDeadline,
     chunkMin: task.chunkMin,
+    labels: task.labels,
+    blockedBy: task.blockedBy,
   };
+  const isBlocked = task.blockedBy.some((b) => b.status !== "DONE");
+  const blockableTasks = otherTasks.filter((t) => t.id !== task.id);
 
   const handleAddSubtask = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -332,12 +349,28 @@ export default function TaskRow({
             )}
             {task.event && (
               <span>
-                · scheduled {formatDueDateTime(task.event.start)}
+                · {task.event.locked ? "scheduled" : "auto-scheduled"} {formatDueDateTime(task.event.start)}
                 {task.eventCount > 1 && (
                   <span className="text-zinc-400"> (1 of {task.eventCount} chunks)</span>
                 )}
               </span>
             )}
+            {isBlocked && (
+              <span
+                className="inline-flex items-center gap-1 rounded-full bg-zinc-200 px-2 py-0.5 text-xs font-medium text-zinc-700 dark:bg-zinc-700 dark:text-zinc-300"
+                title={`Blocked by: ${task.blockedBy.map((b) => b.title).join(", ")}`}
+              >
+                Blocked
+              </span>
+            )}
+            {task.labels.map((label) => (
+              <span
+                key={label.id}
+                className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${PROJECT_COLOR_BADGE[label.color] ?? PROJECT_COLOR_BADGE.zinc}`}
+              >
+                {label.name}
+              </span>
+            ))}
           </div>
         </button>
         {task.status === "CREATED" && (
@@ -656,6 +689,8 @@ export default function TaskRow({
           projects={projects}
           assignees={assignees}
           timeSlots={timeSlots}
+          labels={labels}
+          otherTasks={blockableTasks}
           defaultProjectId={defaultProjectId}
           onClose={() => setEditing(false)}
         />

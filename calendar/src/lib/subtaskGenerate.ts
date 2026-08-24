@@ -24,6 +24,7 @@ export async function generateSubtasks(
   taskNotes: string | null,
   projectName: string | null,
   localAi: LocalAiConfig | null,
+  anthropicApiKey: string | null = null,
 ): Promise<GenerateSubtasksResult> {
   const title = taskTitle.trim();
   if (!title) return { ok: false, error: "The task needs a title first." };
@@ -46,6 +47,7 @@ export async function generateSubtasks(
     userContent: context,
     schema: SubtaskSuggestionSchema,
     localAi,
+    anthropicApiKey,
     maxTokens: 1500,
     shapeHint: '{"subtasks": [string, ...]}',
   });

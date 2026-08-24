@@ -1,5 +1,6 @@
 "use server";
 
+import { randomBytes } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
@@ -13,8 +14,10 @@ import {
   verifyPassword,
 } from "@/lib/auth";
 import { createRateLimiter, requestIp } from "@/lib/rateLimit";
+import { isEmailConfigured, sendEmail } from "@/lib/email";
 
 const MIN_PASSWORD_LEN = 8;
+const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
 
 // Same pattern as the booking page's per-IP limiter — see rateLimit.ts.
 const isLoginRateLimited = createRateLimiter(8, 15 * 60 * 1000);
@@ -23,6 +26,9 @@ const isLoginRateLimited = createRateLimiter(8, 15 * 60 * 1000);
 // picking a longer password), but still bounded: stops a script from
 // mass-creating accounts.
 const isSignupRateLimited = createRateLimiter(5, 60 * 60 * 1000);
+// Bounded the same way as signup — a reset email is a real cost (an
+// actual send), not just a DB check.
+const isResetRequestRateLimited = createRateLimiter(5, 60 * 60 * 1000);
 
 export async function signupAction(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
@@ -137,6 +143,82 @@ export async function changePasswordAction(formData: FormData) {
   await prisma.session.deleteMany({ where: { userId: user.id } });
   await createSession(user.id);
   redirect("/settings?password_changed=1");
+}
+
+/**
+ * Always redirects to the same "check your email" message whether or not
+ * the address is a real account — telling an attacker "no account with
+ * that email" is a free enumeration oracle a login form doesn't give
+ * them, so this deliberately doesn't distinguish the two cases.
+ */
+export async function forgotPasswordAction(formData: FormData) {
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+
+  if (!isEmailConfigured()) {
+    redirect(
+      `/forgot-password?error=${encodeURIComponent(
+        "Password reset isn't set up on this instance yet — see .env.example (SMTP_HOST).",
+      )}`,
+    );
+  }
+
+  if (isResetRequestRateLimited(await requestIp())) {
+    redirect("/forgot-password?sent=1");
+  }
+
+  if (email) {
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (user) {
+      const token = randomBytes(32).toString("hex");
+      await prisma.passwordResetToken.create({
+        data: { token, userId: user.id, expiresAt: new Date(Date.now() + RESET_TOKEN_TTL_MS) },
+      });
+      const appUrl = process.env.APP_URL ?? "http://localhost:3000";
+      const resetUrl = `${appUrl}/reset-password?token=${token}`;
+      await sendEmail(
+        email,
+        "Reset your password",
+        `Someone (hopefully you) requested a password reset.\n\n${resetUrl}\n\nThis link expires in 1 hour. If you didn't request this, ignore this email.`,
+      );
+    }
+  }
+
+  redirect("/forgot-password?sent=1");
+}
+
+export async function resetPasswordAction(formData: FormData) {
+  const token = String(formData.get("token") ?? "");
+  const newPassword = String(formData.get("newPassword") ?? "");
+
+  const record = token
+    ? await prisma.passwordResetToken.findUnique({ where: { token } })
+    : null;
+  if (!record || record.expiresAt < new Date()) {
+    redirect(`/reset-password?token=${encodeURIComponent(token)}&error=${encodeURIComponent("This reset link is invalid or has expired.")}`);
+  }
+  if (newPassword.length < MIN_PASSWORD_LEN) {
+    redirect(
+      `/reset-password?token=${encodeURIComponent(token)}&error=${encodeURIComponent(
+        `Password must be at least ${MIN_PASSWORD_LEN} characters.`,
+      )}`,
+    );
+  }
+
+  await prisma.user.update({
+    where: { id: record.userId },
+    data: { passwordHash: hashPassword(newPassword) },
+  });
+  // Same reasoning as changePasswordAction — a reset means any existing
+  // session (e.g. whatever locked the owner out in the first place) needs
+  // to stop working, not just future logins with the old password.
+  await prisma.session.deleteMany({ where: { userId: record.userId } });
+  // One-time use — delete every outstanding token for this user, not just
+  // the one used, so an older unused link can't reset the password again
+  // after this one already did.
+  await prisma.passwordResetToken.deleteMany({ where: { userId: record.userId } });
+
+  await createSession(record.userId);
+  redirect("/");
 }
 
 export async function revokeOtherSessionsAction() {

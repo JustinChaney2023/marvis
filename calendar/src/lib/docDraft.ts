@@ -24,6 +24,7 @@ export async function generateTaskDoc(
   projectName: string | null,
   subtaskTitles: string[],
   localAi: LocalAiConfig | null,
+  anthropicApiKey: string | null = null,
 ): Promise<DraftDocResult> {
   const title = taskTitle.trim();
   if (!title) return { ok: false, error: "The task needs a title first." };
@@ -48,6 +49,7 @@ export async function generateTaskDoc(
     userContent: context,
     schema: DocDraftSchema,
     localAi,
+    anthropicApiKey,
     maxTokens: 1200,
     shapeHint: '{"title": string, "body": string}',
   });

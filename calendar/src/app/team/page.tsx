@@ -3,7 +3,7 @@ import { requireUser } from "@/lib/auth";
 import { createAssignee, deleteAssignee } from "../actions";
 import { PersonIcon, RobotIcon } from "../icons";
 import Button from "../ui/Button";
-import { addDays, startOfWeekMonday } from "@/lib/calendar-dates";
+import { addDays, startOfWeek } from "@/lib/calendar-dates";
 
 export default async function TeamPage() {
   const user = await requireUser();
@@ -17,7 +17,7 @@ export default async function TeamPage() {
   // can see everyone's load side-by-side instead of only your own
   // calendar. Uses the event's real duration (end - start), not the
   // task's estimate, since that's what's actually on the calendar.
-  const weekStart = startOfWeekMonday(new Date());
+  const weekStart = startOfWeek(new Date());
   const weekEnd = addDays(weekStart, 7);
   const weekTasks = await prisma.task.findMany({
     where: {

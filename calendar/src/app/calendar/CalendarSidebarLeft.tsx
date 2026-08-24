@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ChevronLeftIcon, ChevronRightIcon } from "../icons";
 import { formatYMD, parseYMD, type CalendarView } from "@/lib/calendar-dates";
 import Card from "../ui/Card";
+import { useNowContext } from "./NowContext";
 
 const WEEKDAY_INITIALS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 
@@ -34,6 +35,7 @@ export default function CalendarSidebarLeft({
   const start = parseYMD(startYMD);
   const [cursor, setCursor] = useState(() => new Date(start.getFullYear(), start.getMonth(), 1));
   const router = useRouter();
+  const { triggerScrollToNow } = useNowContext();
   const today = new Date();
   const cells = buildMonthGrid(cursor);
 
@@ -41,60 +43,82 @@ export default function CalendarSidebarLeft({
     router.push(`/?view=${view === "month" ? "day" : view}&start=${formatYMD(d)}`);
   };
 
+  // Same behavior the button used to have on the calendar toolbar: if
+  // you're already looking at today, just scroll the hour grid to the
+  // current time instead of a no-op navigation to the URL you're on.
+  const goToNow = () => {
+    if (startYMD === formatYMD(today)) {
+      triggerScrollToNow();
+    } else {
+      router.push(`/?view=${view}&start=${formatYMD(today)}`);
+    }
+  };
+
   return (
-    <Card padding="sm">
-      <div className="flex items-center justify-between">
+    <div className="mt-2 flex flex-col gap-2">
+      <Card padding="sm">
+        <div className="flex items-center justify-between">
+          <button
+            type="button"
+            onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))}
+            aria-label="Previous month"
+            className="flex h-6 w-6 items-center justify-center rounded-md text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-700"
+          >
+            <ChevronLeftIcon className="h-3.5 w-3.5" />
+          </button>
+          <span className="text-sm font-medium">
+            {cursor.toLocaleDateString(undefined, { month: "long", year: "numeric" })}
+          </span>
+          <button
+            type="button"
+            onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))}
+            aria-label="Next month"
+            className="flex h-6 w-6 items-center justify-center rounded-md text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-700"
+          >
+            <ChevronRightIcon className="h-3.5 w-3.5" />
+          </button>
+        </div>
+        <div className="mt-2 grid grid-cols-7 gap-y-1 text-center text-[10px] text-zinc-400">
+          {WEEKDAY_INITIALS.map((w) => (
+            <span key={w}>{w}</span>
+          ))}
+        </div>
+        <div className="grid grid-cols-7 gap-y-1 text-center text-xs">
+          {cells.map((d, i) => {
+            if (!d) return <span key={i} />;
+            const isToday =
+              d.getFullYear() === today.getFullYear() &&
+              d.getMonth() === today.getMonth() &&
+              d.getDate() === today.getDate();
+            const isSelected = formatYMD(d) === startYMD;
+            return (
+              <button
+                key={i}
+                type="button"
+                onClick={() => goToDay(d)}
+                className={
+                  isSelected
+                    ? "mx-auto flex h-6 w-6 items-center justify-center rounded-full bg-indigo-600 font-semibold text-white"
+                    : isToday
+                      ? "mx-auto flex h-6 w-6 items-center justify-center rounded-full border border-indigo-500 text-indigo-600 dark:text-indigo-400"
+                      : "mx-auto flex h-6 w-6 items-center justify-center rounded-full text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                }
+              >
+                {d.getDate()}
+              </button>
+            );
+          })}
+        </div>
+      </Card>
+      {view !== "month" && (
         <button
           type="button"
-          onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))}
-          aria-label="Previous month"
-          className="flex h-6 w-6 items-center justify-center rounded-md text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-700"
+          onClick={goToNow}
+          className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 shadow-sm transition-colors hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
         >
-          <ChevronLeftIcon className="h-3.5 w-3.5" />
+          Now
         </button>
-        <span className="text-sm font-medium">
-          {cursor.toLocaleDateString(undefined, { month: "long", year: "numeric" })}
-        </span>
-        <button
-          type="button"
-          onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))}
-          aria-label="Next month"
-          className="flex h-6 w-6 items-center justify-center rounded-md text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-700"
-        >
-          <ChevronRightIcon className="h-3.5 w-3.5" />
-        </button>
-      </div>
-      <div className="mt-2 grid grid-cols-7 gap-y-1 text-center text-[10px] text-zinc-400">
-        {WEEKDAY_INITIALS.map((w) => (
-          <span key={w}>{w}</span>
-        ))}
-      </div>
-      <div className="grid grid-cols-7 gap-y-1 text-center text-xs">
-        {cells.map((d, i) => {
-          if (!d) return <span key={i} />;
-          const isToday =
-            d.getFullYear() === today.getFullYear() &&
-            d.getMonth() === today.getMonth() &&
-            d.getDate() === today.getDate();
-          const isSelected = formatYMD(d) === startYMD;
-          return (
-            <button
-              key={i}
-              type="button"
-              onClick={() => goToDay(d)}
-              className={
-                isSelected
-                  ? "mx-auto flex h-6 w-6 items-center justify-center rounded-full bg-indigo-600 font-semibold text-white"
-                  : isToday
-                    ? "mx-auto flex h-6 w-6 items-center justify-center rounded-full border border-indigo-500 text-indigo-600 dark:text-indigo-400"
-                    : "mx-auto flex h-6 w-6 items-center justify-center rounded-full text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700"
-              }
-            >
-              {d.getDate()}
-            </button>
-          );
-        })}
-      </div>
-    </Card>
+      )}
+    </div>
   );
 }

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { dateKey, findBestSlot, findEarliestSlot, splitIntoChunks } from "./scheduler";
+import { dateKey, excludeDaysWindowFn, findBestSlot, findEarliestSlot, splitIntoChunks } from "./scheduler";
 
 // Monday 2026-08-17 09:00 local
 const from = new Date(2026, 7, 17, 9, 0);
@@ -182,6 +182,16 @@ const horizon = new Date(2026, 7, 31, 0, 0);
 
   // remainder goes to the last chunk, not dropped
   assert.deepEqual(splitIntoChunks(200, 60), [60, 60, 60, 20]);
+}
+
+// excludeDaysWindowFn — booking link "no-meeting day" toggle
+{
+  const monday = new Date(2026, 7, 17); // a Monday
+  const saturday = new Date(2026, 7, 22);
+  const noWeekends = excludeDaysWindowFn("SA,SU");
+  assert.ok(noWeekends(monday) !== null, "weekday stays open");
+  assert.equal(noWeekends(saturday), null, "excluded day closed");
+  assert.ok(excludeDaysWindowFn(null)(saturday) === null, "null excludeDays falls back to the base window (weekday-only default)");
 }
 
 console.log("scheduler.test.ts: all checks passed");
