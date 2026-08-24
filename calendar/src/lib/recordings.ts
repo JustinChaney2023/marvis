@@ -1,5 +1,6 @@
 import { unlink } from "node:fs/promises";
 import path from "node:path";
+import { resolveUploadPath } from "@/lib/uploads";
 import { z } from "zod";
 import type { RecordingStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -489,7 +490,8 @@ export async function deleteRecording(userId: string, id: string): Promise<boole
   await prisma.recording.delete({ where: { id } });
   // Best-effort, same as deleteTaskAttachmentAction: a missing file
   // shouldn't block removing the row the user asked to delete.
-  await unlink(path.join(process.cwd(), "public", "uploads", recording.audioPath)).catch(() => {});
+  const absolute = resolveUploadPath(recording.audioPath);
+  if (absolute) await unlink(absolute).catch(() => {});
   return true;
 }
 

@@ -5,6 +5,7 @@ import { Readable } from "node:stream";
 import type { ReadableStream as NodeReadableStream } from "node:stream/web";
 import path from "node:path";
 import { requireUser } from "@/lib/auth";
+import { UPLOADS_ROOT } from "@/lib/uploads";
 import { audioExtensionFor } from "@/lib/recordings";
 
 // An hour of Opus is ~30MB, but an uncompressed WAV of the same lecture
@@ -18,7 +19,10 @@ const MAX_BYTES = 300 * 1024 * 1024;
  * route because the size cap is an order of magnitude larger and the
  * accepted types are disjoint. Same storage discipline as every other
  * uploader here: random server-generated name under
- * public/uploads/<userId>/, client filename never touches the path.
+ * var/uploads/<userId>/, client filename never touches the path, read
+ * back only through the authenticated /uploads/[...path] route —
+ * recordings can carry other people's voices, so URL-only access was
+ * the weakest link this move closes.
  */
 export async function POST(request: NextRequest) {
   const user = await requireUser();
@@ -36,7 +40,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "That audio format isn't supported." }, { status: 400 });
   }
 
-  const dir = path.join(process.cwd(), "public", "uploads", user.id);
+  const dir = path.join(UPLOADS_ROOT, user.id);
   await mkdir(dir, { recursive: true });
   const storedName = `${randomUUID()}.${ext}`;
   // Streamed rather than Buffer.from(await file.arrayBuffer()) like the

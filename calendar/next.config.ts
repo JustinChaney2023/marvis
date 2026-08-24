@@ -50,6 +50,15 @@ const nextConfig: NextConfig = {
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },
+  // Server Actions cap request bodies at 1MB by default, but the syllabus
+  // importer accepts files up to MAX_CONVERT_BYTES (25MB) and hands them
+  // to a server action. Those two limits contradicted each other, so any
+  // real .docx/.pdf syllabus failed with "Body exceeded 1 MB limit"
+  // before its own size check ever ran. Kept in step with
+  // MAX_CONVERT_BYTES in src/lib/documentConvert.ts.
+  experimental: {
+    serverActions: { bodySizeLimit: "25mb" },
+  },
   // Lets dev-mode HMR work when accessing the dev server over Tailscale
   // instead of localhost — Next blocks cross-origin dev requests by
   // default. No effect on a production build.

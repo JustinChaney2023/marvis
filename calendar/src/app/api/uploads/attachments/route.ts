@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { requireUser } from "@/lib/auth";
+import { UPLOADS_ROOT } from "@/lib/uploads";
 
 // Documents run bigger than a note image — 20MB covers a typical PDF/
 // slide deck without turning this into a video host.
@@ -28,9 +29,9 @@ const ALLOWED_TYPES: Record<string, string> = {
 
 /**
  * Task attachment upload — same convention as ../route.ts (task-notes
- * images): random on-disk filename under public/uploads/<userId>/, the
- * client-supplied name is never trusted for the path. Public/ is
- * unauthenticated static hosting, same accepted tradeoff as that route.
+ * images): random on-disk filename under var/uploads/<userId>/, the
+ * client-supplied name is never trusted for the path. Read back through
+ * the authenticated /uploads/[...path] route, never static hosting.
  */
 export async function POST(request: NextRequest) {
   const user = await requireUser();
@@ -48,7 +49,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "That file type isn't supported." }, { status: 400 });
   }
 
-  const dir = path.join(process.cwd(), "public", "uploads", user.id);
+  const dir = path.join(UPLOADS_ROOT, user.id);
   await mkdir(dir, { recursive: true });
   const storedName = `${randomUUID()}.${ext}`;
   const bytes = Buffer.from(await file.arrayBuffer());

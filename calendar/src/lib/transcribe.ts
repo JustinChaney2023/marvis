@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { resolveUploadPath } from "@/lib/uploads";
 import { assertNotLinkLocal } from "@/lib/aiClient";
 
 // Same {url, model, apiKey} shape as LocalAiConfig, for the same reason:
@@ -113,7 +114,8 @@ export async function transcribeAudio(
   try {
     await assertNotLinkLocal(config.url);
 
-    const absolute = path.join(process.cwd(), "public", "uploads", storedPath);
+    const absolute = resolveUploadPath(storedPath);
+    if (!absolute) return { ok: false, error: "Invalid audio path." };
     const bytes = await readFile(absolute);
     const buildForm = (withPrompt: boolean) => {
       const form = new FormData();

@@ -61,6 +61,7 @@ import { randomBytes } from "node:crypto";
 import { isEmailConfigured, sendEmail } from "@/lib/email";
 import { unlink } from "node:fs/promises";
 import path from "node:path";
+import { resolveUploadPath } from "@/lib/uploads";
 
 // Widest of REMINDER_MINUTES_PRESETS (EventModal.tsx) plus a little
 // slack, so the window is never narrower than the longest custom
@@ -418,7 +419,8 @@ export async function deleteTaskAttachmentAction(attachmentId: string) {
   await prisma.taskAttachment.delete({ where: { id: attachmentId } });
   // Best-effort — a missing file on disk shouldn't block removing the
   // now-orphaned DB row the user already asked to delete.
-  await unlink(path.join(process.cwd(), "public", "uploads", attachment.storedPath)).catch(() => {});
+  const absolute = resolveUploadPath(attachment.storedPath);
+  if (absolute) await unlink(absolute).catch(() => {});
   revalidatePath("/tasks");
 }
 
@@ -584,7 +586,8 @@ export async function deleteProjectAttachmentAction(attachmentId: string) {
   if (!attachment) return;
 
   await prisma.projectAttachment.delete({ where: { id: attachmentId } });
-  await unlink(path.join(process.cwd(), "public", "uploads", attachment.storedPath)).catch(() => {});
+  const absolute = resolveUploadPath(attachment.storedPath);
+  if (absolute) await unlink(absolute).catch(() => {});
   revalidatePath(`/projects/${attachment.projectId}`);
 }
 
@@ -844,7 +847,10 @@ export async function deleteTaskAction(taskId: string) {
   });
   await Promise.all(
     attachments.map((a) =>
-      unlink(path.join(process.cwd(), "public", "uploads", a.storedPath)).catch(() => {}),
+      (async () => {
+        const absolute = resolveUploadPath(a.storedPath);
+        if (absolute) await unlink(absolute).catch(() => {});
+      })(),
     ),
   );
 

@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { requireUser } from "@/lib/auth";
+import { UPLOADS_ROOT } from "@/lib/uploads";
 
 const MAX_BYTES = 5 * 1024 * 1024; // 5MB — plenty for a note image, not a video host
 // svg deliberately excluded — an SVG can carry an embedded <script>, one
@@ -16,13 +17,14 @@ const ALLOWED_TYPES: Record<string, string> = {
 };
 
 /**
- * Task-notes image upload. Files land under public/uploads/<userId>/
- * with a random name (the original filename is never trusted — no
- * path-traversal surface, no extension sniffing) and are served back as
- * plain static assets. That means the URL, once known, isn't itself
- * gated by a login check (public/ is unauthenticated static hosting by
- * nature) — acceptable for this app's "you + friends you trust" model,
- * same tradeoff already accepted for the booking page's public surface.
+ * Task-notes image upload. Files land under var/uploads/<userId>/ with
+ * a random name (the original filename is never trusted — no
+ * path-traversal surface, no extension sniffing) and are read back
+ * through the authenticated /uploads/[...path] route.
+ *
+ * Deliberately NOT public/: anything there is unauthenticated static
+ * hosting, so every uploaded file used to be fetchable by URL with no
+ * session at all. See src/lib/uploads.ts for the full reasoning.
  */
 export async function POST(request: NextRequest) {
   const user = await requireUser();
@@ -43,7 +45,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const dir = path.join(process.cwd(), "public", "uploads", user.id);
+  const dir = path.join(UPLOADS_ROOT, user.id);
   await mkdir(dir, { recursive: true });
   const filename = `${randomUUID()}.${ext}`;
   const bytes = Buffer.from(await file.arrayBuffer());
