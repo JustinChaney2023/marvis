@@ -1,0 +1,60 @@
+# Local Whisper server for Marvis — speaches (formerly faster-whisper-server),
+# which exposes OpenAI-compatible /v1/audio/transcriptions and /v1/models.
+# Setup guide: ../docs/whisper-setup.md
+#
+# Versions are pinned on purpose. `:latest-cuda` silently changing under a
+# working setup is exactly the failure this file exists to prevent — bump
+# SPEACHES_VERSION when you actually want to move.
+#
+# Usage: run ./setup.sh once (writes .env, picks gpu/cpu + model), then:
+#   docker compose up -d
+# Or without setup.sh:
+#   docker compose --profile gpu up -d
+#   docker compose --profile cpu up -d
+
+name: marvis-whisper
+
+x-speaches-common: &speaches-common
+  restart: unless-stopped
+  ports:
+    # Binds 0.0.0.0 so another machine (e.g. the laptop running Marvis) can
+    # reach it over Tailscale. That also exposes it to every other network
+    # this host is on — pair it with a firewall rule, see the security note
+    # in ../docs/whisper-setup.md.
+    - "${WHISPER_PORT:-8000}:8000"
+  volumes:
+    # Model cache. Without this every restart re-downloads multiple GB.
+    - hf-hub-cache:/home/ubuntu/.cache/huggingface/hub
+  environment:
+    # Fetched at startup so the first real lecture doesn't block on a cold
+    # multi-GB download. Models download on demand anyway if this is unset.
+    PRELOAD_MODELS: '["${WHISPER_MODEL:-Systran/faster-whisper-small}"]'
+    WHISPER__COMPUTE_TYPE: "${WHISPER_COMPUTE_TYPE:-int8}"
+    # Default is 300s, which unloads the model between recordings and makes
+    # every transcription pay the load cost again. -1 keeps it resident.
+    STT_MODEL_TTL: "${STT_MODEL_TTL:--1}"
+    # VAD filtering is already on by default (_UNSTABLE_VAD_FILTER), so it
+    # is deliberately not set here.
+
+services:
+  speaches-gpu:
+    <<: *speaches-common
+    profiles: ["gpu"]
+    image: ghcr.io/speaches-ai/speaches:${SPEACHES_VERSION:-0.8.3}-cuda
+    # Requires the NVIDIA Container Toolkit on the host, not just a driver.
+    # This is the single most common reason a GPU setup falls back to CPU.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  speaches-cpu:
+    <<: *speaches-common
+    profiles: ["cpu"]
+    image: ghcr.io/speaches-ai/speaches:${SPEACHES_VERSION:-0.8.3}-cpu
+
+volumes:
+  hf-hub-cache:
