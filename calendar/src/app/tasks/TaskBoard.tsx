@@ -40,9 +40,9 @@ export default function TaskBoard({
     <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
       {COLUMNS.map((status) => (
         <div key={status} className="min-w-0">
-          <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold text-zinc-500 dark:text-zinc-400">
+          <h2 className="mb-2 flex items-center gap-2 font-mono text-[11px] tracking-wide text-muted uppercase">
             {STATUS_LABEL[status]}
-            <span className="rounded-full bg-zinc-100 px-1.5 py-0.5 text-xs font-medium text-zinc-500 dark:bg-zinc-700 dark:text-zinc-400">
+            <span className="rounded-full bg-rule-soft px-1.5 py-0.5 text-xs font-medium text-muted">
               {byStatus[status].length}
             </span>
           </h2>
@@ -60,7 +60,7 @@ export default function TaskBoard({
               />
             ))}
             {byStatus[status].length === 0 && (
-              <li className="rounded-xl border border-dashed border-zinc-200 py-6 text-center text-xs text-zinc-400 dark:border-zinc-700">
+              <li className="rounded-xl border border-dashed border-rule py-6 text-center text-xs text-muted">
                 Nothing here
               </li>
             )}

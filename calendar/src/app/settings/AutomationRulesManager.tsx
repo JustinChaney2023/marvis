@@ -46,20 +46,20 @@ export default function AutomationRulesManager({
         return (
           <div
             key={rule.id}
-            className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-zinc-200 p-3 text-sm dark:border-zinc-600"
+            className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-rule p-3 text-sm"
           >
-            <p className="min-w-0">
+            <p className="min-w-0 text-ink-2">
               When a task becomes{" "}
-              <span className="font-medium">{STATUS_LABEL[rule.triggerStatus]}</span>
-              {projectName && <> in <span className="font-medium">{projectName}</span></>}
+              <span className="font-medium text-ink">{STATUS_LABEL[rule.triggerStatus]}</span>
+              {projectName && <> in <span className="font-medium text-ink">{projectName}</span></>}
               {" → "}
-              <span className="font-medium">{ACTION_LABEL[rule.action]}</span>
+              <span className="font-medium text-ink">{ACTION_LABEL[rule.action]}</span>
             </p>
             <div className="flex items-center gap-2">
               <form action={toggleAutomationRuleAction.bind(null, rule.id, !rule.enabled)}>
                 <button
                   type="submit"
-                  className="rounded-full px-2.5 py-1 text-xs text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-700 dark:hover:text-zinc-100"
+                  className="rounded-full px-2.5 py-1 text-xs text-muted transition-colors hover:bg-rule-soft hover:text-ink"
                 >
                   {rule.enabled ? "Disable" : "Enable"}
                 </button>
@@ -67,7 +67,7 @@ export default function AutomationRulesManager({
               <form action={deleteAutomationRuleAction.bind(null, rule.id)}>
                 <button
                   type="submit"
-                  className="rounded-full px-2.5 py-1 text-xs text-zinc-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/40 dark:hover:text-red-400"
+                  className="rounded-full px-2.5 py-1 text-xs text-muted transition-colors hover:bg-accent-wash hover:text-accent"
                 >
                   Delete
                 </button>
@@ -77,14 +77,14 @@ export default function AutomationRulesManager({
         );
       })}
       {rules.length === 0 && (
-        <p className="text-sm text-zinc-400">No automation rules yet.</p>
+        <p className="text-sm text-muted">No automation rules yet.</p>
       )}
 
       {!adding ? (
         <button
           type="button"
           onClick={() => setAdding(true)}
-          className="self-start text-sm text-indigo-600 hover:underline dark:text-indigo-400"
+          className="self-start text-sm text-accent hover:underline"
         >
           + Add rule
         </button>
@@ -94,14 +94,14 @@ export default function AutomationRulesManager({
             await createAutomationRuleAction(formData);
             setAdding(false);
           }}
-          className="flex flex-wrap items-end gap-2 rounded-lg border border-dashed border-zinc-300 p-3 dark:border-zinc-600"
+          className="flex flex-wrap items-end gap-2 rounded-lg border border-dashed border-rule p-3"
         >
-          <label className="flex flex-col gap-1 text-xs text-zinc-500">
+          <label className="flex flex-col gap-1 text-xs text-muted">
             When status becomes
             <select
               name="triggerStatus"
               defaultValue="DONE"
-              className="rounded-lg border border-zinc-200 bg-white px-2 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-800"
+              className="rounded-lg border border-rule bg-surface px-2 py-1.5 text-sm text-ink"
             >
               {Object.entries(STATUS_LABEL).map(([value, label]) => (
                 <option key={value} value={value}>
@@ -110,12 +110,12 @@ export default function AutomationRulesManager({
               ))}
             </select>
           </label>
-          <label className="flex flex-col gap-1 text-xs text-zinc-500">
+          <label className="flex flex-col gap-1 text-xs text-muted">
             In project (optional)
             <select
               name="projectId"
               defaultValue=""
-              className="rounded-lg border border-zinc-200 bg-white px-2 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-800"
+              className="rounded-lg border border-rule bg-surface px-2 py-1.5 text-sm text-ink"
             >
               <option value="">Any project</option>
               {projects.map((p) => (
@@ -125,12 +125,12 @@ export default function AutomationRulesManager({
               ))}
             </select>
           </label>
-          <label className="flex flex-col gap-1 text-xs text-zinc-500">
+          <label className="flex flex-col gap-1 text-xs text-muted">
             Then
             <select
               name="action"
               defaultValue="NOTIFY"
-              className="rounded-lg border border-zinc-200 bg-white px-2 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-800"
+              className="rounded-lg border border-rule bg-surface px-2 py-1.5 text-sm text-ink"
             >
               {Object.entries(ACTION_LABEL).map(([value, label]) => (
                 <option key={value} value={value}>

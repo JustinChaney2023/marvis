@@ -49,13 +49,17 @@ import { scheduleHabitsForWeek, rescheduleConflictedHabits } from "@/lib/habits"
 import { formatYMD } from "@/lib/calendar-dates";
 import { syncCalendarSubscription } from "@/lib/calendarSubscriptions";
 import {
+  answerPostHocQuestion,
   createRecording,
   deleteRecording,
   listRecordings,
   getRecording,
   parseActionItems,
+  parseQuestions,
   retryRecording,
+  summarizeStepOut,
   type RecordingActionItem,
+  type StepOutSummaryResult,
 } from "@/lib/recordings";
 import { randomBytes } from "node:crypto";
 import { isEmailConfigured, sendEmail } from "@/lib/email";
@@ -435,6 +439,7 @@ export async function createRecordingAction(input: {
   sizeBytes: number;
   eventId?: string | null;
   projectId?: string | null;
+  questions?: { atSec: number; text: string }[];
 }) {
   const user = await requireUser();
   const result = await createRecording(user.id, input);
@@ -471,6 +476,7 @@ export async function getRecordingAction(id: string) {
     transcript: recording.transcript,
     summary: recording.summary,
     actionItems: parseActionItems(recording.actionItems),
+    questions: parseQuestions(recording.questions),
     eventId: recording.eventId,
     projectId: recording.projectId,
     createdAt: recording.createdAt,
@@ -488,6 +494,51 @@ export async function retryRecordingAction(id: string) {
   const result = await retryRecording(user.id, id);
   revalidatePath("/recordings");
   return result;
+}
+
+/** The step-out button's on-the-spot "what did I miss" note — see summarizeStepOut. */
+export async function summarizeStepOutAction(roughCaption: string): Promise<StepOutSummaryResult> {
+  const user = await requireUser();
+  const { localAi, anthropicApiKey } = aiConfigFromSettings(await getAppSettings(user.id));
+  return summarizeStepOut(roughCaption, localAi, anthropicApiKey);
+}
+
+/**
+ * Asks a question about a DONE recording from the review screen
+ * (RecordingsList.tsx) — unlike a live question typed in during capture,
+ * this is answered immediately against the saved transcript and appended
+ * to the same questions list, marked postHoc so the UI can render it
+ * without a misleading timestamp.
+ */
+export async function askRecordingQuestionAction(
+  recordingId: string,
+  questionText: string,
+): Promise<{ ok: true; answer: string } | { ok: false; error: string }> {
+  const user = await requireUser();
+  const question = questionText.trim();
+  if (!question) return { ok: false, error: "Question can't be empty." };
+
+  const recording = await getRecording(user.id, recordingId);
+  if (!recording) return { ok: false, error: "Recording not found." };
+  if (!recording.transcript) {
+    return { ok: false, error: "This recording isn't finished processing yet." };
+  }
+
+  const settings = await getAppSettings(user.id);
+  const { localAi, anthropicApiKey } = aiConfigFromSettings(settings);
+  const answer = await answerPostHocQuestion(question, recording.transcript, localAi, anthropicApiKey);
+
+  const updated = [
+    ...parseQuestions(recording.questions),
+    { atSec: recording.durationSec ?? 0, text: question, answer, postHoc: true },
+  ];
+  await prisma.recording.update({
+    where: { id: recordingId },
+    data: { questions: JSON.stringify(updated) },
+  });
+
+  revalidatePath("/recordings");
+  return { ok: true, answer };
 }
 
 /**

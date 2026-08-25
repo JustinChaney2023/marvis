@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getAvailableBookingSlots } from "@/lib/booking";
 import BookingClient, { type BookingDay } from "./BookingClient";
+import Card from "../../ui/Card";
 
 export default async function PublicBookingPage(
   props: PageProps<"/book/[slug]">,
@@ -27,12 +28,12 @@ export default async function PublicBookingPage(
   }));
 
   return (
-    <main className="mx-auto w-full max-w-lg flex-1 px-6 py-12">
-      <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
-        <h1 className="text-2xl font-bold tracking-tight">
+    <main className="mx-auto w-full max-w-lg flex-1 bg-paper px-6 py-12">
+      <Card padding="lg">
+        <h1 className="font-serif text-3xl text-ink">
           {link.title}
         </h1>
-        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+        <p className="mt-1 text-[13px] text-ink-2">
           Pick a time ({link.durationMin} min) — shown in your
           local time zone
         </p>
@@ -43,7 +44,7 @@ export default async function PublicBookingPage(
           durationMinutes={link.durationMin}
           availability={availability}
         />
-      </div>
+      </Card>
     </main>
   );
 }

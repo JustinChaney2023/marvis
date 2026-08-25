@@ -41,17 +41,17 @@ export default function ApiTokensManager({ tokens }: { tokens: ApiToken[] }) {
   return (
     <div className="flex flex-col gap-3">
       {revealedToken && (
-        <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm dark:border-amber-700 dark:bg-amber-950/30">
-          <p className="font-medium text-amber-800 dark:text-amber-300">
+        <div className="rounded-lg border border-accent bg-accent-wash p-3 text-sm">
+          <p className="font-medium text-accent">
             Copy this now — you won&apos;t be able to see it again.
           </p>
-          <code className="mt-1.5 block overflow-x-auto rounded bg-white px-2 py-1.5 text-xs dark:bg-zinc-900">
+          <code className="mt-1.5 block overflow-x-auto rounded bg-surface px-2 py-1.5 text-xs text-ink">
             {revealedToken}
           </code>
           <button
             type="button"
             onClick={() => setRevealedToken(null)}
-            className="mt-2 text-xs text-amber-700 underline dark:text-amber-400"
+            className="mt-2 text-xs text-accent underline"
           >
             Done, dismiss
           </button>
@@ -63,11 +63,11 @@ export default function ApiTokensManager({ tokens }: { tokens: ApiToken[] }) {
           {tokens.map((t) => (
             <li
               key={t.id}
-              className="flex items-center justify-between gap-2 rounded-lg border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-600"
+              className="flex items-center justify-between gap-2 rounded-lg border border-rule px-3 py-2 text-sm"
             >
               <div className="min-w-0">
-                <p className="truncate font-medium">{t.name}</p>
-                <p className="text-xs text-zinc-400">
+                <p className="truncate font-medium text-ink">{t.name}</p>
+                <p className="text-xs text-muted font-mono">
                   Created {t.createdAt.toLocaleDateString()}
                   {t.lastUsedAt ? ` · last used ${t.lastUsedAt.toLocaleDateString()}` : " · never used"}
                   {t.expiresAt ? ` · expires ${t.expiresAt.toLocaleDateString()}` : ""}
@@ -90,12 +90,12 @@ export default function ApiTokensManager({ tokens }: { tokens: ApiToken[] }) {
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="e.g. Obsidian - laptop"
-          className="flex-1 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800"
+          className="flex-1 rounded-lg border border-rule bg-surface px-3 py-2 text-sm text-ink"
         />
         <select
           value={expiryDays}
           onChange={(e) => setExpiryDays(e.target.value)}
-          className="rounded-lg border border-zinc-200 bg-white px-2 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800"
+          className="rounded-lg border border-rule bg-surface px-2 py-2 text-sm text-ink"
         >
           {EXPIRY_OPTIONS.map((o) => (
             <option key={o.label} value={o.days ?? ""}>

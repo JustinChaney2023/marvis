@@ -59,7 +59,7 @@ export default function QuickCreatePopup({ start, end, onClose, onCreatedEvent }
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
+      className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center bg-scrim p-4"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -68,13 +68,13 @@ export default function QuickCreatePopup({ start, end, onClose, onCreatedEvent }
     >
       <form
         onSubmit={handleSubmit}
-        className="w-full max-w-xs rounded-2xl border border-zinc-200 bg-white p-4 shadow-2xl ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800"
+        className="modal-panel w-full max-w-xs rounded-xl border border-rule bg-surface p-4"
       >
-        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+        <p className="font-mono text-xs text-muted">
           {formatTime(start)} – {formatTime(end)}
         </p>
 
-        <div className="mt-2 inline-flex rounded-lg bg-zinc-100 p-1 dark:bg-zinc-900/40">
+        <div className="mt-2 inline-flex rounded-lg bg-rule-soft p-1">
           {(["event", "task"] as const).map((k) => (
             <button
               key={k}
@@ -83,8 +83,8 @@ export default function QuickCreatePopup({ start, end, onClose, onCreatedEvent }
               onClick={() => setKind(k)}
               className={
                 kind === k
-                  ? "rounded-md bg-white px-3 py-1 text-xs font-medium capitalize text-zinc-900 shadow-sm dark:bg-zinc-700 dark:text-zinc-100"
-                  : "rounded-md px-3 py-1 text-xs capitalize text-zinc-500 dark:text-zinc-400"
+                  ? "rounded-md bg-surface px-3 py-1 text-xs font-medium capitalize text-ink"
+                  : "rounded-md px-3 py-1 text-xs capitalize text-muted"
               }
             >
               {k}
@@ -97,9 +97,9 @@ export default function QuickCreatePopup({ start, end, onClose, onCreatedEvent }
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder={kind === "event" ? "Event name" : "Task name"}
-          className="mt-2 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800"
+          className="mt-2 w-full rounded-lg border border-rule bg-paper px-3 py-2 text-sm transition-colors focus:border-accent focus:outline-none"
         />
-        <p className="mt-1 text-[11px] text-zinc-400">
+        <p className="mt-1 text-[11px] text-muted">
           Placed here and locked — drag it again if it needs moving, or unlock it later to let
           auto-scheduling manage it.
         </p>

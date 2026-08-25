@@ -73,8 +73,8 @@ function navTargets(view: CalendarView, start: Date): {
 
 function linkClass(active: boolean): string {
   return active
-    ? "rounded-full bg-white px-3 py-1.5 text-sm font-medium text-zinc-900 shadow-sm transition-colors dark:bg-zinc-700 dark:text-zinc-100"
-    : "rounded-full px-3 py-1.5 text-sm text-zinc-500 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100";
+    ? "rounded-full bg-ink px-3 py-1.5 text-sm font-medium text-paper transition-colors"
+    : "rounded-full px-3 py-1.5 text-sm text-ink-2 transition-colors hover:text-ink";
 }
 
 export default async function Page(props: PageProps<"/">) {
@@ -287,12 +287,12 @@ export default async function Page(props: PageProps<"/">) {
   }
 
   return (
-    <main className="mx-auto w-full max-w-[96rem] flex-1 px-6 pb-12 pt-4">
+    <main className="mx-auto flex h-full min-h-0 w-full max-w-[96rem] flex-col px-6 pb-6 pt-4 print:h-auto">
       <header className="flex flex-col gap-3">
         <p className="hidden text-lg font-semibold print:block">{nav.label}</p>
         <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
           <nav className="flex flex-wrap items-center gap-1">
-            <div className="inline-flex items-center gap-1 rounded-full bg-zinc-100 p-1 dark:bg-zinc-800">
+            <div className="inline-flex items-center gap-1 rounded-full border border-rule bg-paper p-1">
               <Link
                 href={`/?view=day&start=${switchTargets.day}`}
                 className={linkClass(view === "day")}
@@ -312,27 +312,27 @@ export default async function Page(props: PageProps<"/">) {
                 Month
               </Link>
             </div>
-            <span className="mx-1 h-5 w-px bg-zinc-200 dark:bg-zinc-700" />
+            <span className="mx-1 h-5 w-px bg-rule" />
             <Link
               href={`/?view=${view}&start=${nav.prev}`}
-              className="rounded-full px-3 py-1.5 text-sm text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-700 dark:hover:text-zinc-100"
+              className="rounded-full px-3 py-1.5 text-sm text-ink-2 transition-colors hover:bg-rule-soft hover:text-ink"
             >
               ← Prev
             </Link>
             <Link
               href={`/?view=${view}&start=${nav.next}`}
-              className="rounded-full px-3 py-1.5 text-sm text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-700 dark:hover:text-zinc-100"
+              className="rounded-full px-3 py-1.5 text-sm text-ink-2 transition-colors hover:bg-rule-soft hover:text-ink"
             >
               Next →
             </Link>
           </nav>
           <div className="flex items-center gap-1">
             <CalendarSearch view={view} />
-            <p className="text-sm text-zinc-500">{nav.label}</p>
+            <p className="font-serif text-lg text-ink">{nav.label}</p>
             <MiniMonthPicker view={view} startYMD={startYMD} />
           </div>
         </div>
-        <p className="text-xs text-zinc-400 print:hidden">
+        <p className="font-mono text-xs text-muted print:hidden">
           Shortcuts: <kbd>j</kbd>/<kbd>k</kbd> prev/next, <kbd>d</kbd>/
           <kbd>w</kbd>/<kbd>m</kbd> view, <kbd>t</kbd> today, <kbd>?</kbd> all
           shortcuts
@@ -340,12 +340,21 @@ export default async function Page(props: PageProps<"/">) {
       </header>
 
       <NowProvider>
-        <div className="mt-3 grid grid-cols-1 gap-6 print:block lg:grid-cols-[13rem_1fr_15rem]">
-          <aside className="hidden print:hidden lg:block">
+        <div className="mt-3 grid min-h-0 flex-1 grid-cols-1 gap-6 print:block lg:grid-cols-[13rem_1fr_15rem]">
+          {/* Every column here needs `overflow` set (not just `visible`)
+              or its natural content height becomes an input to the grid
+              row's own auto-sizing — one tall column would stretch the
+              whole row, and with it the page, right back to the
+              full-page scroll this layout exists to avoid. `no-scrollbar`
+              hides the resulting scroll track everywhere except the
+              calendar's own .calendar-scroll (that one's a real,
+              deliberately visible/styled scroll surface — see
+              CalendarClient — not just structural overflow control). */}
+          <aside className="no-scrollbar hidden overflow-y-auto print:hidden lg:block">
             <CalendarSidebarLeft view={view} startYMD={startYMD} />
           </aside>
 
-          <div className="min-w-0">
+          <div className="no-scrollbar min-w-0 overflow-y-auto">
             <CalendarClient
               view={view}
               startYMD={startYMD}
@@ -357,7 +366,7 @@ export default async function Page(props: PageProps<"/">) {
             />
           </div>
 
-          <aside className="hidden print:hidden lg:block">
+          <aside className="no-scrollbar hidden overflow-y-auto print:hidden lg:block">
             <CalendarSidebarRight
               tasks={attentionTasks}
               upcomingDays={upcomingDays}

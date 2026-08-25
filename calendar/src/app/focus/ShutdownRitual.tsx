@@ -36,31 +36,26 @@ export default function ShutdownRitual() {
 
   if (!summary) {
     return (
-      <button
-        type="button"
-        onClick={open}
-        disabled={isLoading}
-        className="mt-6 self-start rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 shadow-sm ring-1 ring-black/5 transition-all hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700/60"
-      >
+      <Button type="button" variant="secondary" onClick={open} pending={isLoading} className="mt-6 self-start">
         {isLoading ? "Loading…" : "Shut down for the day"}
-      </button>
+      </Button>
     );
   }
 
   return (
-    <div className="mt-6 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
-      <h2 className="text-sm font-semibold">Today, wrapped</h2>
+    <div className="mt-6 rounded-xl border border-rule bg-surface p-4">
+      <h2 className="font-serif text-lg text-ink">Today, wrapped</h2>
 
       <div className="mt-3">
-        <p className="text-xs font-medium text-zinc-500">
+        <p className="font-mono text-[10px] uppercase tracking-wide text-muted">
           Completed ({summary.completedToday.length})
         </p>
         {summary.completedToday.length === 0 ? (
-          <p className="mt-1 text-xs text-zinc-400">Nothing marked done today.</p>
+          <p className="mt-1 text-xs text-muted">Nothing marked done today.</p>
         ) : (
           <ul className="mt-1 flex flex-col gap-1">
             {summary.completedToday.map((t) => (
-              <li key={t.id} className="text-sm text-zinc-700 line-through dark:text-zinc-300">
+              <li key={t.id} className="text-sm text-ink-2 line-through">
                 {t.title}
               </li>
             ))}
@@ -69,20 +64,20 @@ export default function ShutdownRitual() {
       </div>
 
       <div className="mt-3">
-        <p className="text-xs font-medium text-zinc-500">
+        <p className="font-mono text-[10px] uppercase tracking-wide text-muted">
           Still open ({summary.stillOpen.length})
         </p>
         {summary.stillOpen.length === 0 ? (
-          <p className="mt-1 text-xs text-zinc-400">Nothing left over — clean slate. 🎉</p>
+          <p className="mt-1 text-xs text-muted">Nothing left over — clean slate.</p>
         ) : pushed ? (
-          <p className="mt-1 text-xs text-green-600 dark:text-green-400">
+          <p className="mt-1 text-xs text-accent">
             Pushed to tomorrow.
           </p>
         ) : (
           <>
             <ul className="mt-1 flex flex-col gap-1">
               {summary.stillOpen.map((t) => (
-                <li key={t.id} className="text-sm text-zinc-700 dark:text-zinc-300">
+                <li key={t.id} className="text-sm text-ink-2">
                   {t.title}
                 </li>
               ))}

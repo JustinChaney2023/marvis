@@ -14,22 +14,21 @@ import type { ButtonHTMLAttributes } from "react";
 type Variant = "primary" | "secondary" | "outline" | "danger" | "ghost";
 
 const BASE =
-  "inline-flex items-center justify-center gap-1.5 rounded-lg text-sm font-medium transition-all disabled:opacity-50 disabled:pointer-events-none";
+  "inline-flex items-center justify-center gap-1.5 rounded-[9px] text-[13px] font-medium transition-all duration-150 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2 disabled:opacity-50 disabled:pointer-events-none";
 
 const VARIANTS: Record<Variant, string> = {
-  primary:
-    "bg-gradient-to-b from-indigo-500 to-indigo-600 px-4 py-2 text-white shadow-sm hover:from-indigo-500 hover:to-indigo-700 active:scale-[0.98] dark:from-indigo-400 dark:to-indigo-500 dark:hover:to-indigo-400",
-  // Filled toolbar-style button (bg-white + shadow + ring) — "Schedule
-  // all", "Sync now", etc.
+  // Flat ink/paper (flips with the token, not a dark: override) — the
+  // one color this app spends on hierarchy is accent, reserved for
+  // state (today, mine, due), not painted onto every primary action.
+  primary: "bg-ink px-[17px] py-[10px] text-paper hover:opacity-85 active:scale-[0.98]",
+  // Filled toolbar-style button — "Schedule all", "Sync now", etc. Flat:
+  // border only, no shadow/ring, so it doesn't compete with primary.
   secondary:
-    "border border-zinc-200 bg-white px-3 py-1.5 text-zinc-700 shadow-sm ring-1 ring-black/5 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700/60",
-  // Border only, no fill/shadow — modal "Cancel" buttons.
-  outline:
-    "border border-zinc-200 px-3 py-2 text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-700",
-  danger:
-    "border border-red-200 px-3 py-2 text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-300 dark:hover:bg-red-950/40",
-  ghost:
-    "px-2.5 py-1 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100",
+    "border border-rule bg-surface px-4 py-[10px] text-ink-2 hover:bg-rule-soft active:scale-[0.98]",
+  // Border only, no fill — modal "Cancel" buttons.
+  outline: "border border-rule px-4 py-[10px] text-ink-2 hover:text-ink active:scale-[0.98]",
+  danger: "border border-accent px-4 py-[10px] text-accent hover:bg-accent-wash active:scale-[0.98]",
+  ghost: "px-2.5 py-1 text-muted hover:text-ink active:scale-[0.98]",
 };
 
 type Props = ButtonHTMLAttributes<HTMLButtonElement> & {

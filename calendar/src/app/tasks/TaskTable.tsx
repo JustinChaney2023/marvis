@@ -59,12 +59,12 @@ export default function TaskTable({
   return (
     <div className="mt-6 flex flex-col gap-6">
       {groups.map(({ project, rows }) => (
-        <div key={project.id} className="overflow-x-auto rounded-xl border border-zinc-200 dark:border-zinc-700">
+        <div key={project.id} className="overflow-x-auto rounded-xl border border-rule">
           <table className="w-full min-w-[640px] text-left text-sm">
-            <caption className="border-b border-zinc-200 bg-zinc-50 px-3 py-1.5 text-left text-xs font-semibold text-zinc-500 caption-top dark:border-zinc-700 dark:bg-zinc-800/60 dark:text-zinc-400">
+            <caption className="border-b border-rule bg-rule-soft px-3 py-1.5 text-left font-mono text-[11px] tracking-wide text-muted uppercase caption-top">
               {project.name}
             </caption>
-            <thead className="bg-zinc-50 text-xs text-zinc-500 dark:bg-zinc-800/60 dark:text-zinc-400">
+            <thead className="bg-rule-soft text-xs text-muted">
               <tr>
                 <th className="px-3 py-2 font-medium">Title</th>
                 <th className="px-3 py-2 font-medium">Deadline</th>
@@ -80,7 +80,7 @@ export default function TaskTable({
                 .map((task) => (
                   <tr
                     key={task.id}
-                    className="border-t border-zinc-100 hover:bg-zinc-50 dark:border-zinc-700/60 dark:hover:bg-zinc-700/30"
+                    className="border-t border-rule-soft hover:bg-rule-soft/60"
                   >
                     <td className="px-3 py-2">
                       <button
@@ -95,12 +95,12 @@ export default function TaskTable({
                           onChange={(e) => toggleTaskDone(task.id, e.target.checked)}
                           className="flex-shrink-0"
                         />
-                        <span className={task.status === "DONE" ? "line-through text-zinc-400" : ""}>
+                        <span className={task.status === "DONE" ? "line-through text-muted" : ""}>
                           {task.title}
                         </span>
                       </button>
                     </td>
-                    <td className="px-3 py-2 text-zinc-500">
+                    <td className="px-3 py-2 text-muted">
                       {task.dueAt ? formatDueDateTime(task.dueAt) : "—"}
                     </td>
                     <td className="px-3 py-2">
@@ -110,9 +110,9 @@ export default function TaskTable({
                         {STATUS_LABEL[task.status]}
                       </span>
                     </td>
-                    <td className="px-3 py-2 text-zinc-500">{PRIORITY_LABEL[task.priority]}</td>
-                    <td className="px-3 py-2 text-zinc-500">{task.durationMin}m</td>
-                    <td className="px-3 py-2 text-zinc-500">{task.assignee?.name ?? "—"}</td>
+                    <td className="px-3 py-2 text-muted">{PRIORITY_LABEL[task.priority]}</td>
+                    <td className="px-3 py-2 text-muted">{task.durationMin}m</td>
+                    <td className="px-3 py-2 text-muted">{task.assignee?.name ?? "—"}</td>
                   </tr>
                 ))}
             </tbody>
@@ -120,7 +120,7 @@ export default function TaskTable({
         </div>
       ))}
       {groups.length === 0 && (
-        <p className="rounded-xl border border-dashed border-zinc-200 py-8 text-center text-sm text-zinc-500 dark:border-zinc-700">
+        <p className="rounded-xl border border-dashed border-rule py-8 text-center text-sm text-muted">
           No open tasks.
         </p>
       )}

@@ -23,7 +23,7 @@ type Confirmation = {
 };
 
 const inputClass =
-  "rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800";
+  "rounded-lg border border-rule bg-surface px-3 py-2 text-[13px] text-ink transition-colors focus:border-accent focus:outline-none";
 
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString(undefined, {
@@ -103,7 +103,7 @@ export default function BookingClient({
   if (confirmation) {
     return (
       <div className="mt-6 flex flex-col items-center gap-3 text-center">
-        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-300">
+        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-accent-wash text-accent">
           <svg
             xmlns="http://www.w3.org/2000/svg"
             viewBox="0 0 20 20"
@@ -119,8 +119,8 @@ export default function BookingClient({
           </svg>
         </div>
         <div>
-          <p className="text-lg font-semibold">You&apos;re booked!</p>
-          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+          <p className="font-serif text-xl text-ink">You&apos;re booked!</p>
+          <p className="mt-1 text-[13px] text-ink-2">
             {formatDayHeading(confirmation.dayLabel)} at{" "}
             {formatTime(confirmation.slotIso)} ({durationMinutes} min) with{" "}
             {title}.
@@ -136,14 +136,14 @@ export default function BookingClient({
     <>
       <div className="mt-6 space-y-6">
         {!hasAnySlots && (
-          <p className="rounded-lg border border-dashed border-zinc-200 py-6 text-center text-sm text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
+          <p className="rounded-lg border border-dashed border-rule py-6 text-center text-[13px] text-ink-2">
             No open times in the next two weeks.
           </p>
         )}
         {availability.map((day) =>
           day.slots.length === 0 ? null : (
             <div key={day.dayLabel}>
-              <h2 className="text-sm font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
+              <h2 className="font-serif text-lg text-ink">
                 {formatDayHeading(day.dayLabel)}
               </h2>
               <div className="mt-2 flex flex-wrap gap-2">
@@ -155,7 +155,7 @@ export default function BookingClient({
                       setErrorMsg(null);
                       setSelectedSlot({ dayLabel: day.dayLabel, slotIso: iso });
                     }}
-                    className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 shadow-sm transition-all hover:border-indigo-300 hover:bg-indigo-50 active:scale-[0.98] dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:border-indigo-500/50 dark:hover:bg-indigo-950/40"
+                    className="rounded-lg border border-rule bg-surface px-3 py-1.5 font-mono text-[13px] text-ink-2 transition-all hover:border-accent hover:bg-accent-wash hover:text-ink active:scale-[0.98]"
                   >
                     {formatTime(iso)}
                   </button>
@@ -168,14 +168,14 @@ export default function BookingClient({
 
       {selectedSlot && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
+          className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center bg-scrim p-4"
           onClick={onBackdropClick}
           role="dialog"
           aria-modal="true"
         >
-          <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-6 shadow-2xl ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
+          <div className="modal-panel w-full max-w-md rounded-2xl border border-rule bg-surface p-6">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold tracking-tight">
+              <h2 className="font-serif text-xl text-ink">
                 {formatTime(selectedSlot.slotIso)} ·{" "}
                 {formatDayHeading(selectedSlot.dayLabel)}
               </h2>
@@ -188,12 +188,12 @@ export default function BookingClient({
                   }
                 }}
                 aria-label="close"
-                className="flex h-7 w-7 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-700"
+                className="flex h-7 w-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-rule-soft"
               >
                 <CloseIcon />
               </button>
             </div>
-            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+            <p className="mt-1 font-mono text-[11px] text-muted">
               {durationMinutes} min · with {title}
             </p>
 
@@ -201,8 +201,8 @@ export default function BookingClient({
               onSubmit={handleSubmit}
               className="mt-4 flex flex-col gap-4"
             >
-              <label className="flex flex-col gap-1 text-sm">
-                <span className="text-zinc-500">Your name</span>
+              <label className="flex flex-col gap-1 text-[13px]">
+                <span className="text-ink-2">Your name</span>
                 <input
                   name="name"
                   required
@@ -210,9 +210,9 @@ export default function BookingClient({
                   className={inputClass}
                 />
               </label>
-              <label className="flex flex-col gap-1 text-sm">
-                <span className="text-zinc-500">
-                  Email <span className="text-zinc-400">(optional)</span>
+              <label className="flex flex-col gap-1 text-[13px]">
+                <span className="text-ink-2">
+                  Email <span className="text-muted">(optional)</span>
                 </span>
                 <input
                   type="email"
@@ -220,9 +220,9 @@ export default function BookingClient({
                   className={inputClass}
                 />
               </label>
-              <label className="flex flex-col gap-1 text-sm">
-                <span className="text-zinc-500">
-                  Notes <span className="text-zinc-400">(optional)</span>
+              <label className="flex flex-col gap-1 text-[13px]">
+                <span className="text-ink-2">
+                  Notes <span className="text-muted">(optional)</span>
                 </span>
                 <textarea
                   name="notes"
@@ -232,7 +232,7 @@ export default function BookingClient({
               </label>
 
               {errorMsg && (
-                <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">
+                <p className="rounded-lg bg-accent-wash px-3 py-2 text-[13px] text-accent">
                   {errorMsg}
                 </p>
               )}

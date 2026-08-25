@@ -62,28 +62,28 @@ export default function CalendarSidebarLeft({
             type="button"
             onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))}
             aria-label="Previous month"
-            className="flex h-6 w-6 items-center justify-center rounded-md text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-700"
+            className="flex h-6 w-6 items-center justify-center rounded-md text-muted hover:bg-rule-soft"
           >
             <ChevronLeftIcon className="h-3.5 w-3.5" />
           </button>
-          <span className="text-sm font-medium">
+          <span className="font-serif text-lg">
             {cursor.toLocaleDateString(undefined, { month: "long", year: "numeric" })}
           </span>
           <button
             type="button"
             onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))}
             aria-label="Next month"
-            className="flex h-6 w-6 items-center justify-center rounded-md text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-700"
+            className="flex h-6 w-6 items-center justify-center rounded-md text-muted hover:bg-rule-soft"
           >
             <ChevronRightIcon className="h-3.5 w-3.5" />
           </button>
         </div>
-        <div className="mt-2 grid grid-cols-7 gap-y-1 text-center text-[10px] text-zinc-400">
+        <div className="mt-2 grid grid-cols-7 gap-y-1 text-center font-mono text-[9px] text-muted">
           {WEEKDAY_INITIALS.map((w) => (
             <span key={w}>{w}</span>
           ))}
         </div>
-        <div className="grid grid-cols-7 gap-y-1 text-center text-xs">
+        <div className="grid grid-cols-7 gap-y-1 text-center font-mono text-xs">
           {cells.map((d, i) => {
             if (!d) return <span key={i} />;
             const isToday =
@@ -98,10 +98,10 @@ export default function CalendarSidebarLeft({
                 onClick={() => goToDay(d)}
                 className={
                   isSelected
-                    ? "mx-auto flex h-6 w-6 items-center justify-center rounded-full bg-indigo-600 font-semibold text-white"
+                    ? "mx-auto flex h-6 w-6 items-center justify-center rounded-full bg-ink font-semibold text-paper"
                     : isToday
-                      ? "mx-auto flex h-6 w-6 items-center justify-center rounded-full border border-indigo-500 text-indigo-600 dark:text-indigo-400"
-                      : "mx-auto flex h-6 w-6 items-center justify-center rounded-full text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                      ? "mx-auto flex h-6 w-6 items-center justify-center rounded-full border border-accent font-semibold text-ink"
+                      : "mx-auto flex h-6 w-6 items-center justify-center rounded-full text-ink-2 hover:bg-rule-soft"
                 }
               >
                 {d.getDate()}
@@ -114,7 +114,7 @@ export default function CalendarSidebarLeft({
         <button
           type="button"
           onClick={goToNow}
-          className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 shadow-sm transition-colors hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
+          className="rounded-lg border border-rule bg-surface px-3 py-1.5 text-sm font-medium text-ink-2 transition-colors hover:bg-rule-soft"
         >
           Now
         </button>

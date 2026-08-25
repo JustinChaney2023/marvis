@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  askRecordingQuestionAction,
   createTasksFromRecordingAction,
   deleteRecordingAction,
   getRecordingAction,
@@ -26,7 +27,7 @@ type Detail = Awaited<ReturnType<typeof getRecordingAction>>;
 type ReviewItem = RecordingActionItem & { include: boolean };
 
 const inputClass =
-  "w-full rounded-lg border border-zinc-200 bg-white px-2 py-1 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800";
+  "w-full rounded-lg border border-rule bg-surface px-2 py-1 text-sm text-ink transition-colors focus:border-accent focus:outline-none";
 
 const STATUS_LABEL: Record<string, string> = {
   UPLOADED: "Queued",
@@ -45,13 +46,13 @@ const POLL_MS = 5000;
 
 function StatusBadge({ status }: { status: string }) {
   const tone =
-    status === "DONE"
-      ? "bg-green-50 text-green-700 dark:bg-green-950/40 dark:text-green-300"
-      : status === "FAILED"
-        ? "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300"
-        : "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300";
+    status === "FAILED"
+      ? "border border-accent bg-accent-wash text-accent"
+      : status === "DONE"
+        ? "border border-rule bg-surface text-ink-2"
+        : "border border-rule-soft bg-rule-soft text-muted";
   return (
-    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${tone}`}>
+    <span className={`rounded-full px-2 py-0.5 font-mono text-xs font-medium ${tone}`}>
       {STATUS_LABEL[status] ?? status}
     </span>
   );
@@ -65,6 +66,9 @@ export default function RecordingsList({ recordings }: { recordings: Row[] }) {
   const [created, setCreated] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [showTranscript, setShowTranscript] = useState(false);
+  const [askText, setAskText] = useState("");
+  const [asking, setAsking] = useState(false);
+  const [askError, setAskError] = useState<string | null>(null);
 
   const anyInFlight = recordings.some((r) => IN_FLIGHT.includes(r.status));
 
@@ -93,6 +97,8 @@ export default function RecordingsList({ recordings }: { recordings: Row[] }) {
   const toggle = (id: string) => {
     setCreated(null);
     setShowTranscript(false);
+    setAskText("");
+    setAskError(null);
     if (openId === id) {
       setOpenId(null);
       setDetail(null);
@@ -124,6 +130,27 @@ export default function RecordingsList({ recordings }: { recordings: Row[] }) {
     }
   };
 
+  const handleAsk = async () => {
+    if (!detail || !askText.trim()) return;
+    setAsking(true);
+    setAskError(null);
+    try {
+      const result = await askRecordingQuestionAction(detail.id, askText.trim());
+      if (!result.ok) {
+        setAskError(result.error);
+        return;
+      }
+      setAskText("");
+      // Refetch rather than append locally — the server-side questions
+      // array is the source of truth (it's what gets persisted), and this
+      // keeps the UI honest if two tabs ask questions concurrently.
+      const refreshed = await getRecordingAction(detail.id);
+      setDetail(refreshed);
+    } finally {
+      setAsking(false);
+    }
+  };
+
   const handleCreateTasks = async () => {
     if (!detail) return;
     setBusy(true);
@@ -139,7 +166,7 @@ export default function RecordingsList({ recordings }: { recordings: Row[] }) {
 
   if (recordings.length === 0) {
     return (
-      <p className="mt-4 rounded-lg border border-dashed border-zinc-200 px-4 py-6 text-center text-sm text-zinc-500 dark:border-zinc-700">
+      <p className="mt-4 rounded-lg border border-dashed border-rule px-4 py-6 text-center text-sm text-muted">
         No recordings yet.
       </p>
     );
@@ -150,7 +177,7 @@ export default function RecordingsList({ recordings }: { recordings: Row[] }) {
       {recordings.map((r) => (
         <li
           key={r.id}
-          className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-800"
+          className="rounded-xl border border-rule bg-surface"
         >
           <div className="flex flex-wrap items-center gap-2 p-3">
             <button
@@ -159,8 +186,8 @@ export default function RecordingsList({ recordings }: { recordings: Row[] }) {
               aria-expanded={openId === r.id}
               className="min-w-0 flex-1 text-left"
             >
-              <span className="block truncate font-medium">{r.title}</span>
-              <span className="text-xs text-zinc-500">
+              <span className="block truncate font-medium text-ink">{r.title}</span>
+              <span className="font-mono text-xs text-muted">
                 {new Date(r.createdAt).toLocaleDateString()}
                 {r.durationSec ? ` · ${formatDuration(r.durationSec)}` : ""}
               </span>
@@ -177,32 +204,32 @@ export default function RecordingsList({ recordings }: { recordings: Row[] }) {
           </div>
 
           {r.errorMessage && (
-            <p className="px-3 pb-3 text-sm text-red-600 dark:text-red-400">{r.errorMessage}</p>
+            <p className="px-3 pb-3 text-sm text-accent">{r.errorMessage}</p>
           )}
 
           {openId === r.id && (
-            <div className="border-t border-zinc-200 p-3 dark:border-zinc-700">
+            <div className="border-t border-rule p-3">
               {!detail ? (
-                <p className="text-sm text-zinc-500">Loading…</p>
+                <p className="text-sm text-muted">Loading…</p>
               ) : (
                 <div className="flex flex-col gap-4">
                   <audio controls src={`/uploads/${detail.audioPath}`} className="w-full" />
 
                   {detail.summary ? (
                     <div
-                      className="prose prose-sm max-w-none dark:prose-invert [&_h2]:mt-4 [&_h2]:text-base [&_h2]:font-semibold [&_li]:ml-4 [&_li]:list-disc [&_p]:my-2"
+                      className="prose prose-sm max-w-none text-ink [&_h2]:mt-4 [&_h2]:text-base [&_h2]:font-semibold [&_li]:ml-4 [&_li]:list-disc [&_p]:my-2"
                       dangerouslySetInnerHTML={{ __html: renderMarkdown(detail.summary) }}
                     />
                   ) : (
-                    <p className="text-sm text-zinc-500">
+                    <p className="text-sm text-muted">
                       Notes appear here once transcription and summarizing finish.
                     </p>
                   )}
 
                   {items.length > 0 && (
-                    <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-600">
-                      <h3 className="text-sm font-semibold">Action items</h3>
-                      <p className="mt-0.5 text-xs text-zinc-500">
+                    <div className="rounded-lg border border-rule p-3">
+                      <h3 className="text-sm font-semibold text-ink">Action items</h3>
+                      <p className="mt-0.5 text-xs text-muted">
                         Review these before they become tasks — edit anything the transcript got wrong.
                       </p>
                       <ul className="mt-2 flex flex-col gap-2">
@@ -251,7 +278,7 @@ export default function RecordingsList({ recordings }: { recordings: Row[] }) {
                           Create tasks
                         </Button>
                         {created !== null && (
-                          <span className="text-sm text-green-700 dark:text-green-400">
+                          <span className="text-sm text-ink-2">
                             Created {created} task{created === 1 ? "" : "s"} — they&apos;ll be
                             auto-scheduled.
                           </span>
@@ -261,16 +288,56 @@ export default function RecordingsList({ recordings }: { recordings: Row[] }) {
                   )}
 
                   {detail.transcript && (
+                    <div className="rounded-lg border border-rule p-3">
+                      <h3 className="text-sm font-semibold text-ink">Questions</h3>
+                      {detail.questions.length > 0 && (
+                        <ul className="mt-2 flex flex-col gap-2">
+                          {detail.questions.map((q, i) => (
+                            <li key={i} className="text-sm">
+                              <p className="text-muted">
+                                {q.postHoc ? null : `[${formatDuration(q.atSec)}] `}
+                                {q.text}
+                              </p>
+                              <p className="mt-0.5 text-ink">
+                                {q.answer ?? <span className="text-muted italic">Answer pending…</span>}
+                              </p>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      <div className="mt-3 flex items-center gap-2">
+                        <input
+                          value={askText}
+                          onChange={(e) => setAskText(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              void handleAsk();
+                            }
+                          }}
+                          placeholder="Ask something about this recording…"
+                          disabled={asking}
+                          className={`${inputClass} min-w-0 flex-1`}
+                        />
+                        <Button type="button" variant="outline" onClick={handleAsk} disabled={asking || !askText.trim()}>
+                          {asking ? "Asking…" : "Ask"}
+                        </Button>
+                      </div>
+                      {askError && <p className="mt-1 text-xs text-accent">{askError}</p>}
+                    </div>
+                  )}
+
+                  {detail.transcript && (
                     <div>
                       <button
                         type="button"
                         onClick={() => setShowTranscript((s) => !s)}
-                        className="text-sm text-indigo-600 hover:underline dark:text-indigo-400"
+                        className="text-sm text-accent hover:underline"
                       >
                         {showTranscript ? "Hide" : "Show"} transcript
                       </button>
                       {showTranscript && (
-                        <p className="mt-2 max-h-80 overflow-y-auto rounded-lg bg-zinc-50 p-3 text-sm whitespace-pre-wrap text-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
+                        <p className="mt-2 max-h-80 overflow-y-auto rounded-lg border border-rule-soft bg-paper p-3 text-sm whitespace-pre-wrap text-ink-2">
                           {detail.transcript}
                         </p>
                       )}

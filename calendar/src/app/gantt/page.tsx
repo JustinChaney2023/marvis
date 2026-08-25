@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth";
+import { PROJECT_EVENT_COLORS } from "@/lib/eventColors";
 
 const DAY_MS = 86_400_000;
 const DAY_WIDTH_PX = 32;
@@ -9,16 +10,13 @@ const ROW_HEIGHT_PX = 32;
 // something visible rather than a zero-width sliver.
 const MIN_BAR_DAYS = 1;
 
-const PROJECT_BAR_COLOR: Record<string, string> = {
-  zinc: "bg-zinc-400",
-  red: "bg-red-500",
-  amber: "bg-amber-500",
-  green: "bg-green-500",
-  blue: "bg-blue-500",
-  indigo: "bg-indigo-500",
-  violet: "bg-violet-500",
-  pink: "bg-pink-500",
-};
+// Derived from the shared palette rather than a second literal copy —
+// PROJECT_EVENT_COLORS.ts already has every color's literal class string
+// written out, which is all Tailwind's scanner needs; it doesn't need to
+// appear again at each usage site.
+const PROJECT_BAR_COLOR: Record<string, string> = Object.fromEntries(
+  Object.entries(PROJECT_EVENT_COLORS).map(([color, c]) => [color, c.dot]),
+);
 
 function startOfDay(d: Date): Date {
   const x = new Date(d);
@@ -120,25 +118,25 @@ export default async function GanttPage() {
 
   return (
     <main className="mx-auto w-full max-w-6xl flex-1 px-6 py-12">
-      <p className="text-sm text-zinc-500 dark:text-zinc-400">
+      <p className="text-sm text-ink-2">
         Open tasks by project, scheduled slot if placed, otherwise created
         date → due date.
       </p>
 
       {(trackedReport.length > 0 || untrackedMinutes > 0) && (
-        <div className="mt-4 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
-          <h2 className="text-sm font-semibold">Tracked time this week</h2>
+        <div className="mt-4 rounded-xl border border-rule bg-surface p-4">
+          <h2 className="text-sm font-semibold text-ink">Tracked time this week</h2>
           <ul className="mt-2 flex flex-col gap-1.5">
             {trackedReport.map(([name, minutes]) => (
               <li key={name} className="flex items-center justify-between text-sm">
-                <span className="text-zinc-700 dark:text-zinc-300">{name}</span>
-                <span className="text-zinc-500">{(minutes / 60).toFixed(1)}h</span>
+                <span className="text-ink-2">{name}</span>
+                <span className="font-mono text-muted">{(minutes / 60).toFixed(1)}h</span>
               </li>
             ))}
             {untrackedMinutes > 0 && (
               <li className="flex items-center justify-between text-sm">
-                <span className="text-zinc-500">No project</span>
-                <span className="text-zinc-500">{(untrackedMinutes / 60).toFixed(1)}h</span>
+                <span className="text-muted">No project</span>
+                <span className="font-mono text-muted">{(untrackedMinutes / 60).toFixed(1)}h</span>
               </li>
             )}
           </ul>
@@ -146,19 +144,19 @@ export default async function GanttPage() {
       )}
 
       {allBars.length === 0 ? (
-        <p className="mt-6 rounded-xl border border-dashed border-zinc-200 py-8 text-center text-sm text-zinc-500 dark:border-zinc-700">
+        <p className="mt-6 rounded-xl border border-dashed border-rule py-8 text-center text-sm text-ink-2">
           No open tasks with a due date or scheduled slot yet.
         </p>
       ) : (
-        <div className="mt-6 overflow-x-auto rounded-xl border border-zinc-200 bg-white shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
+        <div className="mt-6 overflow-x-auto rounded-xl border border-rule bg-surface">
           <div className="relative" style={{ width: `${8 * 16 + totalDays * DAY_WIDTH_PX}px` }}>
-            <div className="flex border-b border-zinc-200 dark:border-zinc-700">
+            <div className="flex border-b border-rule">
               <div className="w-32 flex-shrink-0" />
               <div className="relative flex-1" style={{ height: "1.75rem" }}>
                 {months.map((m) => (
                   <div
                     key={m.label}
-                    className="absolute top-0 border-l border-zinc-200 pl-1 text-xs text-zinc-500 dark:border-zinc-700"
+                    className="absolute top-0 border-l border-rule-soft pl-1 font-mono text-xs text-muted"
                     style={{ left: `${m.startDay * DAY_WIDTH_PX}px`, width: `${m.days * DAY_WIDTH_PX}px` }}
                   >
                     {m.label}
@@ -169,8 +167,8 @@ export default async function GanttPage() {
 
             {projectBars.map((project) => (
               <div key={project.id}>
-                <div className="flex border-b border-zinc-100 bg-zinc-50 dark:border-zinc-700/60 dark:bg-zinc-700/30">
-                  <div className="w-32 flex-shrink-0 truncate px-2 py-1 text-xs font-semibold text-zinc-600 dark:text-zinc-300">
+                <div className="flex border-b border-rule-soft bg-rule-soft">
+                  <div className="w-32 flex-shrink-0 truncate px-2 py-1 text-xs font-semibold text-ink-2">
                     {project.name}
                   </div>
                   <div className="relative flex-1" style={{ width: `${totalDays * DAY_WIDTH_PX}px` }} />
@@ -179,8 +177,8 @@ export default async function GanttPage() {
                   const offset = Math.max(0, dayDiff(bar.start, rangeStart));
                   const span = Math.max(MIN_BAR_DAYS, dayDiff(bar.end, bar.start));
                   return (
-                    <div key={bar.taskId} className="flex border-b border-zinc-100 dark:border-zinc-700/60">
-                      <div className="w-32 flex-shrink-0 truncate px-2 py-1.5 text-xs text-zinc-600 dark:text-zinc-400">
+                    <div key={bar.taskId} className="flex border-b border-rule-soft">
+                      <div className="w-32 flex-shrink-0 truncate px-2 py-1.5 text-xs text-ink-2">
                         {bar.title}
                       </div>
                       <div
@@ -201,7 +199,7 @@ export default async function GanttPage() {
 
             {todayOffset >= 0 && todayOffset <= totalDays && (
               <div
-                className="pointer-events-none absolute top-7 bottom-0 w-px bg-red-500"
+                className="pointer-events-none absolute top-7 bottom-0 w-px bg-accent"
                 style={{ left: `${8 * 16 + todayOffset * DAY_WIDTH_PX}px` }}
               />
             )}

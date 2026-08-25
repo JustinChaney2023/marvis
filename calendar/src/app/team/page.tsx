@@ -40,7 +40,7 @@ export default async function TeamPage() {
 
   return (
     <main className="mx-auto w-full max-w-2xl flex-1 px-6 py-12">
-      <p className="text-sm text-zinc-500 dark:text-zinc-400">
+      <p className="text-sm text-ink-2">
         People and AI employees you can assign tasks to. An AI employee is
         just a label for now — assigning it a task shows it as theirs, but
         nothing runs automatically yet.
@@ -48,31 +48,31 @@ export default async function TeamPage() {
 
       <form
         action={createAssignee}
-        className="mt-6 flex flex-wrap items-end gap-3 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800"
+        className="mt-6 flex flex-wrap items-end gap-3 rounded-xl border border-rule bg-surface p-5"
       >
         <label className="flex flex-col gap-1 text-sm">
-          <span className="text-zinc-500">Name</span>
+          <span className="text-ink-2">Name</span>
           <input
             name="name"
             required
             placeholder="e.g. Alex, or Research Bot"
-            className="min-w-[12rem] rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800"
+            className="min-w-[12rem] rounded-lg border border-rule bg-surface px-3 py-2 text-sm text-ink transition-colors focus:border-accent focus:outline-none"
           />
         </label>
         <label className="flex flex-col gap-1 text-sm">
-          <span className="text-zinc-500">Role (optional)</span>
+          <span className="text-ink-2">Role (optional)</span>
           <input
             name="role"
             placeholder="e.g. Content, Ops"
-            className="min-w-[10rem] rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800"
+            className="min-w-[10rem] rounded-lg border border-rule bg-surface px-3 py-2 text-sm text-ink transition-colors focus:border-accent focus:outline-none"
           />
         </label>
         <label className="flex flex-col gap-1 text-sm">
-          <span className="text-zinc-500">Type</span>
+          <span className="text-ink-2">Type</span>
           <select
             name="type"
             defaultValue="HUMAN"
-            className="rounded-lg border border-zinc-200 bg-white px-2 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800"
+            className="rounded-lg border border-rule bg-surface px-2 py-2 text-sm text-ink transition-colors focus:border-accent focus:outline-none"
           >
             <option value="HUMAN">Human</option>
             <option value="AI">AI employee</option>
@@ -85,14 +85,14 @@ export default async function TeamPage() {
         {assignees.map((a) => (
           <li
             key={a.id}
-            className="flex items-center gap-3 rounded-xl border border-zinc-200 bg-white p-3 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800"
+            className="flex items-center gap-3 rounded-xl border border-rule bg-surface p-3"
           >
-            <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-zinc-100 text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">
+            <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-rule-soft text-ink-2">
               {a.type === "AI" ? <RobotIcon /> : <PersonIcon />}
             </span>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium">{a.name}</p>
-              <p className="text-xs text-zinc-500">
+              <p className="text-sm font-medium text-ink">{a.name}</p>
+              <p className="text-xs text-ink-2">
                 {a.role ? `${a.role} · ` : ""}
                 {a._count.tasks} assigned task{a._count.tasks === 1 ? "" : "s"}
               </p>
@@ -103,13 +103,13 @@ export default async function TeamPage() {
                 const pct = Math.min(100, (hours / 40) * 100);
                 return (
                   <div className="mt-1.5 flex items-center gap-2">
-                    <div className="h-1.5 w-24 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-700">
+                    <div className="h-1.5 w-24 overflow-hidden rounded-full bg-rule-soft">
                       <div
-                        className="h-full rounded-full bg-indigo-500"
+                        className="h-full rounded-full bg-ink-2"
                         style={{ width: `${pct}%` }}
                       />
                     </div>
-                    <span className="text-xs text-zinc-400">
+                    <span className="font-mono text-xs text-muted">
                       {hours.toFixed(1)}h this week
                     </span>
                   </div>
@@ -119,7 +119,7 @@ export default async function TeamPage() {
             <form action={deleteAssignee.bind(null, a.id)}>
               <button
                 type="submit"
-                className="text-xs text-zinc-400 transition-colors hover:text-red-600 dark:hover:text-red-400"
+                className="text-xs text-muted transition-colors hover:text-accent"
               >
                 Remove
               </button>
@@ -127,7 +127,7 @@ export default async function TeamPage() {
           </li>
         ))}
         {assignees.length === 0 && (
-          <li className="rounded-xl border border-dashed border-zinc-200 py-8 text-center text-sm text-zinc-500 dark:border-zinc-700">
+          <li className="rounded-xl border border-dashed border-rule py-8 text-center text-sm text-muted">
             No one yet — add yourself, a friend, or an AI employee above.
           </li>
         )}

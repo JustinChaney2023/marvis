@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Instrument_Serif, IBM_Plex_Sans, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
 import QuickCapture from "./QuickCapture";
 import ShortcutsHelp from "./ShortcutsHelp";
@@ -23,13 +23,22 @@ const THEME_INIT_SCRIPT = `
 })();
 `;
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const instrumentSerif = Instrument_Serif({
+  variable: "--font-instrument-serif",
+  weight: "400",
+  style: ["normal", "italic"],
   subsets: ["latin"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const plexSans = IBM_Plex_Sans({
+  variable: "--font-plex-sans",
+  weight: ["400", "500", "600"],
+  subsets: ["latin"],
+});
+
+const plexMono = IBM_Plex_Mono({
+  variable: "--font-plex-mono",
+  weight: ["400", "500"],
   subsets: ["latin"],
 });
 
@@ -42,13 +51,13 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${instrumentSerif.variable} ${plexSans.variable} ${plexMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>
-      <body className="flex h-full flex-col overflow-hidden bg-zinc-50 text-zinc-900 transition-colors duration-200 dark:bg-zinc-900 dark:text-zinc-50">
+      <body className="flex h-full flex-col overflow-hidden bg-paper text-ink transition-colors duration-200">
         <TopBar />
         <MeetingBanner />
         <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>

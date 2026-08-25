@@ -51,20 +51,20 @@ export default function ProjectAttachments({
           {attachments.map((a) => (
             <li
               key={a.id}
-              className="flex items-center justify-between gap-2 rounded-lg border border-zinc-200 px-2.5 py-1.5 text-sm dark:border-zinc-600"
+              className="flex items-center justify-between gap-2 rounded-lg border border-rule px-2.5 py-1.5 text-sm"
             >
               <a
                 href={`/uploads/${a.storedPath}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="truncate text-indigo-600 hover:underline dark:text-indigo-400"
+                className="truncate text-accent hover:underline"
               >
                 {a.filename}
               </a>
               <button
                 type="button"
                 onClick={() => handleDelete(a.id)}
-                className="text-zinc-400 hover:text-red-600 dark:hover:text-red-400"
+                className="text-muted hover:text-accent"
                 aria-label={`Remove ${a.filename}`}
               >
                 <CloseIcon className="h-3.5 w-3.5" />
@@ -81,9 +81,9 @@ export default function ProjectAttachments({
           if (file) handleUpload(file);
         }}
         disabled={isUploading}
-        className="text-sm text-zinc-500"
+        className="text-sm text-ink-2"
       />
-      {error && <span className="text-xs text-red-600 dark:text-red-400">{error}</span>}
+      {error && <span className="text-xs text-accent">{error}</span>}
     </div>
   );
 }

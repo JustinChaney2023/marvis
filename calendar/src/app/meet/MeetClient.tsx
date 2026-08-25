@@ -9,7 +9,7 @@ import Button from "../ui/Button";
 type Person = { id: string; name: string | null; email: string };
 
 const inputClass =
-  "w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800";
+  "w-full rounded-lg border border-rule bg-surface px-3 py-2 text-sm text-ink transition-colors focus:border-accent focus:outline-none";
 
 export default function MeetClient({ people }: { people: Person[] }) {
   const router = useRouter();
@@ -69,11 +69,11 @@ export default function MeetClient({ people }: { people: Person[] }) {
   return (
     <div className="mt-6 flex flex-col gap-4">
       <div>
-        <p className="text-sm text-zinc-500">Who&apos;s meeting</p>
+        <p className="text-sm text-muted">Who&apos;s meeting</p>
         <ul className="mt-1.5 flex flex-col gap-1">
           {people.map((p) => (
             <li key={p.id}>
-              <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-600">
+              <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-rule px-3 py-2 text-sm text-ink">
                 <input type="checkbox" checked={selected.has(p.id)} onChange={() => toggle(p.id)} />
                 {p.name ?? p.email}
               </label>
@@ -83,7 +83,7 @@ export default function MeetClient({ people }: { people: Person[] }) {
       </div>
 
       <label className="flex flex-col gap-1 text-sm">
-        <span className="text-zinc-500">Title</span>
+        <span className="text-muted">Title</span>
         <input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
@@ -93,7 +93,7 @@ export default function MeetClient({ people }: { people: Person[] }) {
       </label>
 
       <label className="flex flex-col gap-1 text-sm">
-        <span className="text-zinc-500">Duration</span>
+        <span className="text-muted">Duration</span>
         <select
           value={durationMin}
           onChange={(e) => setDurationMin(Number(e.target.value))}
@@ -108,7 +108,7 @@ export default function MeetClient({ people }: { people: Person[] }) {
       </label>
 
       {error && (
-        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">
+        <p className="rounded-lg border border-accent bg-accent-wash px-3 py-2 text-sm text-accent">
           {error}
         </p>
       )}
@@ -122,8 +122,8 @@ export default function MeetClient({ people }: { people: Person[] }) {
       )}
 
       {slot && !created && (
-        <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-3 text-sm dark:border-indigo-800 dark:bg-indigo-950/30">
-          <p className="font-medium text-indigo-900 dark:text-indigo-100">
+        <div className="rounded-lg border border-accent bg-accent-wash p-3 text-sm">
+          <p className="font-medium text-accent">
             Everyone&apos;s free {formatDueDateTime(new Date(slot.startIso))} –{" "}
             {formatDueDateTime(new Date(slot.endIso))}
           </p>
@@ -139,7 +139,7 @@ export default function MeetClient({ people }: { people: Person[] }) {
       )}
 
       {created && (
-        <p className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700 dark:bg-green-950/40 dark:text-green-300">
+        <p className="rounded-lg border border-rule bg-rule-soft px-3 py-2 text-sm text-ink-2">
           Created on your calendar.
         </p>
       )}

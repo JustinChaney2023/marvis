@@ -5,7 +5,7 @@ import { scanHardwareAction, testTranscribeEndpointAction } from "../actions";
 import Button from "../ui/Button";
 
 const inputClass =
-  "rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800";
+  "rounded-lg border border-rule bg-surface px-3 py-2 text-sm text-ink transition-colors focus:border-accent focus:outline-none";
 
 type Props = {
   transcribeUrl: string;
@@ -76,14 +76,14 @@ export default function TranscriptionSettings({
   };
 
   return (
-    <div className="flex flex-col gap-3 border-t border-zinc-200 pt-3 dark:border-zinc-700">
-      <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+    <div className="flex flex-col gap-3 border-t border-rule pt-3">
+      <p className="text-sm font-medium text-ink-2">
         Transcription{" "}
-        <span className="font-normal text-zinc-400">(for lecture/meeting recordings)</span>
+        <span className="font-normal text-muted">(for lecture/meeting recordings)</span>
       </p>
 
       <label className="flex flex-col gap-1 text-sm">
-        <span className="text-zinc-500">Speech-to-text URL</span>
+        <span className="text-muted">Speech-to-text URL</span>
         <input
           type="url"
           name="transcribeUrl"
@@ -92,33 +92,33 @@ export default function TranscriptionSettings({
           placeholder="http://100.x.x.x:8000/v1 or https://api.openai.com/v1"
           className={inputClass}
         />
-        <span className="text-xs text-zinc-400">
+        <span className="text-xs text-muted">
           An OpenAI-compatible base URL exposing{" "}
-          <code className="rounded bg-zinc-100 px-1 py-0.5 dark:bg-zinc-700">
+          <code className="rounded bg-rule-soft px-1 py-0.5">
             /audio/transcriptions
           </code>
           . Anything implementing it works — a local{" "}
-          <code className="rounded bg-zinc-100 px-1 py-0.5 dark:bg-zinc-700">
+          <code className="rounded bg-rule-soft px-1 py-0.5">
             faster-whisper-server
           </code>
-          , a <code className="rounded bg-zinc-100 px-1 py-0.5 dark:bg-zinc-700">whisper.cpp</code>{" "}
+          , a <code className="rounded bg-rule-soft px-1 py-0.5">whisper.cpp</code>{" "}
           server, or OpenAI&apos;s hosted Whisper. Claude has no speech-to-text endpoint, so this is
           configured separately from the model above.
         </span>
-        <span className="text-xs text-zinc-400">
+        <span className="text-xs text-muted">
           Running whisper on another machine over Tailscale:{" "}
-          <code className="rounded bg-zinc-100 px-1 py-0.5 dark:bg-zinc-700">
+          <code className="rounded bg-rule-soft px-1 py-0.5">
             http://100.x.x.x:8000/v1
           </code>{" "}
           with model{" "}
-          <code className="rounded bg-zinc-100 px-1 py-0.5 dark:bg-zinc-700">
+          <code className="rounded bg-rule-soft px-1 py-0.5">
             Systran/faster-whisper-small
           </code>{" "}
           and no API key. Hosted instead:{" "}
-          <code className="rounded bg-zinc-100 px-1 py-0.5 dark:bg-zinc-700">
+          <code className="rounded bg-rule-soft px-1 py-0.5">
             https://api.openai.com/v1
           </code>{" "}
-          with <code className="rounded bg-zinc-100 px-1 py-0.5 dark:bg-zinc-700">whisper-1</code>{" "}
+          with <code className="rounded bg-rule-soft px-1 py-0.5">whisper-1</code>{" "}
           and a key.
         </span>
       </label>
@@ -128,20 +128,20 @@ export default function TranscriptionSettings({
           {tested ? "Refresh models" : "Test connection"}
         </Button>
         {tested && !testError && (
-          <span className="text-xs text-green-600 dark:text-green-400">
+          <span className="text-xs text-ink-2">
             Connected — {models.length} model{models.length === 1 ? "" : "s"} available
             {isLocal ? " (running on this machine)" : ""}.
           </span>
         )}
       </div>
       {testError && (
-        <span className="text-xs text-amber-600 dark:text-amber-400">
+        <span className="text-xs text-accent">
           {testError} You can still enter a model name manually and save.
         </span>
       )}
 
       <label className="flex flex-col gap-1 text-sm">
-        <span className="text-zinc-500">Transcription model</span>
+        <span className="text-muted">Transcription model</span>
         {models.length > 0 && (
           <select
             value={models.includes(model) ? model : ""}
@@ -167,39 +167,39 @@ export default function TranscriptionSettings({
           placeholder="Systran/faster-whisper-small or whisper-1"
           className={inputClass}
         />
-        <span className="text-xs text-zinc-400">
+        <span className="text-xs text-muted">
           Bigger is more accurate but slower. Test the connection to list what your endpoint
           actually serves.
         </span>
       </label>
 
       {tested && (
-        <div className="rounded-lg border border-zinc-200 p-3 text-xs dark:border-zinc-700">
+        <div className="rounded-lg border border-rule p-3 text-xs">
           {isLocal ? (
             <div className="flex flex-col gap-2">
               <div className="flex flex-wrap items-center gap-2">
                 <Button type="button" variant="secondary" pending={scanning} onClick={handleScan}>
                   Scan this machine
                 </Button>
-                <span className="text-zinc-400">
+                <span className="text-muted">
                   Transcription runs here, so this machine&apos;s hardware decides what it can keep
                   up with.
                 </span>
               </div>
               {scanResult && (
                 <div className="flex flex-col gap-1.5">
-                  <span className="text-zinc-600 dark:text-zinc-300">{scanResult.reason}</span>
+                  <span className="text-ink-2">{scanResult.reason}</span>
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-zinc-500">
+                    <span className="text-muted">
                       Suggested:{" "}
-                      <code className="rounded bg-zinc-100 px-1 py-0.5 dark:bg-zinc-700">
+                      <code className="rounded bg-rule-soft px-1 py-0.5">
                         {scanResult.suggestion}
                       </code>
                     </span>
                     <button
                       type="button"
                       onClick={() => setModel(scanResult.suggestion)}
-                      className="text-indigo-600 underline dark:text-indigo-400"
+                      className="text-accent underline"
                     >
                       Use this
                     </button>
@@ -208,7 +208,7 @@ export default function TranscriptionSettings({
               )}
             </div>
           ) : (
-            <span className="text-zinc-400">
+            <span className="text-muted">
               Transcription runs on a different machine, so a hardware scan here wouldn&apos;t
               describe the machine doing the work. Pick a model size that fits{" "}
               <em>that</em> machine&apos;s GPU.
@@ -218,15 +218,15 @@ export default function TranscriptionSettings({
       )}
 
       {realtimeFactor !== null && (
-        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+        <p className="text-xs text-muted">
           {describeThroughput(realtimeFactor)}
         </p>
       )}
 
       <label className="flex flex-col gap-1 text-sm">
-        <span className="text-zinc-500">
+        <span className="text-muted">
           API key{" "}
-          <span className="text-zinc-400">(leave blank for a local whisper server with no auth)</span>
+          <span className="text-muted">(leave blank for a local whisper server with no auth)</span>
         </span>
         <input
           type="password"
@@ -238,7 +238,7 @@ export default function TranscriptionSettings({
           className={inputClass}
         />
         {hasApiKey && (
-          <label className="flex items-center gap-1.5 text-xs text-zinc-500">
+          <label className="flex items-center gap-1.5 text-xs text-muted">
             <input type="checkbox" name="clearTranscribeApiKey" />
             Clear saved key
           </label>

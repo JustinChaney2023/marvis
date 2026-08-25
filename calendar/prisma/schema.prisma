@@ -752,6 +752,10 @@ model Recording {
   // transcript shouldn't silently populate someone's task list, same
   // review-before-commit rule the syllabus importer follows.
   actionItems  String?
+  // JSON array of {atSec, text, answer} — questions typed in during the
+  // recording (see RecordingCapture.tsx), answered from the transcript
+  // once it's available. `answer` stays null until answerQuestions runs.
+  questions    String?
   status       RecordingStatus @default(UPLOADED)
   // Why a FAILED row failed — a status with no explanation is unusable
   // for a self-hosted user who has to fix their own whisper endpoint.

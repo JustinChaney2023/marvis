@@ -60,7 +60,7 @@ export default function QuickCapture() {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 pt-[20vh] backdrop-blur-sm"
+      className="modal-backdrop fixed inset-0 z-50 flex items-start justify-center bg-scrim p-4 pt-[20vh]"
       onClick={(e) => {
         if (e.target === e.currentTarget) setOpen(false);
       }}
@@ -68,8 +68,8 @@ export default function QuickCapture() {
       aria-modal="true"
       aria-label="Quick add task"
     >
-      <div className="w-full max-w-lg rounded-2xl border border-zinc-200 bg-white p-4 shadow-2xl ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
-        <div className="mb-2 inline-flex items-center gap-1 rounded-full bg-zinc-100 p-1 text-xs dark:bg-zinc-700">
+      <div className="modal-panel w-full max-w-lg rounded-2xl border border-rule bg-surface p-4">
+        <div className="mb-2 inline-flex items-center gap-1 rounded-full border border-rule bg-paper p-1 text-xs">
           {(["task", "event"] as const).map((m) => (
             <button
               key={m}
@@ -77,8 +77,8 @@ export default function QuickCapture() {
               onClick={() => setMode(m)}
               className={
                 mode === m
-                  ? "rounded-full bg-white px-3 py-1 font-medium text-zinc-900 shadow-sm dark:bg-zinc-600 dark:text-zinc-50"
-                  : "rounded-full px-3 py-1 text-zinc-500 dark:text-zinc-400"
+                  ? "rounded-full bg-ink px-3 py-1 font-medium text-paper"
+                  : "rounded-full px-3 py-1 text-ink-2"
               }
             >
               {m === "task" ? "Task" : "Event"}
@@ -93,13 +93,13 @@ export default function QuickCapture() {
             placeholder={
               mode === "task" ? "Call dentist tomorrow 3pm p2" : "Lunch with Sam tomorrow 1pm for 1h"
             }
-            className="flex-1 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800"
+            className="flex-1 rounded-lg border border-rule bg-surface px-3 py-2 text-sm text-ink transition-colors focus:border-accent focus:outline-none"
           />
           <Button type="submit" pending={isSubmitting}>
             {isSubmitting ? "Adding…" : "Add"}
           </Button>
         </form>
-        <p className="mt-2 text-xs text-zinc-500">
+        <p className="mt-2 text-xs text-muted">
           Try “today / tomorrow / next friday / in 3 days”, a time like “3pm”,
           {mode === "event" && " a duration like “for 1h”,"} and “p0”–“p3”
           for priority{mode === "task" ? "" : " (ignored for events)"}. Press{" "}

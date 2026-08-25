@@ -18,7 +18,7 @@ import {
 import { createEvent, updateEventOccurrence } from "../actions";
 
 /**
- * Turns an uploaded file into plain text for the AI extraction step.
+ * Turns an uploaded file into Markdown text for the AI extraction step.
  *
  * .txt/.md never reach here — the client reads those itself. .docx stays on
  * mammoth in-process rather than going through the converter service: it
@@ -45,7 +45,13 @@ export async function extractFileTextAction(
 
   if (converter === "docx") {
     try {
-      const { value } = await mammoth.extractRawText({ buffer });
+      // mammoth 1.12 added convertToMarkdown at runtime, but its bundled
+      // index.d.ts hasn't caught up (still only declares convertToHtml/
+      // extractRawText) — cast rather than wait on the upstream types fix.
+      const mammothWithMarkdown = mammoth as unknown as {
+        convertToMarkdown: typeof mammoth.extractRawText;
+      };
+      const { value } = await mammothWithMarkdown.convertToMarkdown({ buffer });
       if (!value.trim()) return { ok: false, error: "Couldn't find any text in that file." };
       return { ok: true, text: value };
     } catch {
@@ -77,6 +83,12 @@ export async function extractSyllabusDatesAction(
 export type SyllabusTaskInput = {
   title: string;
   dueDateYMD: string | null;
+  // Weekly-recurring deliverable (e.g. "Discussion Problems due every
+  // Wednesday") — seeds the first occurrence's dueAt from termStartYMD
+  // and sets Task.recurrenceRule so completing it spawns the next one
+  // (see nextTaskOccurrence in actions.ts). Mutually exclusive with
+  // dueDateYMD.
+  recurringDays: WeekdayCode[] | null;
 };
 
 /** Free prose for Project.notes — course description, outcomes, delivery. */
@@ -131,6 +143,16 @@ export type ImportSyllabusCourseResult = {
   classScheduleCreated: boolean;
   lectureNotesCount: number;
 };
+
+/** First date on/after `anchor` whose weekday is in `days`. */
+function firstMatchingWeekday(anchor: Date, days: WeekdayCode[]): Date {
+  let day = new Date(anchor);
+  for (let i = 0; i < 7; i++) {
+    if (days.includes(WEEKDAY_CODES[day.getDay()])) break;
+    day = new Date(day.getTime() + 86_400_000);
+  }
+  return day;
+}
 
 function combineDateTime(ymd: string, hhmm: string): Date {
   const d = parseYMD(ymd);
@@ -195,13 +217,32 @@ export async function importSyllabusCourseAction(
     : null;
   const verifiedAssigneeId = ownedAssignee ? input.assigneeId : null;
 
+  const termStart = input.termStartYMD ? parseYMD(input.termStartYMD) : null;
   const taskRows = input.tasks.filter((t) => t.title.trim());
   if (taskRows.length > 0) {
     await prisma.task.createMany({
       data: taskRows.map((item) => {
+        const title = item.title.trim();
+        // Weekly-recurring items (e.g. "Discussion Problems" due every
+        // Wednesday) need a real first dueAt to anchor recurrenceRule —
+        // Task.recurrenceRule is inert without one (see TaskModal, and
+        // nextTaskOccurrence in actions.ts). No term start means no
+        // anchor, so it falls back to a plain undated task instead.
+        if (item.recurringDays && item.recurringDays.length > 0 && termStart) {
+          const firstDue = firstMatchingWeekday(termStart, item.recurringDays);
+          firstDue.setHours(23, 59, 0, 0);
+          return {
+            userId: user.id,
+            title,
+            dueAt: firstDue,
+            recurrenceRule: buildCustomWeeklyRule(item.recurringDays),
+            durationMin: estimateTaskMinutes(title),
+            projectId,
+            assigneeId: verifiedAssigneeId,
+          };
+        }
         const dueAt = item.dueDateYMD ? parseYMD(item.dueDateYMD) : null;
         if (dueAt) dueAt.setHours(23, 59, 0, 0);
-        const title = item.title.trim();
         return {
           userId: user.id,
           title,
@@ -264,12 +305,8 @@ export async function importSyllabusCourseAction(
     input.meetingEndTime &&
     input.termStartYMD
   ) {
-    const termStart = parseYMD(input.termStartYMD);
-    let firstDay = new Date(termStart);
-    for (let i = 0; i < 7; i++) {
-      if (input.meetingDays.includes(WEEKDAY_CODES[firstDay.getDay()])) break;
-      firstDay = new Date(firstDay.getTime() + 86_400_000);
-    }
+    const scheduleTermStart = parseYMD(input.termStartYMD);
+    const firstDay = firstMatchingWeekday(scheduleTermStart, input.meetingDays);
     const masterStart = combineDateTime(formatYMD(firstDay), input.meetingStartTime);
     const masterEnd = combineDateTime(formatYMD(firstDay), input.meetingEndTime);
     const recurrenceEndsBefore = input.termEndYMD

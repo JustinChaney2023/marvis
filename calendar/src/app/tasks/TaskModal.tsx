@@ -81,7 +81,7 @@ const WEEKDAY_FULL_LABELS = [
 ] as const;
 
 const inputClass =
-  "w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800";
+  "w-full rounded-lg border border-rule bg-paper px-3 py-2 text-sm text-ink transition-colors focus:border-accent focus:outline-none";
 
 export default function TaskModal({
   mode,
@@ -218,21 +218,21 @@ export default function TaskModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
+      className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center bg-scrim p-4"
       onClick={onBackdropClick}
       role="dialog"
       aria-modal="true"
     >
-      <div className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-6 shadow-2xl ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
+      <div className="modal-panel max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-rule bg-surface p-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold tracking-tight">
+          <h2 className="font-serif text-2xl tracking-tight text-ink">
             {mode === "edit" ? "Edit task" : "New task"}
           </h2>
           <button
             type="button"
             onClick={onClose}
             aria-label="close"
-            className="flex h-7 w-7 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-700"
+            className="flex h-7 w-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-rule-soft"
           >
             <CloseIcon />
           </button>
@@ -240,7 +240,7 @@ export default function TaskModal({
 
         <form onSubmit={handleSubmit} className="mt-4 flex flex-col gap-4">
           <label className="flex flex-col gap-1 text-sm">
-            <span className="text-zinc-500">Title</span>
+            <span className="text-muted">Title</span>
             <input
               name="title"
               required
@@ -252,13 +252,13 @@ export default function TaskModal({
           </label>
 
           <div className="flex flex-col gap-1 text-sm">
-            <span className="text-zinc-500">Notes</span>
+            <span className="text-muted">Notes</span>
             <NotesEditor name="notes" defaultValue={task?.notes ?? ""} />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <label className="flex flex-col gap-1 text-sm">
-              <span className="text-zinc-500">Priority</span>
+              <span className="text-muted">Priority</span>
               <select name="priority" defaultValue={String(task?.priority ?? 0)} className={inputClass}>
                 {PRIORITY_LABEL.map((label, value) => (
                   <option key={value} value={value}>{label}</option>
@@ -266,7 +266,7 @@ export default function TaskModal({
               </select>
             </label>
             <label className="flex flex-col gap-1 text-sm">
-              <span className="text-zinc-500">Duration</span>
+              <span className="text-muted">Duration</span>
               <div className="flex items-center gap-1.5">
                 <input
                   type="number"
@@ -278,7 +278,7 @@ export default function TaskModal({
                   aria-label="Duration in minutes"
                   className={inputClass}
                 />
-                <span className="text-xs text-zinc-400">min</span>
+                <span className="text-xs text-muted">min</span>
               </div>
               <select
                 value=""
@@ -286,7 +286,7 @@ export default function TaskModal({
                 onChange={(e) => {
                   if (e.target.value) setDurationValue(e.target.value);
                 }}
-                className={`${inputClass} mt-1 text-xs text-zinc-400`}
+                className={`${inputClass} mt-1 text-xs text-muted`}
               >
                 <option value="">Common durations…</option>
                 {DURATION_PRESETS_MIN.map((m) => (
@@ -300,7 +300,7 @@ export default function TaskModal({
 
           <div className="grid grid-cols-2 gap-3">
             <label className="flex flex-col gap-1 text-sm">
-              <span className="text-zinc-500">Project</span>
+              <span className="text-muted">Project</span>
               <select name="projectId" defaultValue={task?.projectId ?? defaultProjectId} className={inputClass}>
                 <option value="">No project</option>
                 {projects.map((p) => (
@@ -309,7 +309,7 @@ export default function TaskModal({
               </select>
             </label>
             <label className="flex flex-col gap-1 text-sm">
-              <span className="text-zinc-500">Assign to</span>
+              <span className="text-muted">Assign to</span>
               <select
                 name="assigneeId"
                 defaultValue={task ? task.assigneeId ?? "" : defaultAssigneeId ?? ""}
@@ -327,7 +327,7 @@ export default function TaskModal({
 
           <div className="grid grid-cols-2 gap-3">
             <label className="flex flex-col gap-1 text-sm">
-              <span className="text-zinc-500">Color</span>
+              <span className="text-muted">Color</span>
               <select name="color" defaultValue={task?.color ?? ""} className={inputClass}>
                 <option value="">Use project color</option>
                 {TASK_COLOR_OPTIONS.map((c) => (
@@ -338,7 +338,7 @@ export default function TaskModal({
               </select>
             </label>
             <label className="flex flex-col gap-1 text-sm">
-              <span className="text-zinc-500">Min chunk</span>
+              <span className="text-muted">Min chunk</span>
               <div className="flex items-center gap-1.5">
                 <input
                   type="number"
@@ -352,14 +352,14 @@ export default function TaskModal({
                   className={inputClass}
                 />
               </div>
-              <span className="text-xs text-zinc-400">min per piece, with breaks between</span>
+              <span className="text-xs text-muted">min per piece, with breaks between</span>
             </label>
           </div>
 
           <input type="hidden" name="labelIds" value={selectedLabelIds.join(",")} />
           {labels.length > 0 && (
             <div className="flex flex-col gap-1 text-sm">
-              <span className="text-zinc-500">Labels</span>
+              <span className="text-muted">Labels</span>
               <div className="flex flex-wrap gap-1.5">
                 {labels.map((label) => {
                   const selected = selectedLabelIds.includes(label.id);
@@ -371,8 +371,8 @@ export default function TaskModal({
                       onClick={() => toggleLabel(label.id)}
                       className={
                         selected
-                          ? "rounded-full bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-indigo-700 dark:bg-indigo-500"
-                          : "rounded-full border border-zinc-200 px-2.5 py-1 text-xs text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-400 dark:hover:bg-zinc-700"
+                          ? "rounded-full bg-ink px-2.5 py-1 text-xs font-medium text-paper transition-colors hover:opacity-85"
+                          : "rounded-full border border-rule px-2.5 py-1 text-xs text-ink-2 transition-colors hover:bg-rule-soft"
                       }
                     >
                       {label.name}
@@ -386,10 +386,10 @@ export default function TaskModal({
           <input type="hidden" name="blockedByIds" value={selectedBlockedByIds.join(",")} />
           {otherTasks.length > 0 && (
             <details className="text-sm">
-              <summary className="cursor-pointer text-zinc-500">
+              <summary className="cursor-pointer text-muted">
                 Blocked by{selectedBlockedByIds.length > 0 ? ` (${selectedBlockedByIds.length})` : ""}
               </summary>
-              <div className="mt-1.5 flex max-h-40 flex-col gap-1 overflow-y-auto rounded-lg border border-zinc-200 p-2 dark:border-zinc-600">
+              <div className="mt-1.5 flex max-h-40 flex-col gap-1 overflow-y-auto rounded-lg border border-rule p-2">
                 {otherTasks.map((t) => (
                   <label key={t.id} className="flex cursor-pointer items-center gap-2 text-xs">
                     <input
@@ -401,7 +401,7 @@ export default function TaskModal({
                   </label>
                 ))}
               </div>
-              <span className="mt-1 block text-xs text-zinc-400">
+              <span className="mt-1 block text-xs text-muted">
                 Won&apos;t be auto-scheduled until everything checked here is Done.
               </span>
             </details>
@@ -409,7 +409,7 @@ export default function TaskModal({
 
           {timeSlots.length > 0 && (
             <label className="flex flex-col gap-1 text-sm">
-              <span className="text-zinc-500">Time slot</span>
+              <span className="text-muted">Time slot</span>
               <select name="timeSlotId" defaultValue={task?.timeSlotId ?? ""} className={inputClass}>
                 <option value="">Default (9am-6pm weekdays)</option>
                 {timeSlots.map((slot) => (
@@ -423,11 +423,11 @@ export default function TaskModal({
 
           <div className="grid grid-cols-2 gap-3">
             <label className="flex flex-col gap-1 text-sm">
-              <span className="text-zinc-500">Start date</span>
+              <span className="text-muted">Start date</span>
               <DatePicker name="startAt" value={startAtValue} onChange={setStartAtValue} />
             </label>
             <label className="flex flex-col gap-1 text-sm">
-              <span className="text-zinc-500">Due</span>
+              <span className="text-muted">Due</span>
               <div className="flex flex-col gap-1.5">
                 <DatePicker name="dueAtDate" value={dueAtDateValue} onChange={setDueAtDateValue} />
                 <input
@@ -442,9 +442,9 @@ export default function TaskModal({
 
           {hasDueDate && (
             <label className="flex cursor-pointer items-center justify-between gap-3 text-sm">
-              <span className="text-zinc-700 dark:text-zinc-300">
+              <span className="text-ink-2">
                 Hard deadline{" "}
-                <span className="text-zinc-500 dark:text-zinc-400">
+                <span className="text-muted">
                   (must make this date — outranks soft-deadline tasks for open slots)
                 </span>
               </span>
@@ -455,20 +455,26 @@ export default function TaskModal({
                   defaultChecked={task?.hardDeadline ?? true}
                   className="peer sr-only"
                 />
-                <span className="block h-6 w-11 rounded-full bg-zinc-200 transition-colors peer-checked:bg-indigo-600 peer-focus-visible:ring-2 peer-focus-visible:ring-indigo-500/40 dark:bg-zinc-700 dark:peer-checked:bg-indigo-500" />
-                <span className="absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform peer-checked:translate-x-5" />
+                <span className="block h-6 w-11 rounded-full bg-rule-soft transition-colors peer-checked:bg-ink peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-accent" />
+                <span className="absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-surface transition-transform peer-checked:translate-x-5" />
               </span>
             </label>
           )}
 
-          <div className="border-t border-zinc-200 pt-4 dark:border-zinc-700">
+          <div className="border-t border-rule pt-4">
             <label className="flex flex-col gap-1 text-sm">
-              <span className="text-zinc-500">Repeat</span>
+              <span className="text-muted">Repeat</span>
               <select
                 value={recurrenceSelection}
-                onChange={(e) => setRecurrenceSelection(e.target.value)}
-                disabled={!hasDueDate}
-                title={hasDueDate ? undefined : "Set a due date to repeat this task"}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setRecurrenceSelection(value);
+                  // The due date IS the recurrence anchor (its first
+                  // occurrence), not a separate prerequisite — picking a
+                  // repeat with no due date set yet defaults it to today
+                  // rather than blocking the choice on a date first.
+                  if (value && !dueAtDateValue) setDueAtDateValue(formatYMD(new Date()));
+                }}
                 className={inputClass}
               >
                 {RECURRENCE_PRESETS.map((preset) => (
@@ -476,9 +482,6 @@ export default function TaskModal({
                 ))}
                 <option value="CUSTOM">Custom</option>
               </select>
-              {!hasDueDate && (
-                <span className="text-xs text-zinc-400">Set a due date to enable repeat.</span>
-              )}
               {recurrenceSelection === "CUSTOM" && (
                 <div className="mt-1.5 flex gap-1.5">
                   {WEEKDAY_CODES.map((code, idx) => {
@@ -492,8 +495,8 @@ export default function TaskModal({
                         onClick={() => toggleDay(code)}
                         className={
                           selected
-                            ? "flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-600 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400"
-                            : "flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-200 text-xs font-semibold text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-400 dark:hover:bg-zinc-700"
+                            ? "flex h-9 w-9 items-center justify-center rounded-lg bg-ink text-xs font-semibold text-paper transition-colors hover:opacity-85"
+                            : "flex h-9 w-9 items-center justify-center rounded-lg border border-rule text-xs font-semibold text-ink-2 transition-colors hover:bg-rule-soft"
                         }
                       >
                         {WEEKDAY_SHORT_LABELS[idx]}
@@ -506,28 +509,28 @@ export default function TaskModal({
           </div>
 
           {mode === "edit" && task && (
-            <div className="flex flex-col gap-2 border-t border-zinc-200 pt-4 text-sm dark:border-zinc-700">
-              <span className="text-zinc-500">Attachments</span>
+            <div className="flex flex-col gap-2 border-t border-rule pt-4 text-sm">
+              <span className="text-muted">Attachments</span>
               <div className="flex flex-col gap-1.5">
                 {activity
                   .filter((e) => e.attachment)
                   .map((e) => (
                     <div
                       key={e.id}
-                      className="flex items-center justify-between gap-2 rounded-lg border border-zinc-200 px-2.5 py-1.5 text-xs dark:border-zinc-600"
+                      className="flex items-center justify-between gap-2 rounded-lg border border-rule px-2.5 py-1.5 text-xs"
                     >
                       <a
                         href={e.attachment!.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="truncate text-indigo-600 hover:underline dark:text-indigo-400"
+                        className="truncate text-ink-2 hover:underline"
                       >
                         {e.attachment!.filename}
                       </a>
                       <button
                         type="button"
                         onClick={() => handleDeleteAttachment(e.attachment!.id)}
-                        className="text-zinc-400 hover:text-red-600 dark:hover:text-red-400"
+                        className="text-muted hover:text-accent"
                         aria-label={`Remove ${e.attachment!.filename}`}
                       >
                         <CloseIcon className="h-3.5 w-3.5" />
@@ -543,22 +546,22 @@ export default function TaskModal({
                   if (file) handleUploadAttachment(file);
                 }}
                 disabled={isUploadingAttachment}
-                className="text-xs text-zinc-500"
+                className="text-xs text-muted"
               />
               {attachmentError && (
-                <span className="text-xs text-red-600 dark:text-red-400">{attachmentError}</span>
+                <span className="text-xs text-accent">{attachmentError}</span>
               )}
 
-              <span className="mt-2 text-zinc-500">Activity</span>
+              <span className="mt-2 text-muted">Activity</span>
               <div className="flex max-h-40 flex-col gap-1.5 overflow-y-auto">
                 {activity.length === 0 && (
-                  <span className="text-xs text-zinc-400">No activity yet.</span>
+                  <span className="text-xs text-muted">No activity yet.</span>
                 )}
                 {activity
                   .filter((e) => !e.attachment)
                   .map((e) => (
                     <div key={e.id} className="text-xs">
-                      <span className="text-zinc-400">
+                      <span className="text-muted">
                         {e.createdAt.toLocaleString(undefined, {
                           month: "short",
                           day: "numeric",
@@ -566,7 +569,7 @@ export default function TaskModal({
                           minute: "2-digit",
                         })}
                       </span>{" "}
-                      <span className={e.kind === "comment" ? "text-zinc-700 dark:text-zinc-300" : "text-zinc-500"}>
+                      <span className={e.kind === "comment" ? "text-ink-2" : "text-muted"}>
                         {e.detail}
                       </span>
                     </div>

@@ -18,6 +18,7 @@ export async function GET(request: NextRequest) {
       status: r.status,
       errorMessage: r.errorMessage,
       durationSec: r.durationSec,
+      summary: r.summary,
       eventId: r.eventId,
       projectId: r.projectId,
       createdAt: r.createdAt,

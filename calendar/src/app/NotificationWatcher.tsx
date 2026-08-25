@@ -100,7 +100,7 @@ export default function NotificationWatcher() {
         await Notification.requestPermission();
         forceRecheck();
       }}
-      className="fixed bottom-4 right-4 z-40 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 shadow-sm ring-1 ring-black/5 transition-all hover:bg-zinc-50 print:hidden dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700/60"
+      className="fixed bottom-4 right-4 z-40 rounded-full border border-rule bg-surface px-3 py-1.5 text-xs font-medium text-ink-2 transition-colors hover:bg-rule-soft print:hidden"
     >
       Enable reminders
     </button>

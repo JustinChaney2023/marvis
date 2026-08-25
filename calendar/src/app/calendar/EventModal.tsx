@@ -98,7 +98,7 @@ const WEEKDAY_FULL_LABELS = [
 ] as const;
 
 const inputClass =
-  "rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800";
+  "rounded-lg border border-rule bg-paper px-3 py-2 text-sm transition-colors focus:border-accent focus:outline-none";
 
 export default function EventModal({
   mode,
@@ -320,21 +320,21 @@ export default function EventModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
+      className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center bg-scrim p-4"
       onClick={onBackdropClick}
       role="dialog"
       aria-modal="true"
     >
-      <div className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-6 shadow-2xl ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
+      <div className="modal-panel max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-rule bg-surface p-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold tracking-tight">
+          <h2 className="font-serif text-2xl">
             {mode === "create" ? "New event" : "Edit event"}
           </h2>
           <button
             type="button"
             onClick={onClose}
             aria-label="close"
-            className="flex h-7 w-7 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-700"
+            className="flex h-7 w-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-rule-soft"
           >
             <CloseIcon />
           </button>
@@ -343,7 +343,7 @@ export default function EventModal({
         <form onSubmit={handleSubmit} className="mt-4 flex flex-col gap-4">
           <div className="grid grid-cols-2 gap-3">
             <label className="flex flex-col gap-1 text-sm">
-              <span className="text-zinc-500">Title</span>
+              <span className="text-muted">Title</span>
               <input
                 ref={titleInputRef}
                 name="title"
@@ -354,7 +354,7 @@ export default function EventModal({
             </label>
 
             <label className="flex flex-col gap-1 text-sm">
-              <span className="text-zinc-500">Meeting link (optional)</span>
+              <span className="text-muted">Meeting link (optional)</span>
               <input
                 name="meetingUrl"
                 type="url"
@@ -366,7 +366,7 @@ export default function EventModal({
           </div>
 
           <label className="flex flex-col gap-1 text-sm">
-            <span className="text-zinc-500">Location (optional)</span>
+            <span className="text-muted">Location (optional)</span>
             <input
               name="location"
               type="text"
@@ -377,31 +377,25 @@ export default function EventModal({
           </label>
 
           <div className="flex flex-col gap-1 text-sm">
-            <span className="text-zinc-500">Notes</span>
+            <span className="text-muted">Notes</span>
             <NotesEditor name="notes" defaultValue={mode === "edit" ? (event?.notes ?? "") : ""} />
           </div>
 
           {mode === "edit" && (
             <div className="flex flex-col gap-1.5 text-sm">
-              <span className="text-zinc-500">Guests</span>
+              <span className="text-muted">Guests</span>
               {guests.length > 0 && (
                 <ul className="flex flex-col gap-1">
                   {guests.map((g) => (
                     <li
                       key={g.id}
-                      className="flex items-center justify-between gap-2 rounded-lg border border-zinc-200 px-2.5 py-1.5 text-xs dark:border-zinc-600"
+                      className="flex items-center justify-between gap-2 rounded-lg border border-rule px-2.5 py-1.5 text-xs"
                     >
                       <span className="truncate">{g.email}</span>
                       <span className="flex shrink-0 items-center gap-2">
                         <span
                           className={
-                            g.status === "ACCEPTED"
-                              ? "text-green-600 dark:text-green-400"
-                              : g.status === "DECLINED"
-                                ? "text-red-600 dark:text-red-400"
-                                : g.status === "TENTATIVE"
-                                  ? "text-amber-600 dark:text-amber-400"
-                                  : "text-zinc-400"
+                            g.status === "DECLINED" ? "text-accent" : "text-muted"
                           }
                         >
                           {g.status.charAt(0) + g.status.slice(1).toLowerCase()}
@@ -409,7 +403,7 @@ export default function EventModal({
                         <button
                           type="button"
                           onClick={() => handleRemoveGuest(g.id)}
-                          className="text-zinc-400 hover:text-red-600 dark:hover:text-red-400"
+                          className="text-muted hover:text-accent"
                           aria-label={`Remove ${g.email}`}
                         >
                           <CloseIcon className="h-3.5 w-3.5" />
@@ -441,13 +435,13 @@ export default function EventModal({
                   Invite
                 </Button>
               </div>
-              {guestError && <span className="text-xs text-red-600 dark:text-red-400">{guestError}</span>}
+              {guestError && <span className="text-xs text-accent">{guestError}</span>}
             </div>
           )}
 
           <div className="grid grid-cols-2 gap-3">
             <label className="flex flex-col gap-1 text-sm">
-              <span className="text-zinc-500">Color</span>
+              <span className="text-muted">Color</span>
               <select
                 name="color"
                 defaultValue={(mode === "edit" ? event?.color : null) ?? ""}
@@ -463,7 +457,7 @@ export default function EventModal({
             </label>
 
             <label className="flex flex-col gap-1 text-sm">
-              <span className="text-zinc-500">Event type</span>
+              <span className="text-muted">Event type</span>
               <select
                 name="eventType"
                 defaultValue={
@@ -481,7 +475,7 @@ export default function EventModal({
           </div>
 
           <label className="flex flex-col gap-1 text-sm">
-            <span className="text-zinc-500">Reminder</span>
+            <span className="text-muted">Reminder</span>
             <select
               name="reminderMinutes"
               defaultValue={
@@ -501,7 +495,7 @@ export default function EventModal({
 
           {googleAccounts.length > 1 && (
             <label className="flex flex-col gap-1 text-sm">
-              <span className="text-zinc-500">Sync to</span>
+              <span className="text-muted">Sync to</span>
               <select
                 name="googleAccountId"
                 defaultValue={(mode === "edit" ? event?.googleAccountId : null) ?? ""}
@@ -523,14 +517,14 @@ export default function EventModal({
               name="allDay"
               checked={isAllDay}
               onChange={(e) => setIsAllDay(e.target.checked)}
-              className="h-4 w-4 rounded border-zinc-300 text-indigo-600 focus:ring-indigo-500/40 dark:border-zinc-600"
+              className="h-4 w-4 rounded border-rule text-accent focus:outline focus:outline-2 focus:outline-accent"
             />
-            <span className="text-zinc-700 dark:text-zinc-300">All day</span>
+            <span className="text-ink-2">All day</span>
           </label>
 
           <div className="grid grid-cols-2 gap-3">
             <label className="flex flex-col gap-1 text-sm">
-              <span className="text-zinc-500">Start</span>
+              <span className="text-muted">Start</span>
               <div className="flex gap-2">
                 <input
                   ref={startDateRef}
@@ -552,7 +546,7 @@ export default function EventModal({
             </label>
 
             <label className="flex flex-col gap-1 text-sm">
-              <span className="text-zinc-500">End{isAllDay ? " (last day)" : ""}</span>
+              <span className="text-muted">End{isAllDay ? " (last day)" : ""}</span>
               <div className="flex gap-2">
                 <input
                   ref={endDateRef}
@@ -574,9 +568,9 @@ export default function EventModal({
             </label>
           </div>
 
-          <div className="border-t border-zinc-200 pt-4 dark:border-zinc-700">
+          <div className="border-t border-rule pt-4">
             {isEditingRecurring && (
-              <div className="mb-3 inline-flex items-center gap-1 rounded-full bg-zinc-100 p-1 text-xs dark:bg-zinc-700">
+              <div className="mb-3 inline-flex items-center gap-1 rounded-full bg-rule-soft p-1 text-xs">
                 {(["occurrence", "following", "series"] as const).map((scope) => (
                   <button
                     key={scope}
@@ -584,8 +578,8 @@ export default function EventModal({
                     onClick={() => setEditScope(scope)}
                     className={
                       editScope === scope
-                        ? "rounded-full bg-white px-3 py-1 font-medium text-zinc-900 shadow-sm dark:bg-zinc-600 dark:text-zinc-50"
-                        : "rounded-full px-3 py-1 text-zinc-500 dark:text-zinc-400"
+                        ? "rounded-full bg-surface px-3 py-1 font-medium text-ink"
+                        : "rounded-full px-3 py-1 text-muted"
                     }
                   >
                     {scope === "occurrence" ? "This event" : scope === "following" ? "This and following" : "All events"}
@@ -594,15 +588,15 @@ export default function EventModal({
               </div>
             )}
             {isEditingRecurring && editScope === "occurrence" ? (
-              <p className="text-xs text-zinc-500">
+              <p className="text-xs text-muted">
                 Saves just this one occurrence as its own event — the rest
                 of the series is unaffected.
               </p>
             ) : (
             <label className="flex flex-col gap-1 text-sm">
-              <span className="text-zinc-500">Repeat</span>
+              <span className="text-muted">Repeat</span>
               {editScope === "following" && (
-                <p className="mb-1 text-xs text-zinc-500">
+                <p className="mb-1 text-xs text-muted">
                   Splits the series here — earlier occurrences keep their
                   old pattern, this and every occurrence after it become a
                   new series with whatever you set below.
@@ -636,8 +630,8 @@ export default function EventModal({
                         onClick={() => toggleDay(code)}
                         className={
                           selected
-                            ? "flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-600 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400"
-                            : "flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-200 text-xs font-semibold text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-400 dark:hover:bg-zinc-700"
+                            ? "flex h-9 w-9 items-center justify-center rounded-lg bg-ink text-xs font-semibold text-paper transition-colors hover:opacity-85"
+                            : "flex h-9 w-9 items-center justify-center rounded-lg border border-rule text-xs font-semibold text-ink-2 transition-colors hover:bg-rule-soft"
                         }
                       >
                         {WEEKDAY_SHORT_LABELS[idx]}
@@ -647,7 +641,7 @@ export default function EventModal({
                 </div>
               )}
               {initialUnrecognizedRule && !repeatTouched && (
-                <span className="text-xs text-amber-600 dark:text-amber-400">
+                <span className="text-xs text-accent">
                   This event has a recurrence pattern (e.g. an end date)
                   this app can&apos;t fully show — it&apos;s kept as-is
                   unless you change Repeat below.
@@ -657,10 +651,10 @@ export default function EventModal({
             )}
           </div>
 
-          <label className="flex cursor-pointer items-center justify-between gap-3 border-t border-zinc-200 pt-4 text-sm dark:border-zinc-700">
-            <span className="text-zinc-700 dark:text-zinc-300">
+          <label className="flex cursor-pointer items-center justify-between gap-3 border-t border-rule pt-4 text-sm">
+            <span className="text-ink-2">
               Locked{" "}
-              <span className="text-zinc-500 dark:text-zinc-400">
+              <span className="text-muted">
                 (won&apos;t be moved by auto-scheduling — you can still drag it yourself)
               </span>
             </span>
@@ -671,8 +665,8 @@ export default function EventModal({
                 defaultChecked={mode === "edit" ? !!event?.locked : !!initialLocked}
                 className="peer sr-only"
               />
-              <span className="block h-6 w-11 rounded-full bg-zinc-200 transition-colors peer-checked:bg-indigo-600 peer-focus-visible:ring-2 peer-focus-visible:ring-indigo-500/40 dark:bg-zinc-700 dark:peer-checked:bg-indigo-500" />
-              <span className="absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform peer-checked:translate-x-5" />
+              <span className="block h-6 w-11 rounded-full bg-rule-soft transition-colors peer-checked:bg-ink peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-accent" />
+              <span className="absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-paper transition-transform peer-checked:translate-x-5" />
             </span>
           </label>
 
@@ -685,7 +679,7 @@ export default function EventModal({
                   </Button>
                   <a
                     href={`/api/ics/export?eventId=${event?.id}`}
-                    className="text-xs text-zinc-500 underline hover:text-zinc-700 dark:hover:text-zinc-300"
+                    className="text-xs text-muted underline hover:text-ink-2"
                   >
                     Export .ics
                   </a>
@@ -694,13 +688,19 @@ export default function EventModal({
                       the failure mode a lecture recorder can't have. */}
                   <a
                     href={`/recordings?eventId=${event?.id}`}
-                    className="text-xs text-zinc-500 underline hover:text-zinc-700 dark:hover:text-zinc-300"
+                    className="text-xs text-muted underline hover:text-ink-2"
                   >
                     Record
                   </a>
+                  <a
+                    href={`/timer?eventId=${event?.id}`}
+                    className="text-xs text-muted underline hover:text-ink-2"
+                  >
+                    Timer
+                  </a>
                 </div>
                 {isEditingRecurring && (
-                  <span className="text-xs text-zinc-500">
+                  <span className="text-xs text-muted">
                     {editScope === "occurrence"
                       ? "Deletes just this event."
                       : editScope === "following"

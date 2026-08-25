@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { resolveUploadPath } from "@/lib/uploads";
 import { assertNotLinkLocal } from "@/lib/aiClient";
+import { formatDuration } from "@/lib/recordingFormat";
 
 // Same {url, model, apiKey} shape as LocalAiConfig, for the same reason:
 // local whisper servers (whisper.cpp server mode, faster-whisper-server,
@@ -85,6 +86,51 @@ export async function listTranscribeModels(config: {
   }
 }
 
+type WhisperSegment = { start?: unknown; text?: unknown };
+
+/**
+ * Rebuilds the transcript as one `[h:mm:ss] text` line per segment, so a
+ * reader (or a later note that cites "at 12:34...") can jump back to
+ * where in the recording something was said. Only `verbose_json`
+ * responses that actually include segments (OpenAI, whisper.cpp server,
+ * faster-whisper-server all do) carry this; a server that returns bare
+ * `{text}` gives an empty array here, and the caller falls back to the
+ * flat, untimestamped text — degrading, never failing, exactly like the
+ * existing duration handling already does for the same reason.
+ */
+export function formatTimestampedTranscript(segments: WhisperSegment[]): string | null {
+  const lines: string[] = [];
+  for (const segment of segments) {
+    if (typeof segment.start !== "number" || typeof segment.text !== "string") continue;
+    const text = segment.text.trim();
+    if (!text) continue;
+    lines.push(`[${formatDuration(segment.start)}] ${text}`);
+  }
+  return lines.length > 0 ? lines.join("\n") : null;
+}
+
+const TIMESTAMPED_LINE = /^\[(\d+):(\d{2})(?::(\d{2}))?\] (.*)$/;
+
+/**
+ * Inverse of formatTimestampedTranscript — recovers {atSec, text} lines
+ * from a transcript that has them, for answering a question asked at a
+ * given point in the recording (see answerQuestions in recordings.ts).
+ * Lines without the "[h:mm:ss] "/"[m:ss] " prefix (a transcript from a
+ * backend that never had segments) are silently skipped, giving an empty
+ * array — callers fall back to the whole transcript in that case.
+ */
+export function parseTimestampedLines(transcript: string): { atSec: number; text: string }[] {
+  const lines: { atSec: number; text: string }[] = [];
+  for (const line of transcript.split("\n")) {
+    const match = TIMESTAMPED_LINE.exec(line);
+    if (!match) continue;
+    const [, a, b, c, text] = match;
+    const atSec = c !== undefined ? Number(a) * 3600 + Number(b) * 60 + Number(c) : Number(a) * 60 + Number(b);
+    lines.push({ atSec, text });
+  }
+  return lines;
+}
+
 // An hour of audio through a CPU-only whisper build genuinely takes tens
 // of minutes; a 2-minute timeout (the local-AI chat default) would fail
 // every real lecture. Generous but still bounded so a wedged endpoint
@@ -121,9 +167,10 @@ export async function transcribeAudio(
       const form = new FormData();
       form.set("file", new Blob([bytes], { type: mimeType }), path.basename(storedPath));
       form.set("model", config.model);
-      // Asking for verbose_json gets a duration back for free where the
-      // backend supports it; a server that only knows plain json still
-      // returns { text }, which the parsing below handles either way.
+      // Asking for verbose_json gets a duration and per-segment timestamps
+      // back for free where the backend supports it; a server that only
+      // knows plain json still returns { text }, which the parsing below
+      // handles either way.
       form.set("response_format", "verbose_json");
       // "prompt" is the OpenAI-compatible field name; servers map it onto
       // whisper's own initial_prompt argument.
@@ -157,13 +204,14 @@ export async function transcribeAudio(
       };
     }
 
-    const parsed = (await res.json()) as { text?: unknown; duration?: unknown };
+    const parsed = (await res.json()) as { text?: unknown; duration?: unknown; segments?: unknown };
     if (typeof parsed.text !== "string" || !parsed.text.trim()) {
       return { ok: false, error: "The transcription endpoint returned no text." };
     }
+    const segments = Array.isArray(parsed.segments) ? (parsed.segments as WhisperSegment[]) : [];
     return {
       ok: true,
-      text: parsed.text.trim(),
+      text: formatTimestampedTranscript(segments) ?? parsed.text.trim(),
       durationSec: typeof parsed.duration === "number" ? Math.round(parsed.duration) : null,
       // Times only this call, not summarization — "how fast is your whisper
       // endpoint" is a question about the endpoint, and folding in a

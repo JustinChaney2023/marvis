@@ -105,22 +105,22 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
   return (
     <main className="mx-auto w-full max-w-2xl flex-1 px-6 py-12">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
+        <h1 className="font-serif text-3xl text-ink">Settings</h1>
         <Link
           href="/tasks"
-          className="text-sm text-zinc-500 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100"
+          className="text-sm text-ink-2 transition-colors hover:text-ink"
         >
           ← Tasks
         </Link>
       </div>
 
       {connected && (
-        <p className="mt-4 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700 dark:bg-green-950/40 dark:text-green-300">
+        <p className="mt-4 rounded-lg bg-accent-wash px-3 py-2 text-sm text-ink">
           Google Calendar connected.
         </p>
       )}
       {error && (
-        <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">
+        <p className="mt-4 rounded-lg bg-accent-wash px-3 py-2 text-sm text-accent">
           Couldn&apos;t connect: {error}
         </p>
       )}
@@ -132,13 +132,13 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
             label: "Scheduling",
             content: (
               <>
-      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
-        <h2 className="text-lg font-semibold">Scheduling</h2>
+      <section className="mt-6 rounded-xl border border-rule bg-surface p-5">
+        <h2 className="font-serif text-xl text-ink">Scheduling</h2>
         <form action={setUserTimezoneAction} className="mt-3 flex flex-wrap items-end gap-3">
           <label className="flex flex-col gap-1 text-sm">
-            <span className="text-zinc-500">
+            <span className="text-ink-2">
               Your timezone{" "}
-              <span className="text-zinc-400">
+              <span className="text-muted">
                 — the scheduler, booking page, and Google export all use this
               </span>
             </span>
@@ -149,14 +149,14 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
               required
               defaultValue={user.timezone ?? ""}
               placeholder={Intl.DateTimeFormat().resolvedOptions().timeZone}
-              className="w-56 rounded-lg border border-zinc-200 bg-white px-2 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800"
+              className="w-56 rounded-lg border border-rule bg-surface px-2 py-2 text-sm"
             />
           </label>
           <Button type="submit" variant="secondary">
             Save timezone
           </Button>
           {!user.timezone && (
-            <span className="text-xs text-zinc-400">
+            <span className="text-xs text-muted">
               Auto-detected from your browser once you visit any other page —
               set it here to override.
             </span>
@@ -167,12 +167,12 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
           className="mt-3 flex flex-wrap items-end gap-3"
         >
           <div className="flex flex-col gap-1 text-sm">
-            <span className="text-zinc-500">Working hours</span>
+            <span className="text-ink-2">Working hours</span>
             <div className="flex flex-wrap items-center gap-1.5">
               {["SU", "MO", "TU", "WE", "TH", "FR", "SA"].map((code) => (
                 <label
                   key={code}
-                  className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-zinc-200 text-xs font-semibold text-zinc-600 transition-colors has-checked:border-indigo-600 has-checked:bg-indigo-600 has-checked:text-white dark:border-zinc-600 dark:text-zinc-400"
+                  className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-rule text-xs font-semibold text-ink-2 transition-colors has-checked:border-ink has-checked:bg-ink has-checked:text-paper"
                 >
                   <input
                     type="checkbox"
@@ -189,26 +189,26 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
                 type="time"
                 name="workStartMin"
                 defaultValue={minutesToTimeInput(settings.workStartMin)}
-                className="ml-2 rounded-lg border border-zinc-200 bg-white px-2 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800"
+                className="ml-2 rounded-lg border border-rule bg-surface px-2 py-2 text-sm"
               />
-              <span className="text-zinc-500">to</span>
+              <span className="text-ink-2">to</span>
               <input
                 type="time"
                 name="workEndMin"
                 defaultValue={minutesToTimeInput(settings.workEndMin)}
-                className="rounded-lg border border-zinc-200 bg-white px-2 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800"
+                className="rounded-lg border border-rule bg-surface px-2 py-2 text-sm"
               />
             </div>
           </div>
           <label className="flex flex-col gap-1 text-sm">
-            <span className="text-zinc-500">World clock</span>
+            <span className="text-ink-2">World clock</span>
             <input
               type="text"
               name="secondaryTimezone"
               list="timezones"
               defaultValue={settings.secondaryTimezone ?? ""}
               placeholder="None"
-              className="w-44 rounded-lg border border-zinc-200 bg-white px-2 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800"
+              className="w-44 rounded-lg border border-rule bg-surface px-2 py-2 text-sm"
             />
             <datalist id="timezones">
               {Intl.supportedValuesOf("timeZone").map((tz) => (
@@ -217,7 +217,7 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
             </datalist>
           </label>
           <label className="flex flex-col gap-1 text-sm">
-            <span className="text-zinc-500">Buffer between events</span>
+            <span className="text-ink-2">Buffer between events</span>
             <div className="flex items-center gap-2">
               <input
                 type="number"
@@ -226,13 +226,13 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
                 min={0}
                 max={120}
                 step={5}
-                className="w-24 rounded-lg border border-zinc-200 bg-white px-2 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800"
+                className="w-24 rounded-lg border border-rule bg-surface px-2 py-2 text-sm transition-colors focus:border-accent focus:outline-none"
               />
-              <span className="text-zinc-500">minutes</span>
+              <span className="text-ink-2">minutes</span>
             </div>
           </label>
           <label className="flex flex-col gap-1 text-sm">
-            <span className="text-zinc-500">Daily cap (breathing room)</span>
+            <span className="text-ink-2">Daily cap (breathing room)</span>
             <div className="flex items-center gap-2">
               <input
                 type="number"
@@ -242,14 +242,14 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
                 min={30}
                 max={960}
                 step={15}
-                className="w-24 rounded-lg border border-zinc-200 bg-white px-2 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800"
+                className="w-24 rounded-lg border border-rule bg-surface px-2 py-2 text-sm transition-colors focus:border-accent focus:outline-none"
               />
-              <span className="text-zinc-500">minutes</span>
+              <span className="text-ink-2">minutes</span>
             </div>
           </label>
           <Button type="submit">Save</Button>
         </form>
-        <p className="mt-2 text-xs text-zinc-400">
+        <p className="mt-2 text-xs text-muted">
           The auto-scheduler leaves at least the buffer gap around every
           event, and — if a daily cap is set — stops placing new tasks on
           a day once that many minutes are already scheduled, leaving
@@ -258,10 +258,10 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
         </p>
       </section>
 
-      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
-        <h2 className="text-lg font-semibold">AI / local model</h2>
-        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-          <Link href="/tasks/import" className="text-indigo-600 dark:text-indigo-400">
+      <section className="mt-6 rounded-xl border border-rule bg-surface p-5">
+        <h2 className="font-serif text-xl text-ink">AI / local model</h2>
+        <p className="mt-1 text-sm text-ink-2">
+          <Link href="/tasks/import" className="text-accent">
             Import
           </Link>{" "}
           uses Claude by default. Point it at any OpenAI-compatible
@@ -271,62 +271,62 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
         </p>
         <form action={updateAiSettingsAction} className="mt-3 flex flex-col gap-3">
           <label className="flex flex-col gap-1 text-sm">
-            <span className="text-zinc-500">Local/hosted AI URL</span>
+            <span className="text-ink-2">Local/hosted AI URL</span>
             <input
               type="url"
               name="localAiUrl"
               defaultValue={settings.localAiUrl ?? ""}
               placeholder="http://100.x.x.x:11434/v1 or https://api.minimax.io/v1"
-              className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800"
+              className="rounded-lg border border-rule bg-surface px-3 py-2 text-sm transition-colors focus:border-accent focus:outline-none"
             />
-            <span className="text-xs text-zinc-400">
+            <span className="text-xs text-muted">
               The OpenAI-compatible base URL — Ollama serves this at{" "}
-              <code className="rounded bg-zinc-100 px-1 py-0.5 dark:bg-zinc-700">/v1</code>;
-              MiniMax&apos;s is <code className="rounded bg-zinc-100 px-1 py-0.5 dark:bg-zinc-700">https://api.minimax.io/v1</code>.
+              <code className="rounded bg-rule-soft px-1 py-0.5">/v1</code>;
+              MiniMax&apos;s is <code className="rounded bg-rule-soft px-1 py-0.5">https://api.minimax.io/v1</code>.
             </span>
           </label>
           <label className="flex flex-col gap-1 text-sm">
-            <span className="text-zinc-500">Model name</span>
+            <span className="text-ink-2">Model name</span>
             <input
               type="text"
               name="localAiModel"
               defaultValue={settings.localAiModel ?? ""}
               placeholder="llama3.1 or MiniMax-M1"
-              className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800"
+              className="rounded-lg border border-rule bg-surface px-3 py-2 text-sm transition-colors focus:border-accent focus:outline-none"
             />
           </label>
           <label className="flex flex-col gap-1 text-sm">
-            <span className="text-zinc-500">
-              API key <span className="text-zinc-400">(only needed for a hosted API like MiniMax — leave blank for an unauthenticated local Ollama/LM Studio)</span>
+            <span className="text-ink-2">
+              API key <span className="text-muted">(only needed for a hosted API like MiniMax — leave blank for an unauthenticated local Ollama/LM Studio)</span>
             </span>
             <input
               type="password"
               name="localAiApiKey"
               placeholder={settings.localAiApiKey ? "•••••••• (saved — leave blank to keep)" : "sk-..."}
               autoComplete="off"
-              className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800"
+              className="rounded-lg border border-rule bg-surface px-3 py-2 text-sm transition-colors focus:border-accent focus:outline-none"
             />
             {settings.localAiApiKey && (
-              <label className="flex items-center gap-1.5 text-xs text-zinc-500">
+              <label className="flex items-center gap-1.5 text-xs text-ink-2">
                 <input type="checkbox" name="clearLocalAiApiKey" />
                 Clear saved key
               </label>
             )}
           </label>
-          <div className="border-t border-zinc-200 pt-3 dark:border-zinc-700">
+          <div className="border-t border-rule pt-3">
             <label className="flex flex-col gap-1 text-sm">
-              <span className="text-zinc-500">
-                Claude API key <span className="text-zinc-400">(overrides the server&apos;s <code>ANTHROPIC_API_KEY</code> for your account — no .env edit needed)</span>
+              <span className="text-ink-2">
+                Claude API key <span className="text-muted">(overrides the server&apos;s <code>ANTHROPIC_API_KEY</code> for your account — no .env edit needed)</span>
               </span>
               <input
                 type="password"
                 name="anthropicApiKey"
                 placeholder={settings.anthropicApiKey ? "•••••••• (saved — leave blank to keep)" : "sk-ant-..."}
                 autoComplete="off"
-                className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800"
+                className="rounded-lg border border-rule bg-surface px-3 py-2 text-sm transition-colors focus:border-accent focus:outline-none"
               />
               {settings.anthropicApiKey && (
-                <label className="flex items-center gap-1.5 text-xs text-zinc-500">
+                <label className="flex items-center gap-1.5 text-xs text-ink-2">
                   <input type="checkbox" name="clearAnthropicApiKey" />
                   Clear saved key
                 </label>
@@ -344,16 +344,16 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
             <Button type="submit">Save</Button>
           </div>
         </form>
-        <p className="mt-2 text-xs text-zinc-400">
+        <p className="mt-2 text-xs text-muted">
           Leave the URL/model blank to use Claude. Without a Claude API
           key saved here, it falls back to <code>ANTHROPIC_API_KEY</code> in
           your server&apos;s <code>.env</code>.
         </p>
       </section>
 
-      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
-        <h2 className="text-lg font-semibold">Automations</h2>
-        <p className="mt-1 text-xs text-zinc-400">
+      <section className="mt-6 rounded-xl border border-rule bg-surface p-5">
+        <h2 className="font-serif text-xl text-ink">Automations</h2>
+        <p className="mt-1 text-xs text-muted">
           When a task&apos;s status changes to X (optionally, only within a
           specific project), automatically do Y — reusing the AI subtask/
           email-draft features already in this app.
@@ -363,9 +363,9 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
         </div>
       </section>
 
-      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
-        <h2 className="text-lg font-semibold">Habits</h2>
-        <p className="mt-1 text-xs text-zinc-400">
+      <section className="mt-6 rounded-xl border border-rule bg-surface p-5">
+        <h2 className="font-serif text-xl text-ink">Habits</h2>
+        <p className="mt-1 text-xs text-muted">
           Flexible routine time — "exercise 3x a week" rather than a fixed
           recurring event. Placed into open slots each week, and re-placed
           (not dropped) if something else gets booked over a slot.
@@ -375,9 +375,9 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
         </div>
       </section>
 
-      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
-        <h2 className="text-lg font-semibold">Time slots</h2>
-        <p className="mt-1 text-xs text-zinc-400">
+      <section className="mt-6 rounded-xl border border-rule bg-surface p-5">
+        <h2 className="font-serif text-xl text-ink">Time slots</h2>
+        <p className="mt-1 text-xs text-muted">
           Named availability windows (Work, Sleep, School, or your own) —
           assign a task to one on its edit form and the scheduler only
           places it within that slot's days/hours instead of the default
@@ -395,9 +395,9 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
             label: "Calendars",
             content: (
               <>
-      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
-        <h2 className="text-lg font-semibold">Booking pages</h2>
-        <p className="mt-1 text-xs text-zinc-400">
+      <section className="mt-6 rounded-xl border border-rule bg-surface p-5">
+        <h2 className="font-serif text-xl text-ink">Booking pages</h2>
+        <p className="mt-1 text-xs text-muted">
           Each link is its own public page with its own slug, title, and
           duration — e.g. a 15-min quick chat vs. a 30-min deep dive. Bookings
           land as locked events on your calendar.
@@ -407,16 +407,16 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
         </div>
         <div className="mt-3">
           <ShareAvailabilityButton />
-          <p className="mt-1 text-xs text-zinc-400">
+          <p className="mt-1 text-xs text-muted">
             Copies a plain-text list of your open times — for pasting into
             an email or DM instead of sending a link.
           </p>
         </div>
       </section>
 
-      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
-        <h2 className="text-lg font-semibold">Import / export (.ics)</h2>
-        <p className="mt-1 text-xs text-zinc-400">
+      <section className="mt-6 rounded-xl border border-rule bg-surface p-5">
+        <h2 className="font-serif text-xl text-ink">Import / export (.ics)</h2>
+        <p className="mt-1 text-xs text-muted">
           Export your whole calendar as a standard .ics file, or import one
           from another app. Imported events are plain local events — not a
           two-way sync like Google/Apple.
@@ -424,7 +424,7 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
         <div className="mt-3 flex flex-wrap items-center gap-4">
           <a
             href="/api/ics/export"
-            className="inline-flex rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 shadow-sm transition-colors hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-200 dark:hover:bg-zinc-700"
+            className="inline-flex rounded-lg border border-rule px-4 py-2 text-sm font-medium text-ink-2 transition-colors hover:bg-rule-soft"
           >
             Export calendar (.ics)
           </a>
@@ -432,9 +432,9 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
         </div>
       </section>
 
-      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
-        <h2 className="text-lg font-semibold">API tokens</h2>
-        <p className="mt-1 text-xs text-zinc-400">
+      <section className="mt-6 rounded-xl border border-rule bg-surface p-5">
+        <h2 className="font-serif text-xl text-ink">API tokens</h2>
+        <p className="mt-1 text-xs text-muted">
           For external clients that can&apos;t sign in through the browser,
           like the Obsidian plugin. Each token acts as you — treat it like a
           password.
@@ -444,9 +444,9 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
         </div>
       </section>
 
-      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
-        <h2 className="text-lg font-semibold">Subscribed calendars</h2>
-        <p className="mt-1 text-xs text-zinc-400">
+      <section className="mt-6 rounded-xl border border-rule bg-surface p-5">
+        <h2 className="font-serif text-xl text-ink">Subscribed calendars</h2>
+        <p className="mt-1 text-xs text-muted">
           Subscribe to an external calendar by its ICS URL — holidays, a
           friend&apos;s public calendar. Read-only, auto-synced every 6
           hours.
@@ -456,17 +456,17 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
         </div>
       </section>
 
-      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
-        <h2 className="text-lg font-semibold">Google Calendar</h2>
+      <section className="mt-6 rounded-xl border border-rule bg-surface p-5">
+        <h2 className="font-serif text-xl text-ink">Google Calendar</h2>
 
         {googleAccounts.length > 0 ? (
           <GoogleAccountsManager accounts={googleAccounts} />
         ) : (
           <div className="mt-3 space-y-3">
-            <p className="text-sm text-zinc-600 dark:text-zinc-400">
+            <p className="text-sm text-ink-2">
               Not connected. You&apos;ll need a Google Cloud OAuth client
               first — see{" "}
-              <code className="rounded bg-zinc-100 px-1 py-0.5 text-xs dark:bg-zinc-700">
+              <code className="rounded bg-rule-soft px-1 py-0.5 text-xs">
                 docs/google-calendar-setup.md
               </code>{" "}
               in the repo, then set <code>GOOGLE_CLIENT_ID</code> and{" "}
@@ -474,7 +474,7 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
             </p>
             <a
               href="/api/google/connect"
-              className="inline-flex rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-all hover:bg-indigo-700 active:scale-[0.98] dark:bg-indigo-500 dark:hover:bg-indigo-400"
+              className="inline-flex rounded-lg bg-ink px-4 py-2 text-sm font-medium text-paper transition-all hover:opacity-85 active:scale-[0.98]"
             >
               Connect Google Calendar
             </a>
@@ -482,12 +482,12 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
         )}
       </section>
 
-      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
-        <h2 className="text-lg font-semibold">Apple Calendar</h2>
+      <section className="mt-6 rounded-xl border border-rule bg-surface p-5">
+        <h2 className="font-serif text-xl text-ink">Apple Calendar</h2>
 
         {appleAccount ? (
           <div className="mt-3 space-y-3">
-            <p className="text-sm text-zinc-600 dark:text-zinc-400">
+            <p className="text-sm text-ink-2">
               Connected as <span className="font-medium">{appleAccount.appleId}</span>.
               {appleAccount.lastSyncedAt
                 ? ` Last synced ${appleAccount.lastSyncedAt.toLocaleString()}.`
@@ -499,7 +499,7 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
                 <Button type="submit" variant="secondary">Disconnect</Button>
               </form>
             </div>
-            <p className="text-xs text-zinc-400">
+            <p className="text-xs text-muted">
               Read-only overlay, not a two-way sync like Google — events pull in
               (past 7 days through the next 90) as locked blocks so the
               scheduler won&apos;t double-book them, but nothing created or
@@ -509,15 +509,15 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
         ) : (
           <div className="mt-3 space-y-3">
             {appleError && (
-              <p className="text-sm text-red-600 dark:text-red-400">{appleError}</p>
+              <p className="text-sm text-accent">{appleError}</p>
             )}
-            <p className="text-sm text-zinc-600 dark:text-zinc-400">
+            <p className="text-sm text-ink-2">
               Apple has no OAuth login for third-party apps — use an{" "}
               <a
                 href="https://support.apple.com/en-us/102654"
                 target="_blank"
                 rel="noreferrer"
-                className="text-indigo-600 underline dark:text-indigo-400"
+                className="text-accent underline"
               >
                 app-specific password
               </a>{" "}
@@ -529,14 +529,14 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
                 type="email"
                 placeholder="you@icloud.com"
                 required
-                className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800"
+                className="rounded-lg border border-rule bg-surface px-3 py-2 text-sm transition-colors focus:border-accent focus:outline-none"
               />
               <input
                 name="appPassword"
                 type="password"
                 placeholder="App-specific password"
                 required
-                className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800"
+                className="rounded-lg border border-rule bg-surface px-3 py-2 text-sm transition-colors focus:border-accent focus:outline-none"
               />
               <div>
                 <Button type="submit">Connect Apple Calendar</Button>
@@ -546,9 +546,9 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
         )}
       </section>
 
-      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
-        <h2 className="text-lg font-semibold">Calendar sharing</h2>
-        <p className="mt-1 text-xs text-zinc-400">
+      <section className="mt-6 rounded-xl border border-rule bg-surface p-5">
+        <h2 className="font-serif text-xl text-ink">Calendar sharing</h2>
+        <p className="mt-1 text-xs text-muted">
           Share your calendar with another account on this instance — they
           see it overlaid on their own calendar. View-only; they can&apos;t
           edit anything on it.
@@ -579,16 +579,16 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
             label: "Account",
             content: (
               <>
-      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
-        <h2 className="text-lg font-semibold">Account</h2>
-        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+      <section className="mt-6 rounded-xl border border-rule bg-surface p-5">
+        <h2 className="font-serif text-xl text-ink">Account</h2>
+        <p className="mt-2 text-sm text-ink-2">
           Signed in as <span className="font-medium">{user.email}</span>.
         </p>
         <div className="mt-3 flex items-center gap-3">
           {user.isAdmin && (
             <Link
               href="/feedback-inbox"
-              className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700/60"
+              className="rounded-lg border border-rule bg-surface px-3 py-1.5 text-sm font-medium text-ink-2 transition-colors hover:bg-rule-soft"
             >
               Feedback inbox
             </Link>
@@ -598,15 +598,15 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
           </form>
         </div>
 
-        <form action={changePasswordAction} className="mt-5 flex flex-col gap-3 border-t border-zinc-200 pt-4 dark:border-zinc-700">
-          <h3 className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Change password</h3>
+        <form action={changePasswordAction} className="mt-5 flex flex-col gap-3 border-t border-rule pt-4">
+          <h3 className="text-sm font-medium text-ink-2">Change password</h3>
           <div className="flex flex-wrap gap-3">
             <input
               type="password"
               name="currentPassword"
               placeholder="Current password"
               required
-              className="min-w-[10rem] flex-1 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800"
+              className="min-w-[10rem] flex-1 rounded-lg border border-rule bg-surface px-3 py-2 text-sm transition-colors focus:border-accent focus:outline-none"
             />
             <input
               type="password"
@@ -614,14 +614,14 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
               placeholder="New password (min. 8 characters)"
               required
               minLength={8}
-              className="min-w-[10rem] flex-1 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800"
+              className="min-w-[10rem] flex-1 rounded-lg border border-rule bg-surface px-3 py-2 text-sm transition-colors focus:border-accent focus:outline-none"
             />
           </div>
           {passwordError && (
-            <p className="text-sm text-red-600 dark:text-red-400">{passwordError}</p>
+            <p className="text-sm text-accent">{passwordError}</p>
           )}
           {passwordChanged && (
-            <p className="text-sm text-green-600 dark:text-green-400">Password changed.</p>
+            <p className="text-sm text-ink-2">Password changed.</p>
           )}
           <div>
             <Button type="submit" variant="secondary">Update password</Button>
@@ -629,9 +629,9 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
         </form>
       </section>
 
-      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
+      <section className="mt-6 rounded-xl border border-rule bg-surface p-5">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Active sessions</h2>
+          <h2 className="font-serif text-xl text-ink">Active sessions</h2>
           {sessions.length > 1 && (
             <form action={revokeOtherSessionsAction}>
               <Button type="submit" variant="secondary">Log out everywhere else</Button>
@@ -644,13 +644,13 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
             return (
               <li
                 key={s.id}
-                className="flex items-center justify-between gap-3 rounded-lg border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-700"
+                className="flex items-center justify-between gap-3 rounded-lg border border-rule px-3 py-2 text-sm"
               >
                 <div>
                   <span className="font-medium">
                     {isCurrent ? "This device" : "Other device"}
                   </span>
-                  <span className="ml-2 text-xs text-zinc-500">
+                  <span className="ml-2 text-xs text-ink-2">
                     signed in {s.createdAt.toLocaleString()} · expires {s.expiresAt.toLocaleDateString()}
                   </span>
                 </div>
@@ -658,7 +658,7 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
                   <form action={revokeSessionAction.bind(null, s.id)}>
                     <button
                       type="submit"
-                      className="text-xs text-zinc-400 transition-colors hover:text-red-600 dark:hover:text-red-400"
+                      className="text-xs text-muted transition-colors hover:text-accent"
                     >
                       Log out
                     </button>

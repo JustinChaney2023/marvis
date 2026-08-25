@@ -25,17 +25,17 @@ export default function TopBar() {
   if (HIDDEN_PREFIXES.some((p) => pathname.startsWith(p))) return null;
 
   return (
-    <header className="sticky top-0 z-30 flex shrink-0 items-center justify-between gap-2 overflow-x-auto border-b border-zinc-200 bg-white/90 px-3 py-2.5 shadow-sm backdrop-blur print:hidden sm:gap-4 sm:px-4 dark:border-zinc-700 dark:bg-zinc-900/90">
+    <header className="sticky top-0 z-30 flex shrink-0 items-center justify-between gap-2 overflow-x-auto border-b border-rule bg-surface px-3 py-2.5 print:hidden sm:gap-4 sm:px-4">
       <div className="flex shrink-0 items-center gap-2 sm:gap-3">
         <Link href="/" className="flex items-baseline gap-1.5 px-1">
-          <span className="text-sm font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
+          <span className="font-serif text-lg tracking-tight text-ink">
             Marvis
           </span>
-          <span className="hidden text-[10px] font-medium text-zinc-400 sm:inline dark:text-zinc-500">
+          <span className="hidden font-mono text-[10px] text-muted sm:inline">
             v{APP_VERSION}
           </span>
         </Link>
-        <span className="hidden h-5 w-px bg-zinc-200 sm:block dark:bg-zinc-700" />
+        <span className="hidden h-5 w-px bg-rule sm:block" />
         <NavLinks />
       </div>
       <div className="flex shrink-0 items-center gap-1.5">

@@ -18,17 +18,17 @@ export default async function MeetPage() {
 
   return (
     <main className="mx-auto w-full max-w-lg flex-1 px-6 py-12">
-      <h1 className="text-2xl font-bold tracking-tight">Find a group time</h1>
-      <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+      <h1 className="font-serif text-4xl leading-none text-ink">Find a group time</h1>
+      <p className="mt-2 text-sm text-ink-2">
         Pick people who&apos;ve shared their calendar with you, and this
         finds the earliest slot that&apos;s open for everyone.
       </p>
 
       {shares.length === 0 ? (
-        <p className="mt-6 rounded-lg border border-dashed border-zinc-200 px-4 py-6 text-center text-sm text-zinc-500 dark:border-zinc-700">
+        <p className="mt-6 rounded-lg border border-dashed border-rule px-4 py-6 text-center text-sm text-muted">
           Nobody&apos;s shared their calendar with you yet. Ask a friend to
           add you in{" "}
-          <Link href="/settings" className="text-indigo-600 dark:text-indigo-400">
+          <Link href="/settings" className="text-accent">
             Settings → Calendars → Calendar sharing
           </Link>
           .

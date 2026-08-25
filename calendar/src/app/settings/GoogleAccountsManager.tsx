@@ -53,7 +53,7 @@ function CalendarPicker({ account }: { account: ManagedGoogleAccount }) {
       <button
         type="button"
         onClick={load}
-        className="text-xs text-zinc-500 underline hover:text-zinc-700 dark:hover:text-zinc-300"
+        className="text-xs text-ink-2 underline hover:text-ink"
       >
         Change calendar ({account.calendarId})
       </button>
@@ -63,14 +63,14 @@ function CalendarPicker({ account }: { account: ManagedGoogleAccount }) {
   return (
     <div className="flex items-center gap-2 text-xs">
       {isLoading ? (
-        <span className="text-zinc-400">Loading calendars…</span>
+        <span className="text-muted">Loading calendars…</span>
       ) : error ? (
-        <span className="text-red-600 dark:text-red-400">{error}</span>
+        <span className="text-accent">{error}</span>
       ) : (
         <select
           defaultValue={account.calendarId}
           onChange={(e) => setGoogleAccountCalendarAction(account.id, e.target.value)}
-          className="rounded-lg border border-zinc-200 bg-white px-2 py-1 dark:border-zinc-600 dark:bg-zinc-800"
+          className="rounded-lg border border-rule bg-surface px-2 py-1"
         >
           {options?.map((c) => (
             <option key={c.id} value={c.id}>
@@ -85,7 +85,7 @@ function CalendarPicker({ account }: { account: ManagedGoogleAccount }) {
 }
 
 const inputClass =
-  "rounded-lg border border-zinc-200 bg-white px-2 py-1 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800";
+  "rounded-lg border border-rule bg-surface px-2 py-1 text-sm transition-colors focus:border-accent focus:outline-none";
 
 export default function GoogleAccountsManager({ accounts }: { accounts: ManagedGoogleAccount[] }) {
   return (
@@ -94,7 +94,7 @@ export default function GoogleAccountsManager({ accounts }: { accounts: ManagedG
         {accounts.map((account) => (
           <li
             key={account.id}
-            className="flex flex-col gap-2 rounded-lg border border-zinc-200 px-3 py-2.5 dark:border-zinc-600 sm:flex-row sm:items-center sm:justify-between"
+            className="flex flex-col gap-2 rounded-lg border border-rule px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between"
           >
             <div className="min-w-0">
               <div className="flex items-center gap-2">
@@ -108,12 +108,12 @@ export default function GoogleAccountsManager({ accounts }: { accounts: ManagedG
                   aria-label={`Label for ${account.email}`}
                 />
                 {account.isDefault && (
-                  <span className="flex-shrink-0 rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-medium text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300">
+                  <span className="flex-shrink-0 rounded-full bg-accent-wash px-2 py-0.5 text-[10px] font-medium text-accent">
                     Default
                   </span>
                 )}
               </div>
-              <p className="mt-0.5 truncate text-xs text-zinc-500 dark:text-zinc-400">
+              <p className="mt-0.5 truncate text-xs text-ink-2">
                 {account.email} —{" "}
                 {account.lastSyncedAt ? `synced ${account.lastSyncedAt.toLocaleString()}` : "never synced yet"}
               </p>
@@ -126,7 +126,7 @@ export default function GoogleAccountsManager({ accounts }: { accounts: ManagedG
                 <form action={setDefaultGoogleAccountAction.bind(null, account.id)}>
                   <button
                     type="submit"
-                    className="text-xs text-zinc-500 underline hover:text-zinc-700 dark:hover:text-zinc-300"
+                    className="text-xs text-ink-2 underline hover:text-ink"
                   >
                     Set as default
                   </button>
@@ -144,13 +144,13 @@ export default function GoogleAccountsManager({ accounts }: { accounts: ManagedG
         <SyncButton />
         <a
           href="/api/google/connect"
-          className="text-sm text-indigo-600 underline hover:text-indigo-700 dark:text-indigo-400"
+          className="text-sm text-accent underline hover:text-accent-hover"
         >
           Connect another Google account
         </a>
       </div>
 
-      <p className="text-xs text-zinc-400">
+      <p className="text-xs text-muted">
         Syncs the last 7 days through the next 90 for every connected account.
         New events you create here export to the account marked "Default"
         unless you pick a different one on the event itself. Deletions sync

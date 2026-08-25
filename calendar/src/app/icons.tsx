@@ -68,7 +68,7 @@ export function GearIcon({ className = "h-4 w-4" }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
       <path d={path} fill="currentColor" fillRule="evenodd" clipRule="evenodd" />
-      <circle cx={cx} cy={cy} r="3.4" className="fill-white dark:fill-zinc-900" />
+      <circle cx={cx} cy={cy} r="3.4" className="fill-surface" />
     </svg>
   );
 }
@@ -149,6 +149,15 @@ export function CalendarIcon({ className = "h-4 w-4" }: IconProps) {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className={className} aria-hidden="true">
       <rect x="3.5" y="5" width="17" height="15" rx="2" />
       <path strokeLinecap="round" d="M8 3v4M16 3v4M3.5 10h17" />
+    </svg>
+  );
+}
+
+export function ClockIcon({ className = "h-4 w-4" }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className={className} aria-hidden="true">
+      <circle cx="12" cy="12" r="8.5" />
+      <path strokeLinecap="round" d="M12 7.5V12l3 2" />
     </svg>
   );
 }
