@@ -41,7 +41,7 @@ export default function ThemeToggle() {
       }}
       aria-label={isDark ? "Switch to light theme" : "Switch to dark theme"}
       title={isDark ? "Switch to light theme" : "Switch to dark theme"}
-      className="flex h-9 w-9 items-center justify-center rounded-full border border-zinc-200 bg-white shadow-sm ring-1 ring-black/5 transition-all hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:hover:bg-zinc-700/60"
+      className="flex h-9 w-9 items-center justify-center rounded-full border border-zinc-200 bg-white transition-all hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:hover:bg-zinc-700/60"
     >
       {isDark ? <MoonIcon /> : <SunIcon />}
     </button>

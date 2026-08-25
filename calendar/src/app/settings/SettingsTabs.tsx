@@ -19,7 +19,7 @@ export default function SettingsTabs({
             onClick={() => setActive(tab.key)}
             className={
               active === tab.key
-                ? "rounded-full bg-white px-3 py-1.5 font-medium text-zinc-900 shadow-sm dark:bg-zinc-700 dark:text-zinc-100"
+                ? "rounded-full bg-white px-3 py-1.5 font-medium text-zinc-900 dark:bg-zinc-700 dark:text-zinc-100"
                 : "rounded-full px-3 py-1.5 text-zinc-500 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100"
             }
           >

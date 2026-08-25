@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth";
+import { PROJECT_EVENT_COLORS } from "@/lib/eventColors";
 
 const DAY_MS = 86_400_000;
 const DAY_WIDTH_PX = 32;
@@ -9,16 +10,13 @@ const ROW_HEIGHT_PX = 32;
 // something visible rather than a zero-width sliver.
 const MIN_BAR_DAYS = 1;
 
-const PROJECT_BAR_COLOR: Record<string, string> = {
-  zinc: "bg-zinc-400",
-  red: "bg-red-500",
-  amber: "bg-amber-500",
-  green: "bg-green-500",
-  blue: "bg-blue-500",
-  indigo: "bg-indigo-500",
-  violet: "bg-violet-500",
-  pink: "bg-pink-500",
-};
+// Derived from the shared palette rather than a second literal copy —
+// PROJECT_EVENT_COLORS.ts already has every color's literal class string
+// written out, which is all Tailwind's scanner needs; it doesn't need to
+// appear again at each usage site.
+const PROJECT_BAR_COLOR: Record<string, string> = Object.fromEntries(
+  Object.entries(PROJECT_EVENT_COLORS).map(([color, c]) => [color, c.dot]),
+);
 
 function startOfDay(d: Date): Date {
   const x = new Date(d);
@@ -126,7 +124,7 @@ export default async function GanttPage() {
       </p>
 
       {(trackedReport.length > 0 || untrackedMinutes > 0) && (
-        <div className="mt-4 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
+        <div className="mt-4 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-800">
           <h2 className="text-sm font-semibold">Tracked time this week</h2>
           <ul className="mt-2 flex flex-col gap-1.5">
             {trackedReport.map(([name, minutes]) => (
@@ -150,7 +148,7 @@ export default async function GanttPage() {
           No open tasks with a due date or scheduled slot yet.
         </p>
       ) : (
-        <div className="mt-6 overflow-x-auto rounded-xl border border-zinc-200 bg-white shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
+        <div className="mt-6 overflow-x-auto rounded-xl border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-800">
           <div className="relative" style={{ width: `${8 * 16 + totalDays * DAY_WIDTH_PX}px` }}>
             <div className="flex border-b border-zinc-200 dark:border-zinc-700">
               <div className="w-32 flex-shrink-0" />

@@ -5,8 +5,10 @@ import type { HTMLAttributes } from "react";
 // drift problem Button.tsx already solved for buttons.
 type Padding = "sm" | "md" | "lg";
 
-const BASE =
-  "rounded-xl border border-zinc-200 bg-white shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800";
+// Flat: border only, no shadow/ring. A resting card shouldn't carry
+// elevation — that's reserved for things actually floating above the
+// page (modals, popovers, dropdowns).
+const BASE = "rounded-xl border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-800";
 
 const PADDING: Record<Padding, string> = {
   sm: "p-4",

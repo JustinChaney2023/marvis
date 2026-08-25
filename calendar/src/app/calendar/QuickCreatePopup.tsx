@@ -59,7 +59,7 @@ export default function QuickCreatePopup({ start, end, onClose, onCreatedEvent }
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
+      className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -68,7 +68,7 @@ export default function QuickCreatePopup({ start, end, onClose, onCreatedEvent }
     >
       <form
         onSubmit={handleSubmit}
-        className="w-full max-w-xs rounded-2xl border border-zinc-200 bg-white p-4 shadow-2xl ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800"
+        className="modal-panel w-full max-w-xs rounded-2xl border border-zinc-200 bg-white p-4 shadow-2xl ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800"
       >
         <p className="text-xs text-zinc-500 dark:text-zinc-400">
           {formatTime(start)} – {formatTime(end)}
@@ -83,7 +83,7 @@ export default function QuickCreatePopup({ start, end, onClose, onCreatedEvent }
               onClick={() => setKind(k)}
               className={
                 kind === k
-                  ? "rounded-md bg-white px-3 py-1 text-xs font-medium capitalize text-zinc-900 shadow-sm dark:bg-zinc-700 dark:text-zinc-100"
+                  ? "rounded-md bg-white px-3 py-1 text-xs font-medium capitalize text-zinc-900 dark:bg-zinc-700 dark:text-zinc-100"
                   : "rounded-md px-3 py-1 text-xs capitalize text-zinc-500 dark:text-zinc-400"
               }
             >

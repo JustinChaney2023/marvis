@@ -10,7 +10,7 @@ export default async function ForgotPasswordPage(props: PageProps<"/forgot-passw
 
   return (
     <main className="mx-auto flex w-full max-w-sm flex-1 flex-col items-center justify-center px-6 py-12">
-      <div className="w-full rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
+      <div className="w-full rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-700 dark:bg-zinc-800">
         <h1 className="text-xl font-bold tracking-tight">Reset password</h1>
         <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
           Enter your account email and we&apos;ll send a reset link.

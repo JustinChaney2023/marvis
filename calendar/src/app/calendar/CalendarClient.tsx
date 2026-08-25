@@ -490,7 +490,7 @@ export default function CalendarClient({
             const { start, end } = defaultNewEventTimes();
             openCreate(start, end, { title: "Focus time", locked: true, eventType: "FOCUS_TIME" });
           }}
-          className="rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 shadow-sm transition-colors hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-200 dark:hover:bg-zinc-700"
+          className="rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-200 dark:hover:bg-zinc-700"
         >
           + Focus block
         </button>
@@ -504,7 +504,7 @@ export default function CalendarClient({
             end.setDate(end.getDate() + 1);
             openCreate(start, end, { title: "Out of office", locked: true, eventType: "OUT_OF_OFFICE" });
           }}
-          className="rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 shadow-sm transition-colors hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-200 dark:hover:bg-zinc-700"
+          className="rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-200 dark:hover:bg-zinc-700"
         >
           + Out of office
         </button>
@@ -514,7 +514,7 @@ export default function CalendarClient({
             const { start, end } = defaultNewEventTimes();
             openCreate(start, end);
           }}
-          className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-all hover:bg-indigo-700 active:scale-[0.98] dark:bg-indigo-500 dark:hover:bg-indigo-400"
+          className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-all hover:bg-zinc-700 active:scale-[0.98] dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
         >
           + New event
         </button>
@@ -673,7 +673,7 @@ function AgendaView({
             <p className="text-xs font-semibold text-zinc-500">
               {day.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
               {isSameDay(day, today) && (
-                <span className="ml-1.5 rounded-full bg-indigo-100 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300">
+                <span className="ml-1.5 rounded-full bg-zinc-900 px-1.5 py-0.5 text-[10px] font-medium text-white dark:bg-white dark:text-zinc-900">
                   Today
                 </span>
               )}
@@ -818,7 +818,7 @@ function HourGrid({
                   <div
                     className={
                       isToday
-                        ? "mt-0.5 inline-flex h-7 w-7 items-center justify-center rounded-full bg-indigo-600 text-sm font-bold text-white shadow-sm"
+                        ? "mt-0.5 inline-flex h-7 w-7 items-center justify-center rounded-full bg-zinc-900 text-sm font-bold text-white dark:bg-white dark:text-zinc-900"
                         : "text-lg font-semibold text-zinc-700 dark:text-zinc-300"
                     }
                   >
@@ -1074,7 +1074,7 @@ function DayColumn({
     <div
       className={
         isToday
-          ? "relative border-l border-zinc-200 bg-indigo-50/40 dark:border-zinc-700 dark:bg-indigo-500/[0.06]"
+          ? "relative border-l border-zinc-200 bg-zinc-100/60 dark:border-zinc-700 dark:bg-zinc-100/[0.04]"
           : "relative border-l border-zinc-200 dark:border-zinc-700"
       }
       style={{ height: `${TOTAL_HEIGHT}px` }}
@@ -1112,7 +1112,7 @@ function DayColumn({
       />
       {createPreview && (
         <div
-          className="pointer-events-none absolute left-0 right-0 rounded-lg border-2 border-dashed border-indigo-500 bg-indigo-500/10"
+          className="pointer-events-none absolute left-0 right-0 rounded-lg border-2 border-dashed border-zinc-500 bg-zinc-500/10"
           style={{
             top: `${(createPreview.lo / 60) * HOUR_HEIGHT}px`,
             height: `${Math.max(
@@ -1282,9 +1282,9 @@ function EventBlock({
       }}
       type="button"
       title="Shift/Cmd/Ctrl-click to select multiple events"
-      className={`group absolute overflow-hidden rounded-lg border-y border-r border-zinc-200 border-l-4 bg-white/40 p-1.5 text-left text-zinc-900 shadow-sm transition-all hover:shadow-md hover:brightness-95 dark:border-zinc-600 dark:bg-zinc-100/10 dark:text-zinc-100 dark:hover:brightness-110 ${color.bar} ${
+      className={`group absolute overflow-hidden rounded-lg border-y border-r border-zinc-200 border-l-4 bg-white/40 p-1.5 text-left text-zinc-900 transition-all hover:shadow-md hover:brightness-95 dark:border-zinc-600 dark:bg-zinc-100/10 dark:text-zinc-100 dark:hover:brightness-110 ${color.bar} ${
         isDragging ? "opacity-40" : ""
-      } ${selected ? "ring-2 ring-indigo-500 ring-offset-1 dark:ring-offset-zinc-900" : ""}`}
+      } ${selected ? "ring-2 ring-zinc-500 ring-offset-1 dark:ring-offset-zinc-900" : ""}`}
       style={{
         top: `${top}px`,
         height: `${displayHeight}px`,
@@ -1336,7 +1336,7 @@ function EventBlock({
           draggable={false}
           onMouseDown={handleResizeMouseDown}
           onClick={(e) => e.stopPropagation()}
-          className="absolute bottom-0 left-0 right-0 h-1.5 cursor-ns-resize bg-indigo-400/80 opacity-0 transition-opacity group-hover:opacity-100 dark:bg-indigo-500/80"
+          className="absolute bottom-0 left-0 right-0 h-1.5 cursor-ns-resize bg-zinc-400/80 opacity-0 transition-opacity group-hover:opacity-100 dark:bg-zinc-500/80"
           aria-label="Resize event"
         />
       )}
@@ -1391,7 +1391,7 @@ function MonthView({
   const currentMonth = viewStart.getMonth();
 
   return (
-    <div className="grid grid-cols-7 gap-px overflow-hidden rounded-xl border border-zinc-200 bg-zinc-200 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-700">
+    <div className="grid grid-cols-7 gap-px overflow-hidden rounded-xl border border-zinc-200 bg-zinc-200 dark:border-zinc-700 dark:bg-zinc-700">
       {WEEKDAY_LABELS_SUN_FIRST.map((label) => (
         <div
           key={label}
@@ -1449,7 +1449,7 @@ function MonthCell({
   };
 
   const dayNumberClass = isToday
-    ? "inline-flex h-6 w-6 items-center justify-center rounded-full bg-indigo-600 text-xs font-bold text-white shadow-sm"
+    ? "inline-flex h-6 w-6 items-center justify-center rounded-full bg-zinc-900 text-xs font-bold text-white dark:bg-white dark:text-zinc-900"
     : inCurrentMonth
       ? "inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold text-zinc-900 transition-colors hover:bg-zinc-100 dark:text-zinc-100 dark:hover:bg-zinc-700"
       : "inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold text-zinc-400";

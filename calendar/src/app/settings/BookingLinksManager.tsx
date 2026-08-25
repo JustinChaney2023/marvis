@@ -47,7 +47,7 @@ function LinkFields({ defaults }: { defaults?: BookingLinkData }) {
                 onClick={() => toggleDay(code)}
                 className={
                   selected
-                    ? "flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-xs font-semibold text-white transition-colors hover:bg-indigo-700 dark:bg-indigo-500"
+                    ? "flex h-8 w-8 items-center justify-center rounded-lg bg-zinc-900 text-xs font-semibold text-white transition-colors hover:bg-zinc-700 dark:bg-white dark:text-zinc-900"
                     : "flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-200 text-xs font-semibold text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-400 dark:hover:bg-zinc-700"
                 }
               >

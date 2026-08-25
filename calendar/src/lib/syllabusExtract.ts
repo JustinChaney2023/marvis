@@ -7,9 +7,15 @@ const ExtractedItemSchema = z.object({
   title: z.string(),
   // YYYY-MM-DD, or null if the syllabus text genuinely doesn't give
   // enough to resolve a real date (e.g. "TBD", or a week number with no
-  // term start date supplied to anchor it).
+  // term start date supplied to anchor it), or if this item recurs
+  // (recurringDays set instead).
   dueDate: z.string().nullable(),
   notes: z.string().nullable(),
+  // Short weekday codes (WEEKDAY_CODES) when the syllabus states this
+  // deliverable happens on the same weekday(s) every week throughout the
+  // term (e.g. "Discussion Problems due most Wednesdays") — null for a
+  // normal one-off deliverable. Set dueDate to null when this is set.
+  recurringDays: z.array(z.enum(WEEKDAY_CODES)).nullable(),
 });
 
 const CourseInfoSchema = z.object({
@@ -136,6 +142,7 @@ export async function extractSyllabusDates(
     "If a date genuinely can't be resolved, leave it null and say why in notes.\n\n" +
     "For `items`: graded deliverables (assignments, labs, quizzes, knowledge checks, discussion posts, projects, dated readings) AND hard administrative deadlines the student must not miss (add/drop deadline, withdrawal deadline, \"all work submitted by\" dates). " +
     "Do NOT put exams here — every exam belongs in `examDates` instead, or it will be created twice. " +
+    "If a deliverable recurs on the same weekday(s) every week for the whole term (e.g. \"Discussion Problems due most Wednesdays\", \"weekly quiz every Friday\") — as opposed to a one-off item with its own date — set `recurringDays` to those weekday codes and leave `dueDate` null, instead of inventing one entry per week. " +
     "Skip office hours, policy prose, and general course info here; those go in courseInfo.\n" +
     "For `courseInfo`: pull whatever is stated (course name, course code/section, term, credit hours, instructor name/email, meeting days as short weekday codes SU/MO/TU/WE/TH/FR/SA, meeting start/end time as HH:mm 24-hour, meeting location, office hours, grading scale, grading policy, late-work policy, AI-use policy, required technology/software/accounts, required/optional books). " +
     "Set `courseSummary` to a short plain-prose summary of what the course is and how it's delivered, including learning outcomes if listed. " +
@@ -154,7 +161,7 @@ export async function extractSyllabusDates(
     anthropicApiKey,
     maxTokens: 8000,
     shapeHint:
-      '{"items": [{"title": string, "dueDate": string|null, "notes": string|null}], ' +
+      '{"items": [{"title": string, "dueDate": string|null, "notes": string|null, "recurringDays": string[]|null}], ' +
       '"courseInfo": {"courseName": string|null, "courseCode": string|null, "term": string|null, "creditHours": string|null, "instructorName": string|null, "instructorEmail": string|null, "meetingDays": string[]|null, "meetingStartTime": string|null, "meetingEndTime": string|null, "meetingLocation": string|null, "officeHoursDays": string|null, "officeHoursTime": string|null, "officeHoursLocation": string|null, "gradingScale": string|null, "gradingPolicy": string|null, "latePolicy": string|null, "aiPolicy": string|null, "requiredTechnology": string[]|null, "requiredBooks": string[]|null, "optionalBooks": string[]|null, "courseSummary": string|null}, ' +
       '"examDates": [{"title": string, "type": "midterm"|"final"|"other", "date": string|null, "notes": string|null}], ' +
       '"lectureSchedule": [{"date": string|null, "topic": string}]}',

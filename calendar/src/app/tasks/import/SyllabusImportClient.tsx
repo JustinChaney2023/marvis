@@ -27,6 +27,7 @@ type ReviewRow = {
   title: string;
   dueDateYMD: string | null;
   notes: string | null;
+  recurringDays: WeekdayCode[] | null;
   include: boolean;
 };
 
@@ -143,7 +144,14 @@ export default function SyllabusImportClient({
           title: item.title,
           dueDateYMD: item.dueDate,
           notes: item.notes,
-          include: true,
+          recurringDays: item.recurringDays,
+          // Genuinely dated or recurring items are real, detected
+          // commitments — include by default. An item with neither is a
+          // placeholder ("Assignment 3", no date the syllabus ever gives)
+          // and shouldn't quietly become a real task; the review UI puts
+          // these in their own section, unchecked, for the user to date
+          // and opt in individually.
+          include: Boolean(item.dueDate || (item.recurringDays && item.recurringDays.length > 0)),
         })),
       );
       setCourseName(result.courseInfo.courseName ?? "");
@@ -189,8 +197,33 @@ export default function SyllabusImportClient({
   const toggleMeetingDay = (day: WeekdayCode) => {
     setMeetingDays((prev) => (prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]));
   };
+  const toggleRowDay = (index: number, day: WeekdayCode) => {
+    setRows(
+      (prev) =>
+        prev?.map((r, i) => {
+          if (i !== index) return r;
+          const current = r.recurringDays ?? [];
+          return {
+            ...r,
+            recurringDays: current.includes(day) ? current.filter((d) => d !== day) : [...current, day],
+          };
+        }) ?? null,
+    );
+  };
 
   const canCreateClassSchedule = meetingDays.length > 0 && meetingStartTime && meetingEndTime && termStart;
+
+  // Index lists (not copies) so updateRow/toggleRowDay keep working against
+  // the flat `rows` array regardless of which section a row renders in.
+  const recurringRows = (rows ?? [])
+    .map((r, i) => (r.recurringDays && r.recurringDays.length > 0 ? i : -1))
+    .filter((i) => i >= 0);
+  const datedRows = (rows ?? [])
+    .map((r, i) => (!(r.recurringDays && r.recurringDays.length > 0) && r.dueDateYMD ? i : -1))
+    .filter((i) => i >= 0);
+  const futureRows = (rows ?? [])
+    .map((r, i) => (!(r.recurringDays && r.recurringDays.length > 0) && !r.dueDateYMD ? i : -1))
+    .filter((i) => i >= 0);
 
   const handleImport = async () => {
     if (!rows) return;
@@ -199,7 +232,7 @@ export default function SyllabusImportClient({
     try {
       const tasks: SyllabusTaskInput[] = rows
         .filter((r) => r.include)
-        .map((r) => ({ title: r.title, dueDateYMD: r.dueDateYMD }));
+        .map((r) => ({ title: r.title, dueDateYMD: r.dueDateYMD, recurringDays: r.recurringDays }));
       const result = await importSyllabusCourseAction({
         courseName,
         useExistingProjectId: useExistingProjectId || null,
@@ -385,7 +418,7 @@ export default function SyllabusImportClient({
                 onClick={() => toggleMeetingDay(day)}
                 className={
                   meetingDays.includes(day)
-                    ? "flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-600 text-xs font-semibold text-white dark:bg-indigo-500"
+                    ? "flex h-9 w-9 items-center justify-center rounded-lg bg-zinc-900 text-xs font-semibold text-white dark:bg-white dark:text-zinc-900"
                     : "flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-200 text-xs font-semibold text-zinc-600 dark:border-zinc-600 dark:text-zinc-400"
                 }
               >
@@ -460,47 +493,148 @@ export default function SyllabusImportClient({
             </details>
           )}
 
-          <div className="flex flex-col gap-1">
-            <span className="text-sm text-zinc-500">Assignments</span>
-            {rows.length === 0 ? (
+          {rows.length === 0 ? (
+            <div className="flex flex-col gap-1">
+              <span className="text-sm text-zinc-500">Assignments</span>
               <p className="rounded-lg border border-dashed border-zinc-200 py-6 text-center text-sm text-zinc-500 dark:border-zinc-700">
                 No deliverables found in that text.
               </p>
-            ) : (
-              <ul className="flex flex-col gap-2">
-                {rows.map((row, i) => (
-                  <li
-                    key={i}
-                    className="flex flex-wrap items-start gap-2 rounded-xl border border-zinc-200 bg-white p-3 shadow-sm dark:border-zinc-700 dark:bg-zinc-800"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={row.include}
-                      onChange={(e) => updateRow(i, { include: e.target.checked })}
-                      className="mt-2.5 h-4 w-4"
-                      aria-label="Include"
-                    />
-                    <input
-                      value={row.title}
-                      onChange={(e) => updateRow(i, { title: e.target.value })}
-                      className={`${inputClass} min-w-[10rem] flex-[2]`}
-                    />
-                    <input
-                      type="date"
-                      value={row.dueDateYMD ?? ""}
-                      onChange={(e) => updateRow(i, { dueDateYMD: e.target.value || null })}
-                      className={`${inputClass} flex-1`}
-                    />
-                    {row.notes && !row.dueDateYMD && (
-                      <p className="w-full text-xs text-amber-600 dark:text-amber-400">
-                        {row.notes}
-                      </p>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+            </div>
+          ) : (
+            <>
+              {recurringRows.length > 0 && (
+                <div className="flex flex-col gap-1">
+                  <span className="text-sm text-zinc-500">Recurring (every week)</span>
+                  <ul className="flex flex-col gap-2">
+                    {recurringRows.map((i) => {
+                      const row = rows[i];
+                      return (
+                        <li
+                          key={i}
+                          className="flex flex-wrap items-start gap-2 rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-800"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={row.include}
+                            onChange={(e) => updateRow(i, { include: e.target.checked })}
+                            className="mt-2.5 h-4 w-4"
+                            aria-label="Include"
+                          />
+                          <input
+                            value={row.title}
+                            onChange={(e) => updateRow(i, { title: e.target.value })}
+                            className={`${inputClass} min-w-[10rem] flex-1`}
+                          />
+                          <div className="flex gap-1.5">
+                            {WEEKDAY_CODES.map((day) => (
+                              <button
+                                key={day}
+                                type="button"
+                                aria-pressed={(row.recurringDays ?? []).includes(day)}
+                                onClick={() => toggleRowDay(i, day)}
+                                className={
+                                  (row.recurringDays ?? []).includes(day)
+                                    ? "flex h-8 w-8 items-center justify-center rounded-lg bg-zinc-900 text-xs font-semibold text-white dark:bg-white dark:text-zinc-900"
+                                    : "flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-200 text-xs font-semibold text-zinc-600 dark:border-zinc-600 dark:text-zinc-400"
+                                }
+                              >
+                                {WEEKDAY_SHORT_LABELS[day]}
+                              </button>
+                            ))}
+                          </div>
+                          {!termStart && (
+                            <p className="w-full text-xs text-amber-600 dark:text-amber-400">
+                              Needs a term start date above to create — see the field near the top.
+                            </p>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
+
+              {datedRows.length > 0 && (
+                <div className="flex flex-col gap-1">
+                  <span className="text-sm text-zinc-500">Assignments</span>
+                  <ul className="flex flex-col gap-2">
+                    {datedRows.map((i) => {
+                      const row = rows[i];
+                      return (
+                        <li
+                          key={i}
+                          className="flex flex-wrap items-start gap-2 rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-800"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={row.include}
+                            onChange={(e) => updateRow(i, { include: e.target.checked })}
+                            className="mt-2.5 h-4 w-4"
+                            aria-label="Include"
+                          />
+                          <input
+                            value={row.title}
+                            onChange={(e) => updateRow(i, { title: e.target.value })}
+                            className={`${inputClass} min-w-[10rem] flex-[2]`}
+                          />
+                          <input
+                            type="date"
+                            value={row.dueDateYMD ?? ""}
+                            onChange={(e) => updateRow(i, { dueDateYMD: e.target.value || null })}
+                            className={`${inputClass} flex-1`}
+                          />
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
+
+              {futureRows.length > 0 && (
+                <div className="flex flex-col gap-1">
+                  <span className="text-sm text-zinc-500">
+                    No date yet{" "}
+                    <span className="text-zinc-400">
+                      (the syllabus didn&apos;t give one — pick a date and check the box to create these)
+                    </span>
+                  </span>
+                  <ul className="flex flex-col gap-2">
+                    {futureRows.map((i) => {
+                      const row = rows[i];
+                      return (
+                        <li
+                          key={i}
+                          className="flex flex-wrap items-start gap-2 rounded-xl border border-dashed border-zinc-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-800"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={row.include}
+                            onChange={(e) => updateRow(i, { include: e.target.checked })}
+                            className="mt-2.5 h-4 w-4"
+                            aria-label="Include"
+                          />
+                          <input
+                            value={row.title}
+                            onChange={(e) => updateRow(i, { title: e.target.value })}
+                            className={`${inputClass} min-w-[10rem] flex-[2]`}
+                          />
+                          <input
+                            type="date"
+                            value={row.dueDateYMD ?? ""}
+                            onChange={(e) => updateRow(i, { dueDateYMD: e.target.value || null })}
+                            className={`${inputClass} flex-1`}
+                          />
+                          {row.notes && (
+                            <p className="w-full text-xs text-amber-600 dark:text-amber-400">{row.notes}</p>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
+            </>
+          )}
 
           <label className="flex flex-col gap-1 text-sm">
             <span className="text-zinc-500">Assign to</span>

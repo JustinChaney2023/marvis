@@ -11,7 +11,7 @@ export default async function ResetPasswordPage(props: PageProps<"/reset-passwor
 
   return (
     <main className="mx-auto flex w-full max-w-sm flex-1 flex-col items-center justify-center px-6 py-12">
-      <div className="w-full rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
+      <div className="w-full rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-700 dark:bg-zinc-800">
         <h1 className="text-xl font-bold tracking-tight">Set a new password</h1>
 
         {!token ? (

@@ -35,7 +35,7 @@ export default async function FeedbackInboxPage() {
         {feedback.map((f) => (
           <li
             key={f.id}
-            className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800"
+            className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-800"
           >
             <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500">
               <span className={`rounded-full px-2 py-0.5 font-medium ${CATEGORY_BADGE[f.category]}`}>

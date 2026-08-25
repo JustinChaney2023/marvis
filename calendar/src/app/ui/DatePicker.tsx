@@ -148,9 +148,9 @@ export default function DatePicker({ name, value, onChange, placeholder = "Pick 
                     onClick={() => pick(d)}
                     className={
                       isSelected
-                        ? "mx-auto flex h-6 w-6 items-center justify-center rounded-full bg-indigo-600 font-semibold text-white"
+                        ? "mx-auto flex h-6 w-6 items-center justify-center rounded-full bg-zinc-900 font-semibold text-white dark:bg-white dark:text-zinc-900"
                         : isToday
-                          ? "mx-auto flex h-6 w-6 items-center justify-center rounded-full border border-indigo-500 text-indigo-600 dark:text-indigo-400"
+                          ? "mx-auto flex h-6 w-6 items-center justify-center rounded-full border border-zinc-400 font-semibold text-zinc-900 dark:border-zinc-500 dark:text-zinc-100"
                           : "mx-auto flex h-6 w-6 items-center justify-center rounded-full text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700"
                     }
                   >

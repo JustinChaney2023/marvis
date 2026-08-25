@@ -1,20 +1,13 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth";
+import { PROJECT_EVENT_COLORS } from "@/lib/eventColors";
 
-// Same palette as the detail page's header dot — kept in step by hand
-// rather than shared, since PROJECT_EVENT_COLORS in @/lib/eventColors is
-// the event-block class set (bar/bg/text), not a plain swatch.
-const PROJECT_COLOR_DOT: Record<string, string> = {
-  zinc: "bg-zinc-400",
-  red: "bg-red-500",
-  amber: "bg-amber-500",
-  green: "bg-green-500",
-  blue: "bg-blue-500",
-  indigo: "bg-indigo-500",
-  violet: "bg-violet-500",
-  pink: "bg-pink-500",
-};
+// Same palette as the detail page's header dot, both derived from the
+// one shared source in @/lib/eventColors.
+const PROJECT_COLOR_DOT: Record<string, string> = Object.fromEntries(
+  Object.entries(PROJECT_EVENT_COLORS).map(([color, c]) => [color, c.dot]),
+);
 
 /**
  * Project index. Projects previously had no entry point of their own —
@@ -52,7 +45,7 @@ export default async function ProjectsPage() {
         </div>
         <Link
           href="/tasks/import"
-          className="flex-shrink-0 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400"
+          className="flex-shrink-0 rounded-lg bg-zinc-900 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-700 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
         >
           Import syllabus
         </Link>

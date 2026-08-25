@@ -8,17 +8,11 @@ import ProjectAttachments from "./ProjectAttachments";
 import ProjectVocabulary from "./ProjectVocabulary";
 import RecordingsList from "../../recordings/RecordingsList";
 import { buildTranscriptionPrompt, listRecordings } from "@/lib/recordings";
+import { PROJECT_EVENT_COLORS } from "@/lib/eventColors";
 
-const PROJECT_COLOR_DOT: Record<string, string> = {
-  zinc: "bg-zinc-400",
-  red: "bg-red-500",
-  amber: "bg-amber-500",
-  green: "bg-green-500",
-  blue: "bg-blue-500",
-  indigo: "bg-indigo-500",
-  violet: "bg-violet-500",
-  pink: "bg-pink-500",
-};
+const PROJECT_COLOR_DOT: Record<string, string> = Object.fromEntries(
+  Object.entries(PROJECT_EVENT_COLORS).map(([color, c]) => [color, c.dot]),
+);
 
 export default async function ProjectDetailPage({
   params,

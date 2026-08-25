@@ -7,11 +7,13 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "tsx src/lib/scheduler.test.ts && tsx src/lib/recurrence.test.ts && tsx src/lib/quickCapture.test.ts && tsx src/lib/calendar-dates.test.ts && tsx src/lib/taskRecurrence.test.ts && tsx src/lib/ics.test.ts && tsx src/lib/timezone.test.ts && tsx src/lib/chatActions.test.ts && tsx src/lib/syllabusExtract.test.ts && tsx src/lib/apiTokens.test.ts && tsx src/lib/recordings.test.ts && tsx src/lib/hardware.test.ts && tsx src/lib/recordingFormat.test.ts && tsx src/lib/documentConvert.test.ts && tsx src/lib/taskDuration.test.ts && tsx src/lib/uploads.test.ts && tsx src/app/calendar/CalendarClient.test.ts",
-    "test:e2e": "playwright test"
+    "test": "tsx src/lib/scheduler.test.ts && tsx src/lib/recurrence.test.ts && tsx src/lib/quickCapture.test.ts && tsx src/lib/calendar-dates.test.ts && tsx src/lib/taskRecurrence.test.ts && tsx src/lib/ics.test.ts && tsx src/lib/timezone.test.ts && tsx src/lib/chatActions.test.ts && tsx src/lib/syllabusExtract.test.ts && tsx src/lib/apiTokens.test.ts && tsx src/lib/recordings.test.ts && tsx src/lib/transcribe.test.ts && tsx src/lib/hardware.test.ts && tsx src/lib/recordingFormat.test.ts && tsx src/lib/localWhisper.test.ts && tsx src/lib/documentConvert.test.ts && tsx src/lib/taskDuration.test.ts && tsx src/lib/uploads.test.ts && tsx src/lib/audioClean.test.ts && tsx src/app/calendar/CalendarClient.test.ts",
+    "test:e2e": "playwright test",
+    "setup:whisper": "node scripts/setup-whisper-assets.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.117.1",
+    "@huggingface/transformers": "^4.2.0",
     "@prisma/client": "^6.19.3",
     "@types/nodemailer": "^8.0.1",
     "dotenv": "^17.4.2",

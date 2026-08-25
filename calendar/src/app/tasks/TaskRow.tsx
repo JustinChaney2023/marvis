@@ -266,7 +266,7 @@ export default function TaskRow({
   };
 
   return (
-    <li className="rounded-xl border border-zinc-200 bg-white p-3 shadow-sm ring-1 ring-black/5 transition-shadow hover:shadow-md dark:border-zinc-700 dark:bg-zinc-800">
+    <li className="rounded-xl border border-zinc-200 bg-white p-3 transition-shadow hover:shadow-md dark:border-zinc-700 dark:bg-zinc-800">
       <div className="flex items-center gap-3">
         <form action={toggleTaskDone.bind(null, task.id, true)}>
           <button
@@ -456,7 +456,7 @@ export default function TaskRow({
           />
           <button
             type="submit"
-            className="rounded-lg bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-indigo-700 dark:bg-indigo-500"
+            className="rounded-lg bg-zinc-900 px-2.5 py-1 text-xs font-medium text-white hover:bg-zinc-700 dark:bg-white dark:text-zinc-900"
           >
             Delay
           </button>
@@ -492,7 +492,7 @@ export default function TaskRow({
                     aria-label="toggle subtask done"
                     className={
                       sub.status === "DONE"
-                        ? "flex h-4 w-4 items-center justify-center rounded-full bg-indigo-600 dark:bg-indigo-500"
+                        ? "flex h-4 w-4 items-center justify-center rounded-full bg-zinc-900 dark:bg-white"
                         : "h-4 w-4 rounded-full border border-zinc-300 bg-white transition-colors hover:border-indigo-500 dark:border-zinc-600 dark:bg-zinc-800"
                     }
                   />
@@ -584,7 +584,7 @@ export default function TaskRow({
                       type="button"
                       onClick={handleAcceptSuggested}
                       disabled={isAddingSubtask}
-                      className="rounded-lg bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50 dark:bg-indigo-500"
+                      className="rounded-lg bg-zinc-900 px-2 py-1 text-xs font-medium text-white hover:bg-zinc-700 disabled:opacity-50 dark:bg-white dark:text-zinc-900"
                     >
                       {isAddingSubtask ? "Adding…" : `Add ${suggested.length}`}
                     </button>
@@ -627,7 +627,7 @@ export default function TaskRow({
                     <button
                       type="button"
                       onClick={handleCopyDraft}
-                      className="rounded-lg bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-700 dark:bg-indigo-500"
+                      className="rounded-lg bg-zinc-900 px-2 py-1 text-xs font-medium text-white hover:bg-zinc-700 dark:bg-white dark:text-zinc-900"
                     >
                       {copyStatus === "copied" ? "Copied!" : "Copy"}
                     </button>
@@ -670,7 +670,7 @@ export default function TaskRow({
                     <button
                       type="button"
                       onClick={handleCopyDoc}
-                      className="rounded-lg bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-700 dark:bg-indigo-500"
+                      className="rounded-lg bg-zinc-900 px-2 py-1 text-xs font-medium text-white hover:bg-zinc-700 dark:bg-white dark:text-zinc-900"
                     >
                       {copyDocStatus === "copied" ? "Copied!" : "Copy"}
                     </button>

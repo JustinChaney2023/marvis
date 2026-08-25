@@ -65,10 +65,10 @@ export default function MiniMonthPicker({
               desktop, but a bare click-outside is easy to miss on a
               phone without something visibly separating the sheet. */}
           <div
-            className="fixed inset-0 z-30 bg-black/30 sm:hidden"
+            className="modal-backdrop fixed inset-0 z-30 bg-black/30 sm:hidden"
             onClick={() => setOpen(false)}
           />
-          <div className="fixed inset-x-0 bottom-0 z-40 w-full rounded-t-2xl border-t border-zinc-200 bg-white p-4 shadow-lg sm:absolute sm:inset-x-auto sm:right-0 sm:top-10 sm:bottom-auto sm:w-64 sm:rounded-xl sm:border sm:p-3 sm:shadow-lg sm:ring-1 sm:ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
+          <div className="modal-panel fixed inset-x-0 bottom-0 z-40 w-full rounded-t-2xl border-t border-zinc-200 bg-white p-4 shadow-lg sm:absolute sm:inset-x-auto sm:right-0 sm:top-10 sm:bottom-auto sm:w-64 sm:rounded-xl sm:border sm:p-3 sm:shadow-lg sm:ring-1 sm:ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
             <div className="flex items-center justify-between">
               <button
                 type="button"
@@ -110,9 +110,9 @@ export default function MiniMonthPicker({
                     onClick={() => goToDay(d)}
                     className={
                       isSelected
-                        ? "mx-auto flex h-6 w-6 items-center justify-center rounded-full bg-indigo-600 font-semibold text-white"
+                        ? "mx-auto flex h-6 w-6 items-center justify-center rounded-full bg-zinc-900 font-semibold text-white dark:bg-white dark:text-zinc-900"
                         : isToday
-                          ? "mx-auto flex h-6 w-6 items-center justify-center rounded-full border border-indigo-500 text-indigo-600 dark:text-indigo-400"
+                          ? "mx-auto flex h-6 w-6 items-center justify-center rounded-full border border-zinc-400 font-semibold text-zinc-900 dark:border-zinc-500 dark:text-zinc-100"
                           : "mx-auto flex h-6 w-6 items-center justify-center rounded-full text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700"
                     }
                   >

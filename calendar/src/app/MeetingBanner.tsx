@@ -74,7 +74,7 @@ export default function MeetingBanner() {
           href={next.meetingUrl && /^https?:\/\//i.test(next.meetingUrl) ? next.meetingUrl : "#"}
           target="_blank"
           rel="noreferrer"
-          className="rounded-full bg-indigo-600 px-3 py-1 text-xs font-medium text-white hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400"
+          className="rounded-full bg-zinc-900 px-3 py-1 text-xs font-medium text-white hover:bg-zinc-700 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
         >
           Join call
         </a>

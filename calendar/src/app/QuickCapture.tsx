@@ -60,7 +60,7 @@ export default function QuickCapture() {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 pt-[20vh] backdrop-blur-sm"
+      className="modal-backdrop fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 pt-[20vh] backdrop-blur-sm"
       onClick={(e) => {
         if (e.target === e.currentTarget) setOpen(false);
       }}
@@ -68,7 +68,7 @@ export default function QuickCapture() {
       aria-modal="true"
       aria-label="Quick add task"
     >
-      <div className="w-full max-w-lg rounded-2xl border border-zinc-200 bg-white p-4 shadow-2xl ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
+      <div className="modal-panel w-full max-w-lg rounded-2xl border border-zinc-200 bg-white p-4 shadow-2xl ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
         <div className="mb-2 inline-flex items-center gap-1 rounded-full bg-zinc-100 p-1 text-xs dark:bg-zinc-700">
           {(["task", "event"] as const).map((m) => (
             <button
@@ -77,7 +77,7 @@ export default function QuickCapture() {
               onClick={() => setMode(m)}
               className={
                 mode === m
-                  ? "rounded-full bg-white px-3 py-1 font-medium text-zinc-900 shadow-sm dark:bg-zinc-600 dark:text-zinc-50"
+                  ? "rounded-full bg-white px-3 py-1 font-medium text-zinc-900 dark:bg-zinc-600 dark:text-zinc-50"
                   : "rounded-full px-3 py-1 text-zinc-500 dark:text-zinc-400"
               }
             >

@@ -132,7 +132,7 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
             label: "Scheduling",
             content: (
               <>
-      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
+      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-800">
         <h2 className="text-lg font-semibold">Scheduling</h2>
         <form action={setUserTimezoneAction} className="mt-3 flex flex-wrap items-end gap-3">
           <label className="flex flex-col gap-1 text-sm">
@@ -172,7 +172,7 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
               {["SU", "MO", "TU", "WE", "TH", "FR", "SA"].map((code) => (
                 <label
                   key={code}
-                  className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-zinc-200 text-xs font-semibold text-zinc-600 transition-colors has-checked:border-indigo-600 has-checked:bg-indigo-600 has-checked:text-white dark:border-zinc-600 dark:text-zinc-400"
+                  className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-zinc-200 text-xs font-semibold text-zinc-600 transition-colors has-checked:border-zinc-900 has-checked:bg-zinc-900 has-checked:text-white dark:border-zinc-600 dark:text-zinc-400 dark:has-checked:border-white dark:has-checked:bg-white dark:has-checked:text-zinc-900"
                 >
                   <input
                     type="checkbox"
@@ -258,7 +258,7 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
         </p>
       </section>
 
-      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
+      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-800">
         <h2 className="text-lg font-semibold">AI / local model</h2>
         <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
           <Link href="/tasks/import" className="text-indigo-600 dark:text-indigo-400">
@@ -351,7 +351,7 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
         </p>
       </section>
 
-      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
+      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-800">
         <h2 className="text-lg font-semibold">Automations</h2>
         <p className="mt-1 text-xs text-zinc-400">
           When a task&apos;s status changes to X (optionally, only within a
@@ -363,7 +363,7 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
         </div>
       </section>
 
-      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
+      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-800">
         <h2 className="text-lg font-semibold">Habits</h2>
         <p className="mt-1 text-xs text-zinc-400">
           Flexible routine time — "exercise 3x a week" rather than a fixed
@@ -375,7 +375,7 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
         </div>
       </section>
 
-      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
+      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-800">
         <h2 className="text-lg font-semibold">Time slots</h2>
         <p className="mt-1 text-xs text-zinc-400">
           Named availability windows (Work, Sleep, School, or your own) —
@@ -395,7 +395,7 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
             label: "Calendars",
             content: (
               <>
-      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
+      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-800">
         <h2 className="text-lg font-semibold">Booking pages</h2>
         <p className="mt-1 text-xs text-zinc-400">
           Each link is its own public page with its own slug, title, and
@@ -414,7 +414,7 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
         </div>
       </section>
 
-      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
+      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-800">
         <h2 className="text-lg font-semibold">Import / export (.ics)</h2>
         <p className="mt-1 text-xs text-zinc-400">
           Export your whole calendar as a standard .ics file, or import one
@@ -424,7 +424,7 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
         <div className="mt-3 flex flex-wrap items-center gap-4">
           <a
             href="/api/ics/export"
-            className="inline-flex rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 shadow-sm transition-colors hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-200 dark:hover:bg-zinc-700"
+            className="inline-flex rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-200 dark:hover:bg-zinc-700"
           >
             Export calendar (.ics)
           </a>
@@ -432,7 +432,7 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
         </div>
       </section>
 
-      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
+      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-800">
         <h2 className="text-lg font-semibold">API tokens</h2>
         <p className="mt-1 text-xs text-zinc-400">
           For external clients that can&apos;t sign in through the browser,
@@ -444,7 +444,7 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
         </div>
       </section>
 
-      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
+      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-800">
         <h2 className="text-lg font-semibold">Subscribed calendars</h2>
         <p className="mt-1 text-xs text-zinc-400">
           Subscribe to an external calendar by its ICS URL — holidays, a
@@ -456,7 +456,7 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
         </div>
       </section>
 
-      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
+      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-800">
         <h2 className="text-lg font-semibold">Google Calendar</h2>
 
         {googleAccounts.length > 0 ? (
@@ -474,7 +474,7 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
             </p>
             <a
               href="/api/google/connect"
-              className="inline-flex rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-all hover:bg-indigo-700 active:scale-[0.98] dark:bg-indigo-500 dark:hover:bg-indigo-400"
+              className="inline-flex rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-all hover:bg-zinc-700 active:scale-[0.98] dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
             >
               Connect Google Calendar
             </a>
@@ -482,7 +482,7 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
         )}
       </section>
 
-      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
+      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-800">
         <h2 className="text-lg font-semibold">Apple Calendar</h2>
 
         {appleAccount ? (
@@ -546,7 +546,7 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
         )}
       </section>
 
-      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
+      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-800">
         <h2 className="text-lg font-semibold">Calendar sharing</h2>
         <p className="mt-1 text-xs text-zinc-400">
           Share your calendar with another account on this instance — they
@@ -579,7 +579,7 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
             label: "Account",
             content: (
               <>
-      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
+      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-800">
         <h2 className="text-lg font-semibold">Account</h2>
         <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
           Signed in as <span className="font-medium">{user.email}</span>.
@@ -629,7 +629,7 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
         </form>
       </section>
 
-      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
+      <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-800">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">Active sessions</h2>
           {sessions.length > 1 && (

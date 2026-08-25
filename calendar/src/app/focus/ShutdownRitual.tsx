@@ -40,7 +40,7 @@ export default function ShutdownRitual() {
         type="button"
         onClick={open}
         disabled={isLoading}
-        className="mt-6 self-start rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 shadow-sm ring-1 ring-black/5 transition-all hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700/60"
+        className="mt-6 self-start rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 transition-all hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700/60"
       >
         {isLoading ? "Loading…" : "Shut down for the day"}
       </button>
@@ -48,7 +48,7 @@ export default function ShutdownRitual() {
   }
 
   return (
-    <div className="mt-6 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
+    <div className="mt-6 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-800">
       <h2 className="text-sm font-semibold">Today, wrapped</h2>
 
       <div className="mt-3">

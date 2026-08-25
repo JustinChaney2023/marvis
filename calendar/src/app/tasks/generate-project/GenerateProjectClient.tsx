@@ -125,7 +125,7 @@ export default function GenerateProjectClient({ assignees }: { assignees: Assign
               {rows.map((row, i) => (
                 <li
                   key={i}
-                  className="flex flex-col gap-1 rounded-xl border border-zinc-200 bg-white p-3 shadow-sm dark:border-zinc-700 dark:bg-zinc-800"
+                  className="flex flex-col gap-1 rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-800"
                 >
                   <div className="flex items-start gap-2">
                     <input

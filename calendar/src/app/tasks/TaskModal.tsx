@@ -218,12 +218,12 @@ export default function TaskModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
+      className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
       onClick={onBackdropClick}
       role="dialog"
       aria-modal="true"
     >
-      <div className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-6 shadow-2xl ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
+      <div className="modal-panel max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-6 shadow-2xl ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold tracking-tight">
             {mode === "edit" ? "Edit task" : "New task"}
@@ -371,7 +371,7 @@ export default function TaskModal({
                       onClick={() => toggleLabel(label.id)}
                       className={
                         selected
-                          ? "rounded-full bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-indigo-700 dark:bg-indigo-500"
+                          ? "rounded-full bg-zinc-900 px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-zinc-700 dark:bg-white dark:text-zinc-900"
                           : "rounded-full border border-zinc-200 px-2.5 py-1 text-xs text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-400 dark:hover:bg-zinc-700"
                       }
                     >
@@ -455,7 +455,7 @@ export default function TaskModal({
                   defaultChecked={task?.hardDeadline ?? true}
                   className="peer sr-only"
                 />
-                <span className="block h-6 w-11 rounded-full bg-zinc-200 transition-colors peer-checked:bg-indigo-600 peer-focus-visible:ring-2 peer-focus-visible:ring-indigo-500/40 dark:bg-zinc-700 dark:peer-checked:bg-indigo-500" />
+                <span className="block h-6 w-11 rounded-full bg-zinc-200 transition-colors peer-checked:bg-zinc-900 peer-focus-visible:ring-2 peer-focus-visible:ring-zinc-500/40 dark:bg-zinc-700 dark:peer-checked:bg-white" />
                 <span className="absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform peer-checked:translate-x-5" />
               </span>
             </label>
@@ -466,9 +466,15 @@ export default function TaskModal({
               <span className="text-zinc-500">Repeat</span>
               <select
                 value={recurrenceSelection}
-                onChange={(e) => setRecurrenceSelection(e.target.value)}
-                disabled={!hasDueDate}
-                title={hasDueDate ? undefined : "Set a due date to repeat this task"}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setRecurrenceSelection(value);
+                  // The due date IS the recurrence anchor (its first
+                  // occurrence), not a separate prerequisite — picking a
+                  // repeat with no due date set yet defaults it to today
+                  // rather than blocking the choice on a date first.
+                  if (value && !dueAtDateValue) setDueAtDateValue(formatYMD(new Date()));
+                }}
                 className={inputClass}
               >
                 {RECURRENCE_PRESETS.map((preset) => (
@@ -476,9 +482,6 @@ export default function TaskModal({
                 ))}
                 <option value="CUSTOM">Custom</option>
               </select>
-              {!hasDueDate && (
-                <span className="text-xs text-zinc-400">Set a due date to enable repeat.</span>
-              )}
               {recurrenceSelection === "CUSTOM" && (
                 <div className="mt-1.5 flex gap-1.5">
                   {WEEKDAY_CODES.map((code, idx) => {
@@ -492,7 +495,7 @@ export default function TaskModal({
                         onClick={() => toggleDay(code)}
                         className={
                           selected
-                            ? "flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-600 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400"
+                            ? "flex h-9 w-9 items-center justify-center rounded-lg bg-zinc-900 text-xs font-semibold text-white transition-colors hover:bg-zinc-700 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
                             : "flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-200 text-xs font-semibold text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-400 dark:hover:bg-zinc-700"
                         }
                       >

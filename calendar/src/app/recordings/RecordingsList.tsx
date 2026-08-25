@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  askRecordingQuestionAction,
   createTasksFromRecordingAction,
   deleteRecordingAction,
   getRecordingAction,
@@ -65,6 +66,9 @@ export default function RecordingsList({ recordings }: { recordings: Row[] }) {
   const [created, setCreated] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [showTranscript, setShowTranscript] = useState(false);
+  const [askText, setAskText] = useState("");
+  const [asking, setAsking] = useState(false);
+  const [askError, setAskError] = useState<string | null>(null);
 
   const anyInFlight = recordings.some((r) => IN_FLIGHT.includes(r.status));
 
@@ -93,6 +97,8 @@ export default function RecordingsList({ recordings }: { recordings: Row[] }) {
   const toggle = (id: string) => {
     setCreated(null);
     setShowTranscript(false);
+    setAskText("");
+    setAskError(null);
     if (openId === id) {
       setOpenId(null);
       setDetail(null);
@@ -121,6 +127,27 @@ export default function RecordingsList({ recordings }: { recordings: Row[] }) {
       router.refresh();
     } finally {
       setBusy(false);
+    }
+  };
+
+  const handleAsk = async () => {
+    if (!detail || !askText.trim()) return;
+    setAsking(true);
+    setAskError(null);
+    try {
+      const result = await askRecordingQuestionAction(detail.id, askText.trim());
+      if (!result.ok) {
+        setAskError(result.error);
+        return;
+      }
+      setAskText("");
+      // Refetch rather than append locally — the server-side questions
+      // array is the source of truth (it's what gets persisted), and this
+      // keeps the UI honest if two tabs ask questions concurrently.
+      const refreshed = await getRecordingAction(detail.id);
+      setDetail(refreshed);
+    } finally {
+      setAsking(false);
     }
   };
 
@@ -257,6 +284,46 @@ export default function RecordingsList({ recordings }: { recordings: Row[] }) {
                           </span>
                         )}
                       </div>
+                    </div>
+                  )}
+
+                  {detail.transcript && (
+                    <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-600">
+                      <h3 className="text-sm font-semibold">Questions</h3>
+                      {detail.questions.length > 0 && (
+                        <ul className="mt-2 flex flex-col gap-2">
+                          {detail.questions.map((q, i) => (
+                            <li key={i} className="text-sm">
+                              <p className="text-zinc-500">
+                                {q.postHoc ? null : `[${formatDuration(q.atSec)}] `}
+                                {q.text}
+                              </p>
+                              <p className="mt-0.5">
+                                {q.answer ?? <span className="text-zinc-400 italic">Answer pending…</span>}
+                              </p>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      <div className="mt-3 flex items-center gap-2">
+                        <input
+                          value={askText}
+                          onChange={(e) => setAskText(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              void handleAsk();
+                            }
+                          }}
+                          placeholder="Ask something about this recording…"
+                          disabled={asking}
+                          className={`${inputClass} min-w-0 flex-1`}
+                        />
+                        <Button type="button" variant="outline" onClick={handleAsk} disabled={asking || !askText.trim()}>
+                          {asking ? "Asking…" : "Ask"}
+                        </Button>
+                      </div>
+                      {askError && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{askError}</p>}
                     </div>
                   )}
 

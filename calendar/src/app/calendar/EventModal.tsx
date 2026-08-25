@@ -320,12 +320,12 @@ export default function EventModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
+      className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
       onClick={onBackdropClick}
       role="dialog"
       aria-modal="true"
     >
-      <div className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-6 shadow-2xl ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
+      <div className="modal-panel max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-6 shadow-2xl ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold tracking-tight">
             {mode === "create" ? "New event" : "Edit event"}
@@ -584,7 +584,7 @@ export default function EventModal({
                     onClick={() => setEditScope(scope)}
                     className={
                       editScope === scope
-                        ? "rounded-full bg-white px-3 py-1 font-medium text-zinc-900 shadow-sm dark:bg-zinc-600 dark:text-zinc-50"
+                        ? "rounded-full bg-white px-3 py-1 font-medium text-zinc-900 dark:bg-zinc-600 dark:text-zinc-50"
                         : "rounded-full px-3 py-1 text-zinc-500 dark:text-zinc-400"
                     }
                   >
@@ -636,7 +636,7 @@ export default function EventModal({
                         onClick={() => toggleDay(code)}
                         className={
                           selected
-                            ? "flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-600 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400"
+                            ? "flex h-9 w-9 items-center justify-center rounded-lg bg-zinc-900 text-xs font-semibold text-white transition-colors hover:bg-zinc-700 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
                             : "flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-200 text-xs font-semibold text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-400 dark:hover:bg-zinc-700"
                         }
                       >
@@ -671,7 +671,7 @@ export default function EventModal({
                 defaultChecked={mode === "edit" ? !!event?.locked : !!initialLocked}
                 className="peer sr-only"
               />
-              <span className="block h-6 w-11 rounded-full bg-zinc-200 transition-colors peer-checked:bg-indigo-600 peer-focus-visible:ring-2 peer-focus-visible:ring-indigo-500/40 dark:bg-zinc-700 dark:peer-checked:bg-indigo-500" />
+              <span className="block h-6 w-11 rounded-full bg-zinc-200 transition-colors peer-checked:bg-zinc-900 peer-focus-visible:ring-2 peer-focus-visible:ring-zinc-500/40 dark:bg-zinc-700 dark:peer-checked:bg-white" />
               <span className="absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform peer-checked:translate-x-5" />
             </span>
           </label>
@@ -697,6 +697,12 @@ export default function EventModal({
                     className="text-xs text-zinc-500 underline hover:text-zinc-700 dark:hover:text-zinc-300"
                   >
                     Record
+                  </a>
+                  <a
+                    href={`/timer?eventId=${event?.id}`}
+                    className="text-xs text-zinc-500 underline hover:text-zinc-700 dark:hover:text-zinc-300"
+                  >
+                    Timer
                   </a>
                 </div>
                 {isEditingRecurring && (

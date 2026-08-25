@@ -30,7 +30,11 @@ const securityHeaders = [
     // how the App Router ships bootstrap data, not a shortcut taken here.
     value: [
       "default-src 'self'",
-      `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
+      // 'wasm-unsafe-eval' is required for the local-whisper Worker
+      // (src/lib/localWhisperWorker.ts) to compile/instantiate the ONNX
+      // runtime's WASM binary — Chrome enforces this under CSP even
+      // though the binary is same-origin.
+      `script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'${isDev ? " 'unsafe-eval'" : ""}`,
       "style-src 'self' 'unsafe-inline'",
       // https: (any host) so task notes can embed an externally-hosted
       // image link, not just ones uploaded through this app — the
@@ -39,6 +43,9 @@ const securityHeaders = [
       // images accepts; it's read-only, no script execution.
       "img-src 'self' data: https:",
       "connect-src 'self'",
+      // Same-origin module worker for local-whisper captioning — no
+      // blob: needed since it's loaded via new URL(..., import.meta.url).
+      "worker-src 'self'",
       "frame-ancestors 'none'",
       "base-uri 'self'",
       "form-action 'self'",
@@ -58,6 +65,11 @@ const nextConfig: NextConfig = {
   // MAX_CONVERT_BYTES in src/lib/documentConvert.ts.
   experimental: {
     serverActions: { bodySizeLimit: "25mb" },
+    // Default proxy body-clone limit is 10MB, well under recordings'
+    // own 300MB cap (src/app/api/uploads/recordings/route.ts) — without
+    // this, any mp3/m4a over 10MB gets silently truncated before the
+    // route handler ever sees it, and FormData parsing throws.
+    proxyClientMaxBodySize: "300mb",
   },
   // Lets dev-mode HMR work when accessing the dev server over Tailscale
   // instead of localhost — Next blocks cross-origin dev requests by

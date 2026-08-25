@@ -94,7 +94,7 @@ export default function FocusClient({ queue }: { queue: FocusTask[] }) {
 
   return (
     <div className="mt-10 flex flex-col items-center gap-8">
-      <div className="w-full rounded-2xl border border-zinc-200 bg-white p-6 text-center shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
+      <div className="w-full rounded-2xl border border-zinc-200 bg-white p-6 text-center dark:border-zinc-700 dark:bg-zinc-800">
         <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
           {task.eventStart ? "Scheduled now" : "Up next"}
         </p>
@@ -140,7 +140,7 @@ export default function FocusClient({ queue }: { queue: FocusTask[] }) {
         <button
           type="button"
           onClick={() => setRunning((r) => !r)}
-          className="rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm transition-all hover:bg-indigo-700 active:scale-[0.98] dark:bg-indigo-500 dark:hover:bg-indigo-400"
+          className="rounded-lg bg-zinc-900 px-5 py-2.5 text-sm font-medium text-white transition-all hover:bg-zinc-700 active:scale-[0.98] dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
         >
           {running ? "Pause" : secondsLeft === totalSeconds ? "Start" : "Resume"}
         </button>
@@ -150,7 +150,7 @@ export default function FocusClient({ queue }: { queue: FocusTask[] }) {
             setSecondsLeft(totalSeconds);
             setRunning(false);
           }}
-          className="rounded-lg border border-zinc-200 bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 shadow-sm transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700/60"
+          className="rounded-lg border border-zinc-200 bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700/60"
         >
           Reset
         </button>
@@ -161,7 +161,7 @@ export default function FocusClient({ queue }: { queue: FocusTask[] }) {
           type="button"
           onClick={handleMarkDone}
           disabled={isMarkingDone}
-          className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white shadow-sm transition-all hover:bg-zinc-800 active:scale-[0.98] disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+          className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-all hover:bg-zinc-800 active:scale-[0.98] disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
         >
           Mark done
         </button>

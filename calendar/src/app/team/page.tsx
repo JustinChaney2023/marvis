@@ -48,7 +48,7 @@ export default async function TeamPage() {
 
       <form
         action={createAssignee}
-        className="mt-6 flex flex-wrap items-end gap-3 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800"
+        className="mt-6 flex flex-wrap items-end gap-3 rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-800"
       >
         <label className="flex flex-col gap-1 text-sm">
           <span className="text-zinc-500">Name</span>
@@ -85,7 +85,7 @@ export default async function TeamPage() {
         {assignees.map((a) => (
           <li
             key={a.id}
-            className="flex items-center gap-3 rounded-xl border border-zinc-200 bg-white p-3 shadow-sm ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800"
+            className="flex items-center gap-3 rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-800"
           >
             <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-zinc-100 text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">
               {a.type === "AI" ? <RobotIcon /> : <PersonIcon />}
@@ -105,7 +105,7 @@ export default async function TeamPage() {
                   <div className="mt-1.5 flex items-center gap-2">
                     <div className="h-1.5 w-24 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-700">
                       <div
-                        className="h-full rounded-full bg-indigo-500"
+                        className="h-full rounded-full bg-zinc-500 dark:bg-zinc-400"
                         style={{ width: `${pct}%` }}
                       />
                     </div>

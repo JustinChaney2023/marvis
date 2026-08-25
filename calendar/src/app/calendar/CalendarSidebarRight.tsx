@@ -89,7 +89,7 @@ export default function CalendarSidebarRight({
   return (
     <div className="flex flex-col gap-4">
       {overcommitment && overcommitment.plannedMinutes > overcommitment.capMinutes && (
-        <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 shadow-sm ring-1 ring-black/5 dark:border-amber-700 dark:bg-amber-950/30">
+        <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 dark:border-amber-700 dark:bg-amber-950/30">
           <h2 className="flex items-center gap-1.5 text-sm font-semibold text-amber-700 dark:text-amber-400">
             <AlertTriangleIcon className="h-3.5 w-3.5" />
             Overcommitted today

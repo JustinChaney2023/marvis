@@ -114,7 +114,7 @@ export default function TimeSlotsManager({ timeSlots }: { timeSlots: TimeSlotDat
                       }
                       className={
                         selected
-                          ? "flex h-7 w-7 items-center justify-center rounded-full bg-indigo-600 text-xs font-semibold text-white"
+                          ? "flex h-7 w-7 items-center justify-center rounded-full bg-zinc-900 text-xs font-semibold text-white dark:bg-white dark:text-zinc-900"
                           : "flex h-7 w-7 items-center justify-center rounded-full border border-zinc-200 text-xs font-semibold text-zinc-600 dark:border-zinc-600 dark:text-zinc-400"
                       }
                     >
