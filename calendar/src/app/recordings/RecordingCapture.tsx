@@ -17,7 +17,7 @@ type Props = Attach & {
 };
 
 const inputClass =
-  "w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800";
+  "w-full rounded-lg border border-rule bg-surface px-3 py-2 text-sm text-ink transition-colors focus:border-accent focus:outline-none";
 
 // Flush a blob every few seconds instead of accumulating one giant buffer
 // at stop(). Bounds memory on an hour-long recording, and means a crash
@@ -295,15 +295,15 @@ export default function RecordingCapture({ eventId, projectId, defaultTitle, pol
   };
 
   return (
-    <div className="flex flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-800">
+    <div className="flex flex-col gap-3 rounded-xl border border-rule bg-surface p-4">
       {policy && (
-        <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+        <p className="rounded-lg border border-accent bg-accent-wash px-3 py-2 text-xs text-accent">
           <span className="font-medium">Recording policy for this course:</span> {policy}
         </p>
       )}
 
       <label className="flex flex-col gap-1 text-sm">
-        <span className="text-zinc-500">Title</span>
+        <span className="text-muted">Title</span>
         <input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
@@ -321,11 +321,11 @@ export default function RecordingCapture({ eventId, projectId, defaultTitle, pol
         ) : (
           <>
             <span
-              className="inline-flex items-center gap-2 rounded-full bg-red-50 px-3 py-1.5 text-sm font-medium text-red-700 dark:bg-red-950/40 dark:text-red-300"
+              className="inline-flex items-center gap-2 rounded-full border border-accent bg-accent-wash px-3 py-1.5 font-mono text-sm font-medium text-accent"
               role="status"
             >
               <span
-                className={`h-2.5 w-2.5 rounded-full bg-red-600 ${state === "recording" ? "animate-pulse" : ""}`}
+                className={`h-2.5 w-2.5 rounded-full bg-accent ${state === "recording" ? "animate-pulse" : ""}`}
                 aria-hidden
               />
               {state === "recording" ? "Recording" : "Paused"} — {formatDuration(elapsed)}
@@ -352,7 +352,7 @@ export default function RecordingCapture({ eventId, projectId, defaultTitle, pol
 
         {!isCapturing && (
           <>
-            <span className="text-xs text-zinc-400">or</span>
+            <span className="text-xs text-muted">or</span>
             <input
               ref={fileInputRef}
               type="file"
@@ -366,14 +366,14 @@ export default function RecordingCapture({ eventId, projectId, defaultTitle, pol
                   void submit(file, file.name, file.type);
                 }
               }}
-              className="max-w-full text-sm text-zinc-500 file:mr-3 file:rounded-lg file:border-0 file:bg-zinc-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-zinc-700 hover:file:bg-zinc-200 dark:file:bg-zinc-700 dark:file:text-zinc-200 dark:hover:file:bg-zinc-600"
+              className="max-w-full text-sm text-muted file:mr-3 file:rounded-lg file:border-0 file:bg-rule-soft file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-ink-2 hover:file:bg-rule"
             />
           </>
         )}
       </div>
 
       {state === "recording" && (
-        <p className="truncate text-xs text-zinc-400" aria-live="polite">
+        <p className="truncate text-xs text-muted" aria-live="polite">
           {captionStatus === "loading" && !caption && "Loading local captions…"}
           {captionStatus === "unavailable" && "Local captions unavailable — run `npm run setup:whisper` if this is a dev machine."}
           {caption}
@@ -400,7 +400,7 @@ export default function RecordingCapture({ eventId, projectId, defaultTitle, pol
             </Button>
           </div>
           {askedQuestions.length > 0 && (
-            <ul className="flex flex-col gap-0.5 text-xs text-zinc-500">
+            <ul className="flex flex-col gap-0.5 text-xs text-muted">
               {askedQuestions.map((q, i) => (
                 <li key={i}>
                   [{formatDuration(q.atSec)}] {q.text}
@@ -412,42 +412,42 @@ export default function RecordingCapture({ eventId, projectId, defaultTitle, pol
       )}
 
       {stepOutAt !== null && (
-        <p className="text-xs text-amber-600 dark:text-amber-400">
+        <p className="text-xs text-accent">
           Stepped out at {formatDuration(stepOutAt)} — press &quot;I&apos;m back&quot; for a catch-up note.
         </p>
       )}
-      {stepOutBusy && <span className="text-xs text-zinc-500">Summarizing what you missed…</span>}
+      {stepOutBusy && <span className="text-xs text-muted">Summarizing what you missed…</span>}
       {stepOutSummary && (
-        <p className="flex items-start justify-between gap-2 rounded-lg bg-indigo-50 px-3 py-2 text-sm text-indigo-900 dark:bg-indigo-950/40 dark:text-indigo-200">
+        <p className="flex items-start justify-between gap-2 rounded-lg border border-rule bg-rule-soft px-3 py-2 text-sm text-ink">
           <span>{stepOutSummary}</span>
           <button
             type="button"
             onClick={() => setStepOutSummary(null)}
-            className="shrink-0 text-indigo-500 hover:text-indigo-700 dark:text-indigo-300"
+            className="shrink-0 text-muted hover:text-ink"
             aria-label="Dismiss"
           >
             ×
           </button>
         </p>
       )}
-      {stepOutError && <span className="text-xs text-amber-600 dark:text-amber-400">{stepOutError}</span>}
+      {stepOutError && <span className="text-xs text-accent">{stepOutError}</span>}
 
       {busy && (
         <div className="flex flex-col gap-1">
-          <span className="text-xs text-zinc-500">
+          <span className="text-xs text-muted">
             {uploadPct !== null && uploadPct < 100 ? `Uploading… ${uploadPct}%` : "Processing…"}
           </span>
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-700">
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-rule-soft">
             <div
-              className="h-full rounded-full bg-indigo-500 transition-all"
+              className="h-full rounded-full bg-accent transition-all"
               style={{ width: `${uploadPct ?? 0}%` }}
             />
           </div>
         </div>
       )}
-      {error && <span className="text-sm text-red-600 dark:text-red-400">{error}</span>}
+      {error && <span className="text-sm text-accent">{error}</span>}
 
-      <p className="text-xs text-zinc-400">
+      <p className="text-xs text-muted">
         For a long lecture, recording on your phone and uploading the file here is more reliable — a
         backgrounded or locked device can suspend in-browser recording partway through.
       </p>

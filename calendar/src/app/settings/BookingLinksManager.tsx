@@ -35,7 +35,7 @@ function LinkFields({ defaults }: { defaults?: BookingLinkData }) {
     <>
       <input type="hidden" name="excludeDays" value={excluded.join(",")} />
       <div className="flex flex-col gap-1 text-sm">
-        <span className="text-zinc-500">No-meeting days</span>
+        <span className="text-ink-2">No-meeting days</span>
         <div className="flex gap-1.5">
           {WEEKDAY_CODES.map((code, idx) => {
             const selected = excluded.includes(code);
@@ -47,8 +47,8 @@ function LinkFields({ defaults }: { defaults?: BookingLinkData }) {
                 onClick={() => toggleDay(code)}
                 className={
                   selected
-                    ? "flex h-8 w-8 items-center justify-center rounded-lg bg-zinc-900 text-xs font-semibold text-white transition-colors hover:bg-zinc-700 dark:bg-white dark:text-zinc-900"
-                    : "flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-200 text-xs font-semibold text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-400 dark:hover:bg-zinc-700"
+                    ? "flex h-8 w-8 items-center justify-center rounded-lg bg-ink text-xs font-semibold text-paper transition-colors hover:opacity-85"
+                    : "flex h-8 w-8 items-center justify-center rounded-lg border border-rule text-xs font-semibold text-ink-2 transition-colors hover:bg-rule-soft"
                 }
               >
                 {WEEKDAY_LABELS[idx]}
@@ -58,32 +58,32 @@ function LinkFields({ defaults }: { defaults?: BookingLinkData }) {
         </div>
       </div>
       <label className="flex flex-col gap-1 text-sm">
-        <span className="text-zinc-500">URL slug</span>
+        <span className="text-ink-2">URL slug</span>
         <div className="flex items-center gap-2">
-          <span className="text-zinc-500">/book/</span>
+          <span className="text-ink-2">/book/</span>
           <input
             type="text"
             name="slug"
             defaultValue={defaults?.slug ?? ""}
             placeholder="quick-chat"
             required
-            className="w-40 rounded-lg border border-zinc-200 bg-white px-2 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800"
+            className="w-40 rounded-lg border border-rule bg-surface px-2 py-2 text-sm transition-colors focus:border-accent focus:outline-none"
           />
         </div>
       </label>
       <label className="flex flex-col gap-1 text-sm">
-        <span className="text-zinc-500">Title</span>
+        <span className="text-ink-2">Title</span>
         <input
           type="text"
           name="title"
           defaultValue={defaults?.title ?? ""}
           placeholder="Quick chat"
           required
-          className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800"
+          className="rounded-lg border border-rule bg-surface px-3 py-2 text-sm transition-colors focus:border-accent focus:outline-none"
         />
       </label>
       <label className="flex flex-col gap-1 text-sm">
-        <span className="text-zinc-500">Duration</span>
+        <span className="text-ink-2">Duration</span>
         <div className="flex items-center gap-2">
           <input
             type="number"
@@ -94,9 +94,9 @@ function LinkFields({ defaults }: { defaults?: BookingLinkData }) {
             step={5}
             list="booking-duration-presets"
             aria-label="Booking duration in minutes"
-            className="w-24 rounded-lg border border-zinc-200 bg-white px-2 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800"
+            className="w-24 rounded-lg border border-rule bg-surface px-2 py-2 text-sm transition-colors focus:border-accent focus:outline-none"
           />
-          <span className="text-zinc-500">minutes</span>
+          <span className="text-ink-2">minutes</span>
         </div>
         <datalist id="booking-duration-presets">
           {DURATION_PRESETS_MIN.map((m) => (
@@ -105,7 +105,7 @@ function LinkFields({ defaults }: { defaults?: BookingLinkData }) {
         </datalist>
       </label>
       <label className="flex flex-col gap-1 text-sm">
-        <span className="text-zinc-500">Minimum notice</span>
+        <span className="text-ink-2">Minimum notice</span>
         <div className="flex items-center gap-2">
           <input
             type="number"
@@ -115,13 +115,13 @@ function LinkFields({ defaults }: { defaults?: BookingLinkData }) {
             max={10_080}
             step={15}
             aria-label="Minimum notice in minutes"
-            className="w-24 rounded-lg border border-zinc-200 bg-white px-2 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800"
+            className="w-24 rounded-lg border border-rule bg-surface px-2 py-2 text-sm transition-colors focus:border-accent focus:outline-none"
           />
-          <span className="text-zinc-500">minutes before a booking can start</span>
+          <span className="text-ink-2">minutes before a booking can start</span>
         </div>
       </label>
       <label className="flex flex-col gap-1 text-sm">
-        <span className="text-zinc-500">Max bookings per day</span>
+        <span className="text-ink-2">Max bookings per day</span>
         <div className="flex items-center gap-2">
           <input
             type="number"
@@ -131,9 +131,9 @@ function LinkFields({ defaults }: { defaults?: BookingLinkData }) {
             max={100}
             placeholder="Unlimited"
             aria-label="Maximum bookings per day"
-            className="w-24 rounded-lg border border-zinc-200 bg-white px-2 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800"
+            className="w-24 rounded-lg border border-rule bg-surface px-2 py-2 text-sm transition-colors focus:border-accent focus:outline-none"
           />
-          <span className="text-zinc-500">leave blank for unlimited</span>
+          <span className="text-ink-2">leave blank for unlimited</span>
         </div>
       </label>
     </>
@@ -150,7 +150,7 @@ function BookingLinkRow({ link }: { link: BookingLinkData }) {
           await updateBookingLinkAction(link.id, formData);
           setEditing(false);
         }}
-        className="flex flex-col gap-3 rounded-lg border border-zinc-200 p-3 dark:border-zinc-600"
+        className="flex flex-col gap-3 rounded-lg border border-rule p-3"
       >
         <LinkFields defaults={link} />
         <div className="flex items-center gap-2">
@@ -164,10 +164,10 @@ function BookingLinkRow({ link }: { link: BookingLinkData }) {
   }
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-zinc-200 p-3 dark:border-zinc-600">
+    <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-rule p-3">
       <div className="min-w-0">
         <p className="truncate text-sm font-medium">{link.title}</p>
-        <p className="text-xs text-zinc-400">
+        <p className="text-xs text-muted">
           /book/{link.slug} · {link.durationMin} min
           {link.excludeDays && ` · no ${link.excludeDays.split(",").join("/")}`}
           {link.minNoticeMin > 0 && ` · ${link.minNoticeMin}min notice`}
@@ -180,7 +180,7 @@ function BookingLinkRow({ link }: { link: BookingLinkData }) {
             href={`/book/${link.slug}`}
             target="_blank"
             rel="noreferrer"
-            className="rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700 transition-colors hover:bg-indigo-100 dark:border-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-300 dark:hover:bg-indigo-950/60"
+            className="rounded-full border border-accent bg-accent-wash px-2.5 py-1 text-xs font-medium text-accent transition-colors hover:bg-accent-hover hover:text-paper"
           >
             Open
           </a>
@@ -188,7 +188,7 @@ function BookingLinkRow({ link }: { link: BookingLinkData }) {
         <form action={toggleBookingLinkAction.bind(null, link.id, !link.enabled)}>
           <button
             type="submit"
-            className="rounded-full px-2.5 py-1 text-xs text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-700 dark:hover:text-zinc-100"
+            className="rounded-full px-2.5 py-1 text-xs text-ink-2 transition-colors hover:bg-rule-soft hover:text-ink"
           >
             {link.enabled ? "Disable" : "Enable"}
           </button>
@@ -196,14 +196,14 @@ function BookingLinkRow({ link }: { link: BookingLinkData }) {
         <button
           type="button"
           onClick={() => setEditing(true)}
-          className="rounded-full px-2.5 py-1 text-xs text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-700 dark:hover:text-zinc-100"
+          className="rounded-full px-2.5 py-1 text-xs text-ink-2 transition-colors hover:bg-rule-soft hover:text-ink"
         >
           Edit
         </button>
         <form action={deleteBookingLinkAction.bind(null, link.id)}>
           <button
             type="submit"
-            className="rounded-full px-2.5 py-1 text-xs text-zinc-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/40 dark:hover:text-red-400"
+            className="rounded-full px-2.5 py-1 text-xs text-ink-2 transition-colors hover:bg-accent-wash hover:text-accent"
           >
             Delete
           </button>
@@ -220,11 +220,11 @@ export default function BookingLinksManager({ links }: { links: BookingLinkData[
         <BookingLinkRow key={link.id} link={link} />
       ))}
       {links.length === 0 && (
-        <p className="text-sm text-zinc-400">No booking links yet.</p>
+        <p className="text-sm text-muted">No booking links yet.</p>
       )}
 
       <details className="mt-1">
-        <summary className="cursor-pointer list-none text-sm text-indigo-600 hover:underline dark:text-indigo-400">
+        <summary className="cursor-pointer list-none text-sm text-accent hover:underline">
           + Add booking link
         </summary>
         <form action={createBookingLinkAction} className="mt-3 flex flex-col gap-3">

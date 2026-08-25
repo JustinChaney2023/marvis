@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { signupAction } from "../authActions";
 import Button from "../ui/Button";
+import Card from "../ui/Card";
 
 export default async function SignupPage(props: PageProps<"/signup">) {
   const sp = await props.searchParams;
@@ -10,9 +11,9 @@ export default async function SignupPage(props: PageProps<"/signup">) {
 
   return (
     <main className="mx-auto flex w-full max-w-sm flex-1 flex-col items-center justify-center px-6 py-12">
-      <div className="w-full rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-700 dark:bg-zinc-800">
-        <h1 className="text-xl font-bold tracking-tight">Create an account</h1>
-        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+      <Card padding="lg" className="w-full">
+        <h1 className="font-serif text-2xl text-ink">Create an account</h1>
+        <p className="mt-1 text-sm text-ink-2">
           Your own calendar, tasks, and Google connection.
         </p>
         <form action={signupAction} className="mt-4 flex flex-col gap-3">
@@ -21,13 +22,13 @@ export default async function SignupPage(props: PageProps<"/signup">) {
               name="inviteCode"
               placeholder="Invite code"
               required
-              className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800"
+              className="rounded-lg border border-rule bg-paper px-3 py-2 text-[13px] text-ink placeholder:text-muted transition-colors focus:border-accent focus:outline-none"
             />
           )}
           <input
             name="name"
             placeholder="Name (optional)"
-            className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800"
+            className="rounded-lg border border-rule bg-paper px-3 py-2 text-[13px] text-ink placeholder:text-muted transition-colors focus:border-accent focus:outline-none"
           />
           <input
             type="email"
@@ -35,7 +36,7 @@ export default async function SignupPage(props: PageProps<"/signup">) {
             placeholder="Email"
             autoFocus
             required
-            className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800"
+            className="rounded-lg border border-rule bg-paper px-3 py-2 text-[13px] text-ink placeholder:text-muted transition-colors focus:border-accent focus:outline-none"
           />
           <input
             type="password"
@@ -43,20 +44,18 @@ export default async function SignupPage(props: PageProps<"/signup">) {
             placeholder="Password (min. 8 characters)"
             required
             minLength={8}
-            className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800"
+            className="rounded-lg border border-rule bg-paper px-3 py-2 text-[13px] text-ink placeholder:text-muted transition-colors focus:border-accent focus:outline-none"
           />
-          {error && (
-            <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
-          )}
+          {error && <p className="text-sm text-accent">{error}</p>}
           <Button type="submit">Sign up</Button>
         </form>
-        <p className="mt-4 text-center text-sm text-zinc-500 dark:text-zinc-400">
+        <p className="mt-4 text-center text-sm text-ink-2">
           Already have an account?{" "}
-          <Link href="/login" className="font-medium text-indigo-600 dark:text-indigo-400">
+          <Link href="/login" className="font-medium text-accent hover:text-ink">
             Sign in
           </Link>
         </p>
-      </div>
+      </Card>
     </main>
   );
 }

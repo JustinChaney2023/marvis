@@ -14,6 +14,7 @@ import {
   scheduleAllAction,
 } from "../actions";
 import { RepeatIcon } from "../icons";
+import Button from "../ui/Button";
 import NewTaskButton from "./NewTaskButton";
 import TaskRow from "./TaskRow";
 import TaskBoard from "./TaskBoard";
@@ -151,36 +152,40 @@ export default async function Home(props: PageProps<"/tasks">) {
 
   return (
     <main className={`mx-auto w-full flex-1 px-6 py-12 ${view === "board" || view === "table" ? "max-w-6xl" : "max-w-2xl"}`}>
-      <div className="flex flex-wrap items-center justify-end gap-3">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <div className="font-mono text-[10px] tracking-wide text-muted uppercase">Everything open</div>
+          <h1 className="font-serif text-4xl leading-none tracking-tight text-ink">Tasks</h1>
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           <form action={scheduleAllAction}>
-            <button
+            <Button
               type="submit"
+              variant="secondary"
               title="Fix stale slots and schedule new tasks"
-              className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 transition-all hover:bg-zinc-50 active:scale-[0.98] dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700/60"
             >
               Schedule all
-            </button>
+            </Button>
           </form>
           <form action={rescheduleAllAction}>
-            <button
+            <Button
               type="submit"
+              variant="secondary"
               title="Re-plan every unlocked scheduled task from scratch"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 transition-all hover:bg-zinc-50 active:scale-[0.98] dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700/60"
             >
               <RepeatIcon className="h-3.5 w-3.5" />
               Reschedule all
-            </button>
+            </Button>
           </form>
           <Link
             href="/tasks/import"
-            className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 transition-all hover:bg-zinc-50 active:scale-[0.98] dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700/60"
+            className="rounded-[9px] border border-rule bg-surface px-4 py-[10px] text-[13px] font-medium text-ink-2 transition-all hover:bg-rule-soft active:scale-[0.98]"
           >
             Import
           </Link>
           <Link
             href="/tasks/generate-project"
-            className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 transition-all hover:bg-zinc-50 active:scale-[0.98] dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700/60"
+            className="rounded-[9px] border border-rule bg-surface px-4 py-[10px] text-[13px] font-medium text-ink-2 transition-all hover:bg-rule-soft active:scale-[0.98]"
           >
             Generate project
           </Link>
@@ -201,8 +206,8 @@ export default async function Home(props: PageProps<"/tasks">) {
           href="/tasks"
           className={
             !projectFilter
-              ? "rounded-full bg-white px-3 py-1 text-xs font-medium text-zinc-900 dark:bg-zinc-700 dark:text-zinc-100"
-              : "rounded-full px-3 py-1 text-xs text-zinc-500 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100"
+              ? "rounded-full bg-surface px-3 py-1 text-xs font-medium text-ink"
+              : "rounded-full px-3 py-1 text-xs text-muted transition-colors hover:text-ink"
           }
         >
           All
@@ -213,8 +218,8 @@ export default async function Home(props: PageProps<"/tasks">) {
             href={`/tasks?project=${project.id}`}
             className={
               projectFilter === project.id
-                ? "inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1 text-xs font-medium text-zinc-900 dark:bg-zinc-700 dark:text-zinc-100"
-                : "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs text-zinc-500 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100"
+                ? "inline-flex items-center gap-1.5 rounded-full bg-surface px-3 py-1 text-xs font-medium text-ink"
+                : "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs text-muted transition-colors hover:text-ink"
             }
           >
             <span
@@ -223,13 +228,13 @@ export default async function Home(props: PageProps<"/tasks">) {
             {project.name}
           </Link>
         ))}
-        <div className="ml-auto flex items-center gap-1 rounded-full bg-zinc-100 p-0.5 text-xs dark:bg-zinc-700">
+        <div className="ml-auto flex items-center gap-1 rounded-full bg-rule-soft p-0.5 text-xs">
           <Link
             href={viewParams("list")}
             className={
               view === "list"
-                ? "rounded-full bg-white px-2.5 py-1 font-medium text-zinc-900 dark:bg-zinc-600 dark:text-zinc-100"
-                : "rounded-full px-2.5 py-1 text-zinc-500 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100"
+                ? "rounded-full bg-surface px-2.5 py-1 font-medium text-ink"
+                : "rounded-full px-2.5 py-1 text-muted transition-colors hover:text-ink"
             }
           >
             List
@@ -238,8 +243,8 @@ export default async function Home(props: PageProps<"/tasks">) {
             href={viewParams("board")}
             className={
               view === "board"
-                ? "rounded-full bg-white px-2.5 py-1 font-medium text-zinc-900 dark:bg-zinc-600 dark:text-zinc-100"
-                : "rounded-full px-2.5 py-1 text-zinc-500 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100"
+                ? "rounded-full bg-surface px-2.5 py-1 font-medium text-ink"
+                : "rounded-full px-2.5 py-1 text-muted transition-colors hover:text-ink"
             }
           >
             Board
@@ -248,8 +253,8 @@ export default async function Home(props: PageProps<"/tasks">) {
             href={viewParams("table")}
             className={
               view === "table"
-                ? "rounded-full bg-white px-2.5 py-1 font-medium text-zinc-900 dark:bg-zinc-600 dark:text-zinc-100"
-                : "rounded-full px-2.5 py-1 text-zinc-500 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100"
+                ? "rounded-full bg-surface px-2.5 py-1 font-medium text-ink"
+                : "rounded-full px-2.5 py-1 text-muted transition-colors hover:text-ink"
             }
           >
             Table
@@ -264,27 +269,27 @@ export default async function Home(props: PageProps<"/tasks">) {
             name="q"
             defaultValue={searchQuery}
             placeholder="Search tasks…"
-            className="w-36 rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs text-zinc-700 focus:w-48 focus:outline-none focus:ring-1 focus:ring-indigo-400 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+            className="w-36 rounded-full border border-rule bg-surface px-3 py-1 text-xs text-ink-2 focus:w-48 focus:border-accent focus:outline-none"
           />
         </form>
         <details>
-          <summary className="cursor-pointer list-none rounded-full px-3 py-1 text-xs text-zinc-500 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100">
+          <summary className="cursor-pointer list-none rounded-full px-3 py-1 text-xs text-muted transition-colors hover:text-ink">
             + Project
           </summary>
           <form
             action={createProject}
-            className="mt-2 flex items-center gap-2 rounded-lg border border-zinc-200 bg-white p-2 dark:border-zinc-700 dark:bg-zinc-800"
+            className="mt-2 flex items-center gap-2 rounded-lg border border-rule bg-surface p-2"
           >
             <input
               name="name"
               placeholder="Project name"
               required
-              className="min-w-0 flex-1 rounded border border-zinc-200 bg-white px-2 py-1 text-xs dark:border-zinc-600 dark:bg-zinc-800"
+              className="min-w-0 flex-1 rounded border border-rule bg-paper px-2 py-1 text-xs text-ink"
             />
             <select
               name="color"
               defaultValue="indigo"
-              className="rounded border border-zinc-200 bg-white px-1 py-1 text-xs dark:border-zinc-600 dark:bg-zinc-800"
+              className="rounded border border-rule bg-paper px-1 py-1 text-xs text-ink"
             >
               {PROJECT_COLOR_OPTIONS.map((color) => (
                 <option key={color} value={color}>
@@ -292,12 +297,9 @@ export default async function Home(props: PageProps<"/tasks">) {
                 </option>
               ))}
             </select>
-            <button
-              type="submit"
-              className="rounded bg-zinc-900 px-2 py-1 text-xs font-medium text-white hover:bg-zinc-700 dark:bg-white dark:text-zinc-900"
-            >
+            <Button type="submit" className="px-2 py-1 text-xs">
               Add
-            </button>
+            </Button>
           </form>
         </details>
       </div>
@@ -338,7 +340,7 @@ export default async function Home(props: PageProps<"/tasks">) {
             />
           ))}
           {tasks.length === 0 && (
-            <li className="rounded-xl border border-dashed border-zinc-200 py-8 text-center text-sm text-zinc-500 dark:border-zinc-700">
+            <li className="rounded-xl border border-dashed border-rule py-8 text-center text-sm text-muted">
               No open tasks.
             </li>
           )}
@@ -346,8 +348,8 @@ export default async function Home(props: PageProps<"/tasks">) {
       )}
 
       {projects.length > 0 && (
-        <details className="mt-4 text-xs text-zinc-500">
-          <summary className="cursor-pointer transition-colors hover:text-zinc-900 dark:hover:text-zinc-100">
+        <details className="mt-4 text-xs text-muted">
+          <summary className="cursor-pointer transition-colors hover:text-ink">
             Manage projects
           </summary>
           <ul className="mt-2 space-y-1">
@@ -362,7 +364,7 @@ export default async function Home(props: PageProps<"/tasks">) {
                 <form action={saveProjectAsTemplateAction.bind(null, project.id, `${project.name} template`)}>
                   <button
                     type="submit"
-                    className="text-zinc-400 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100"
+                    className="text-muted transition-colors hover:text-ink"
                   >
                     Save as template
                   </button>
@@ -370,7 +372,7 @@ export default async function Home(props: PageProps<"/tasks">) {
                 <form action={deleteProject.bind(null, project.id)}>
                   <button
                     type="submit"
-                    className="text-zinc-400 transition-colors hover:text-red-600 dark:hover:text-red-400"
+                    className="text-muted transition-colors hover:text-accent"
                   >
                     Delete
                   </button>
@@ -382,8 +384,8 @@ export default async function Home(props: PageProps<"/tasks">) {
       )}
 
       {projectTemplates.length > 0 && (
-        <details className="mt-4 text-xs text-zinc-500">
-          <summary className="cursor-pointer transition-colors hover:text-zinc-900 dark:hover:text-zinc-100">
+        <details className="mt-4 text-xs text-muted">
+          <summary className="cursor-pointer transition-colors hover:text-ink">
             Project templates
           </summary>
           <ul className="mt-2 space-y-2">
@@ -391,14 +393,14 @@ export default async function Home(props: PageProps<"/tasks">) {
               <li key={template.id} className="flex items-center gap-2">
                 <span className="flex-1">
                   {template.name}{" "}
-                  <span className="text-zinc-400">
+                  <span className="text-muted">
                     ({template._count.tasks} task{template._count.tasks === 1 ? "" : "s"})
                   </span>
                 </span>
                 <form action={createProjectFromTemplateAction.bind(null, template.id, template.name.replace(/ template$/, ""))}>
                   <button
                     type="submit"
-                    className="text-zinc-400 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100"
+                    className="text-muted transition-colors hover:text-ink"
                   >
                     New project from this
                   </button>
@@ -406,7 +408,7 @@ export default async function Home(props: PageProps<"/tasks">) {
                 <form action={deleteProjectTemplateAction.bind(null, template.id)}>
                   <button
                     type="submit"
-                    className="text-zinc-400 transition-colors hover:text-red-600 dark:hover:text-red-400"
+                    className="text-muted transition-colors hover:text-accent"
                   >
                     Delete
                   </button>
@@ -417,8 +419,8 @@ export default async function Home(props: PageProps<"/tasks">) {
         </details>
       )}
 
-      <details className="mt-4 text-xs text-zinc-500">
-        <summary className="cursor-pointer transition-colors hover:text-zinc-900 dark:hover:text-zinc-100">
+      <details className="mt-4 text-xs text-muted">
+        <summary className="cursor-pointer transition-colors hover:text-ink">
           Manage labels
         </summary>
         <ul className="mt-2 space-y-1">
@@ -431,7 +433,7 @@ export default async function Home(props: PageProps<"/tasks">) {
               <form action={deleteLabel.bind(null, label.id)}>
                 <button
                   type="submit"
-                  className="text-zinc-400 transition-colors hover:text-red-600 dark:hover:text-red-400"
+                  className="text-muted transition-colors hover:text-accent"
                 >
                   Delete
                 </button>
@@ -441,18 +443,18 @@ export default async function Home(props: PageProps<"/tasks">) {
         </ul>
         <form
           action={createLabel}
-          className="mt-2 flex items-center gap-2 rounded-lg border border-zinc-200 bg-white p-2 dark:border-zinc-700 dark:bg-zinc-800"
+          className="mt-2 flex items-center gap-2 rounded-lg border border-rule bg-surface p-2"
         >
           <input
             name="name"
             placeholder="Label name"
             required
-            className="min-w-0 flex-1 rounded border border-zinc-200 bg-white px-2 py-1 text-xs dark:border-zinc-600 dark:bg-zinc-800"
+            className="min-w-0 flex-1 rounded border border-rule bg-paper px-2 py-1 text-xs text-ink"
           />
           <select
             name="color"
             defaultValue="indigo"
-            className="rounded border border-zinc-200 bg-white px-1 py-1 text-xs dark:border-zinc-600 dark:bg-zinc-800"
+            className="rounded border border-rule bg-paper px-1 py-1 text-xs text-ink"
           >
             {PROJECT_COLOR_OPTIONS.map((color) => (
               <option key={color} value={color}>
@@ -460,18 +462,15 @@ export default async function Home(props: PageProps<"/tasks">) {
               </option>
             ))}
           </select>
-          <button
-            type="submit"
-            className="rounded bg-zinc-900 px-2 py-1 text-xs font-medium text-white hover:bg-zinc-700 dark:bg-white dark:text-zinc-900"
-          >
+          <Button type="submit" className="px-2 py-1 text-xs">
             Add
-          </button>
+          </Button>
         </form>
       </details>
 
       {done.length > 0 && (
-        <details className="mt-4 text-sm text-zinc-500">
-          <summary className="cursor-pointer transition-colors hover:text-zinc-900 dark:hover:text-zinc-100">
+        <details className="mt-4 text-sm text-muted">
+          <summary className="cursor-pointer transition-colors hover:text-ink">
             Recently done ({done.length})
           </summary>
           <ul className="mt-2 space-y-1">

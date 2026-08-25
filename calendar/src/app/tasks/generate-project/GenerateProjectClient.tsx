@@ -14,7 +14,7 @@ type Assignee = { id: string; name: string; type: "HUMAN" | "AI" };
 type ReviewRow = { title: string; notes: string | null; include: boolean };
 
 const inputClass =
-  "w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800";
+  "w-full rounded-lg border border-rule bg-surface px-3 py-2 text-sm text-ink transition-colors focus:border-accent focus:outline-none";
 
 export default function GenerateProjectClient({ assignees }: { assignees: Assignee[] }) {
   const router = useRouter();
@@ -77,7 +77,7 @@ export default function GenerateProjectClient({ assignees }: { assignees: Assign
       {!rows && (
         <>
           <label className="flex flex-col gap-1 text-sm">
-            <span className="text-zinc-500">Describe the project</span>
+            <span className="text-ink-2">Describe the project</span>
             <textarea
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
@@ -87,7 +87,7 @@ export default function GenerateProjectClient({ assignees }: { assignees: Assign
             />
           </label>
           {error && (
-            <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">
+            <p className="rounded-lg border border-accent bg-accent-wash px-3 py-2 text-sm text-accent">
               {error}
             </p>
           )}
@@ -100,7 +100,7 @@ export default function GenerateProjectClient({ assignees }: { assignees: Assign
       )}
 
       {createdCount !== null && (
-        <p className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700 dark:bg-green-950/40 dark:text-green-300">
+        <p className="rounded-lg border border-rule bg-surface px-3 py-2 text-sm text-ink-2">
           Created project with {createdCount} task{createdCount === 1 ? "" : "s"}.
         </p>
       )}
@@ -108,7 +108,7 @@ export default function GenerateProjectClient({ assignees }: { assignees: Assign
       {rows && (
         <>
           <label className="flex flex-col gap-1 text-sm">
-            <span className="text-zinc-500">Project name</span>
+            <span className="text-ink-2">Project name</span>
             <input
               value={projectName}
               onChange={(e) => setProjectName(e.target.value)}
@@ -117,7 +117,7 @@ export default function GenerateProjectClient({ assignees }: { assignees: Assign
           </label>
 
           {rows.length === 0 ? (
-            <p className="rounded-lg border border-dashed border-zinc-200 py-6 text-center text-sm text-zinc-500 dark:border-zinc-700">
+            <p className="rounded-lg border border-dashed border-rule py-6 text-center text-sm text-muted">
               No tasks proposed.
             </p>
           ) : (
@@ -125,14 +125,14 @@ export default function GenerateProjectClient({ assignees }: { assignees: Assign
               {rows.map((row, i) => (
                 <li
                   key={i}
-                  className="flex flex-col gap-1 rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-800"
+                  className="flex flex-col gap-1 rounded-xl border border-rule bg-surface p-3"
                 >
                   <div className="flex items-start gap-2">
                     <input
                       type="checkbox"
                       checked={row.include}
                       onChange={(e) => updateRow(i, { include: e.target.checked })}
-                      className="mt-2.5 h-4 w-4"
+                      className="mt-2.5 h-4 w-4 accent-accent"
                       aria-label="Include"
                     />
                     <input
@@ -141,14 +141,14 @@ export default function GenerateProjectClient({ assignees }: { assignees: Assign
                       className={inputClass}
                     />
                   </div>
-                  {row.notes && <p className="pl-6 text-xs text-zinc-400">{row.notes}</p>}
+                  {row.notes && <p className="pl-6 text-xs text-muted">{row.notes}</p>}
                 </li>
               ))}
             </ul>
           )}
 
           <label className="flex flex-col gap-1 text-sm">
-            <span className="text-zinc-500">Assign every task to</span>
+            <span className="text-ink-2">Assign every task to</span>
             <select value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)} className={`${inputClass} max-w-xs`}>
               <option value="">Unassigned</option>
               {assignees.map((a) => (
@@ -160,7 +160,7 @@ export default function GenerateProjectClient({ assignees }: { assignees: Assign
           </label>
 
           {error && (
-            <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">
+            <p className="rounded-lg border border-accent bg-accent-wash px-3 py-2 text-sm text-accent">
               {error}
             </p>
           )}

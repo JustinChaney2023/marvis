@@ -29,6 +29,7 @@ import QuickCreatePopup from "./QuickCreatePopup";
 import { LockIcon, FlagIcon } from "../icons";
 import { moveEvent, deleteEvent } from "../actions";
 import { PROJECT_EVENT_COLORS, DEFAULT_EVENT_COLOR } from "@/lib/eventColors";
+import Button from "../ui/Button";
 
 export type CalendarEvent = {
   id: string;
@@ -483,19 +484,20 @@ export default function CalendarClient({
   return (
     <>
       <div className="flex justify-end gap-2 print:hidden">
-        <button
+        <Button
           type="button"
+          variant="secondary"
           title="A locked block the auto-scheduler won't place tasks into"
           onClick={() => {
             const { start, end } = defaultNewEventTimes();
             openCreate(start, end, { title: "Focus time", locked: true, eventType: "FOCUS_TIME" });
           }}
-          className="rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-200 dark:hover:bg-zinc-700"
         >
           + Focus block
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
+          variant="secondary"
           title="Blocks the day off and marks it distinctly on the calendar"
           onClick={() => {
             const start = new Date(today);
@@ -504,20 +506,18 @@ export default function CalendarClient({
             end.setDate(end.getDate() + 1);
             openCreate(start, end, { title: "Out of office", locked: true, eventType: "OUT_OF_OFFICE" });
           }}
-          className="rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-200 dark:hover:bg-zinc-700"
         >
           + Out of office
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
           onClick={() => {
             const { start, end } = defaultNewEventTimes();
             openCreate(start, end);
           }}
-          className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-all hover:bg-zinc-700 active:scale-[0.98] dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
         >
           + New event
-        </button>
+        </Button>
       </div>
 
       <div className="mt-2">
@@ -558,16 +558,16 @@ export default function CalendarClient({
       </div>
 
       {selectedEventIds.size > 0 && (
-        <div className="fixed bottom-6 left-1/2 z-40 flex -translate-x-1/2 items-center gap-3 rounded-full border border-zinc-200 bg-white px-4 py-2 shadow-lg ring-1 ring-black/5 dark:border-zinc-600 dark:bg-zinc-800">
+        <div className="fixed bottom-6 left-1/2 z-40 flex -translate-x-1/2 items-center gap-3 rounded-full border border-rule bg-surface px-4 py-2">
           <span className="text-sm font-medium">
             {selectedEventIds.size} selected
           </span>
-          <div className="flex items-center gap-1 border-l border-zinc-200 pl-3 dark:border-zinc-600">
+          <div className="flex items-center gap-1 border-l border-rule pl-3">
             <button
               type="button"
               title="Move all selected 15 minutes earlier"
               onClick={() => handleBulkNudge(-15)}
-              className="rounded-full px-2 py-1 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700"
+              className="rounded-full px-2 py-1 text-xs font-medium text-ink-2 transition-colors hover:bg-rule-soft"
             >
               −15m
             </button>
@@ -575,7 +575,7 @@ export default function CalendarClient({
               type="button"
               title="Move all selected 15 minutes later"
               onClick={() => handleBulkNudge(15)}
-              className="rounded-full px-2 py-1 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700"
+              className="rounded-full px-2 py-1 text-xs font-medium text-ink-2 transition-colors hover:bg-rule-soft"
             >
               +15m
             </button>
@@ -583,7 +583,7 @@ export default function CalendarClient({
               type="button"
               title="Move all selected 1 day later"
               onClick={() => handleBulkNudge(24 * 60)}
-              className="rounded-full px-2 py-1 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700"
+              className="rounded-full px-2 py-1 text-xs font-medium text-ink-2 transition-colors hover:bg-rule-soft"
             >
               +1d
             </button>
@@ -592,14 +592,14 @@ export default function CalendarClient({
             type="button"
             onClick={handleBulkDelete}
             disabled={isBulkDeleting}
-            className="rounded-full bg-red-600 px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50 dark:bg-red-500 dark:hover:bg-red-400"
+            className="rounded-full border border-accent px-3 py-1 text-xs font-medium text-accent transition-colors hover:bg-accent-wash disabled:opacity-50"
           >
             {isBulkDeleting ? "Deleting…" : "Delete"}
           </button>
           <button
             type="button"
             onClick={clearSelection}
-            className="text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
+            className="text-xs text-muted hover:text-ink"
           >
             Clear
           </button>
@@ -670,16 +670,16 @@ function AgendaView({
           .sort((a, b) => a.start.getTime() - b.start.getTime());
         return (
           <div key={day.toISOString()}>
-            <p className="text-xs font-semibold text-zinc-500">
+            <p className="text-xs font-semibold text-ink-2">
               {day.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
               {isSameDay(day, today) && (
-                <span className="ml-1.5 rounded-full bg-zinc-900 px-1.5 py-0.5 text-[10px] font-medium text-white dark:bg-white dark:text-zinc-900">
+                <span className="ml-1.5 rounded-full bg-ink px-1.5 py-0.5 text-[10px] font-medium text-paper">
                   Today
                 </span>
               )}
             </p>
             {dayEvents.length === 0 ? (
-              <p className="mt-1 text-xs text-zinc-400">Nothing scheduled.</p>
+              <p className="mt-1 text-xs text-muted">Nothing scheduled.</p>
             ) : (
               <ul className="mt-1.5 flex flex-col gap-1.5">
                 {dayEvents.map((e) => {
@@ -689,9 +689,9 @@ function AgendaView({
                       <button
                         type="button"
                         onClick={() => onEventClick(e)}
-                        className={`flex w-full items-center gap-2 rounded-lg border-l-4 px-3 py-2 text-left text-sm ${colors ? `${colors.bar} ${colors.bg} ${colors.text}` : "border-l-zinc-400 bg-zinc-50 dark:bg-zinc-700/40"}`}
+                        className={`flex w-full items-center gap-2 rounded-lg border-l-4 px-3 py-2 text-left text-sm ${colors ? `${colors.bar} ${colors.bg} ${colors.text}` : "border-l-muted bg-rule-soft"}`}
                       >
-                        <span className="w-14 flex-shrink-0 text-xs text-zinc-500">
+                        <span className="w-14 flex-shrink-0 font-mono text-xs text-muted">
                           {e.allDay
                             ? "All day"
                             : e.start.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}
@@ -810,16 +810,16 @@ function HourGrid({
               return (
                 <div
                   key={day.toISOString()}
-                  className="border-b border-l border-zinc-200 px-2 py-1.5 text-center dark:border-zinc-700"
+                  className="border-b border-l border-rule px-2 py-1.5 text-center"
                 >
-                  <div className="text-xs font-medium text-zinc-500">
+                  <div className="font-mono text-xs font-medium text-muted">
                     {dayWeekdayLabel(day)}
                   </div>
                   <div
                     className={
                       isToday
-                        ? "mt-0.5 inline-flex h-7 w-7 items-center justify-center rounded-full bg-zinc-900 text-sm font-bold text-white dark:bg-white dark:text-zinc-900"
-                        : "text-lg font-semibold text-zinc-700 dark:text-zinc-300"
+                        ? "mt-0.5 inline-flex h-7 w-7 items-center justify-center rounded-full bg-ink font-serif text-lg text-paper"
+                        : "font-serif text-xl text-ink-2"
                     }
                   >
                     {day.getDate()}
@@ -830,9 +830,9 @@ function HourGrid({
           </div>
         </div>
         {allDayPlacements.length > 0 && (
-          <div className="flex border-b border-zinc-200 dark:border-zinc-700">
+          <div className="flex border-b border-rule">
             {secondaryTimezone && <div className="w-14 flex-shrink-0" />}
-            <div className="flex w-16 flex-shrink-0 items-center justify-end pr-2 text-[10px] text-zinc-400">
+            <div className="flex w-16 flex-shrink-0 items-center justify-end pr-2 font-mono text-[10px] text-muted">
               All day
             </div>
             <div
@@ -853,7 +853,7 @@ function HourGrid({
                     type="button"
                     onClick={() => onEventClick(event)}
                     title={event.title}
-                    className={`absolute flex items-center truncate border-l-2 border-l-indigo-500 bg-indigo-50 px-1.5 text-left text-[11px] font-medium text-indigo-900 transition-colors hover:brightness-95 dark:bg-indigo-950/30 dark:text-indigo-100 dark:hover:brightness-110 ${
+                    className={`absolute flex items-center truncate border-l-2 border-l-ink-2 bg-rule-soft px-1.5 text-left text-[11px] font-medium text-ink-2 transition-colors hover:brightness-95 ${
                       isRealStart ? "rounded-l-md" : ""
                     } ${isRealEnd ? "rounded-r-md" : ""}`}
                     style={{
@@ -878,13 +878,13 @@ function HourGrid({
         >
           {secondaryTimezone && (
             <div
-              className="w-14 flex-shrink-0 border-r border-zinc-100 dark:border-zinc-800"
+              className="w-14 flex-shrink-0 border-r border-rule-soft"
               title={secondaryTimezone}
             >
               {HOURS.map((h) => (
                 <div
                   key={h}
-                  className="pr-1.5 text-right text-[10px] text-zinc-400"
+                  className="pr-1.5 text-right font-mono text-[10px] text-muted"
                   style={{ height: `${HOUR_HEIGHT}px` }}
                 >
                   {formatHourLabelInZone(days[0] ?? today, h, secondaryTimezone)}
@@ -896,7 +896,7 @@ function HourGrid({
             {HOURS.map((h) => (
               <div
                 key={h}
-                className="pr-2 text-right text-xs text-zinc-500"
+                className="pr-2 text-right font-mono text-xs text-muted"
                 style={{ height: `${HOUR_HEIGHT}px` }}
               >
                 {formatHourLabel(h)}
@@ -905,7 +905,7 @@ function HourGrid({
             {days.some((day) => isSameDay(day, today)) && (
               <div
                 ref={nowLabelRef}
-                className="pointer-events-none absolute right-2 z-10 -translate-y-1/2 text-[10px] font-semibold text-red-500"
+                className="pointer-events-none absolute right-2 z-10 -translate-y-1/2 font-mono text-[10px] font-semibold text-accent"
                 style={{ top: `${computeNowTop(now)}px` }}
               >
                 {formatTime(now)}
@@ -1074,15 +1074,15 @@ function DayColumn({
     <div
       className={
         isToday
-          ? "relative border-l border-zinc-200 bg-zinc-100/60 dark:border-zinc-700 dark:bg-zinc-100/[0.04]"
-          : "relative border-l border-zinc-200 dark:border-zinc-700"
+          ? "relative border-l border-rule bg-rule-soft"
+          : "relative border-l border-rule"
       }
       style={{ height: `${TOTAL_HEIGHT}px` }}
     >
       {HOURS.map((h) => (
         <div
           key={h}
-          className="pointer-events-none absolute left-0 right-0 border-t border-zinc-200 dark:border-zinc-700"
+          className="pointer-events-none absolute left-0 right-0 border-t border-rule-soft"
           style={{
             top: `${(h - HOUR_START) * HOUR_HEIGHT}px`,
             height: `${HOUR_HEIGHT}px`,
@@ -1100,7 +1100,7 @@ function DayColumn({
         // down to keep the moving line in the same spot in the viewport.
         <div
           ref={nowLineRef}
-          className="pointer-events-none absolute left-0 right-0 z-10 h-px bg-red-500"
+          className="pointer-events-none absolute left-0 right-0 z-10 h-px bg-accent"
           style={{ top: `${nowTop}px` }}
         />
       )}
@@ -1112,7 +1112,7 @@ function DayColumn({
       />
       {createPreview && (
         <div
-          className="pointer-events-none absolute left-0 right-0 rounded-lg border-2 border-dashed border-zinc-500 bg-zinc-500/10"
+          className="pointer-events-none absolute left-0 right-0 rounded-lg border-2 border-dashed border-muted bg-ink/5"
           style={{
             top: `${(createPreview.lo / 60) * HOUR_HEIGHT}px`,
             height: `${Math.max(
@@ -1132,7 +1132,7 @@ function DayColumn({
             // Read-only — no onClick, not draggable, deliberately not an
             // EventBlock. Diagonal stripes (not a solid fill) so it never
             // gets mistaken for one of your own events even at a glance.
-            className="pointer-events-none absolute overflow-hidden truncate rounded-md border border-zinc-400/60 px-1.5 py-0.5 text-[10px] text-zinc-600 dark:border-zinc-500/60 dark:text-zinc-300"
+            className="pointer-events-none absolute overflow-hidden truncate rounded-md border border-muted/60 px-1.5 py-0.5 text-[10px] text-ink-2"
             style={{
               top: `${block.top}px`,
               height: `${block.height}px`,
@@ -1282,9 +1282,9 @@ function EventBlock({
       }}
       type="button"
       title="Shift/Cmd/Ctrl-click to select multiple events"
-      className={`group absolute overflow-hidden rounded-lg border-y border-r border-zinc-200 border-l-4 bg-white/40 p-1.5 text-left text-zinc-900 transition-all hover:shadow-md hover:brightness-95 dark:border-zinc-600 dark:bg-zinc-100/10 dark:text-zinc-100 dark:hover:brightness-110 ${color.bar} ${
+      className={`group absolute overflow-hidden rounded-lg border-y border-r border-rule border-l-4 bg-surface/40 p-1.5 text-left text-ink transition-all hover:brightness-95 ${color.bar} ${
         isDragging ? "opacity-40" : ""
-      } ${selected ? "ring-2 ring-zinc-500 ring-offset-1 dark:ring-offset-zinc-900" : ""}`}
+      } ${selected ? "outline outline-2 outline-accent" : ""}`}
       style={{
         top: `${top}px`,
         height: `${displayHeight}px`,
@@ -1307,8 +1307,8 @@ function EventBlock({
           title={event.taskPriority === 3 ? "Urgent priority task" : "High priority task"}
           className={
             event.taskPriority === 3
-              ? "absolute left-1 top-1 text-red-600 dark:text-red-400"
-              : "absolute left-1 top-1 text-amber-600 dark:text-amber-400"
+              ? "absolute left-1 top-1 text-accent"
+              : "absolute left-1 top-1 text-ink-2"
           }
         >
           <FlagIcon className="h-2.5 w-2.5" />
@@ -1321,13 +1321,13 @@ function EventBlock({
       >
         {event.title}
         {event.eventType !== "DEFAULT" && (
-          <span className="ml-1 rounded bg-black/10 px-1 py-px text-[9px] font-semibold uppercase opacity-70 dark:bg-white/10">
+          <span className="ml-1 rounded bg-ink/10 px-1 py-px text-[9px] font-semibold uppercase opacity-70">
             {event.eventType === "OUT_OF_OFFICE" ? "OOO" : "Focus"}
           </span>
         )}
       </div>
       {displayHeight >= 32 && (
-        <div className="truncate text-[10px] opacity-80">
+        <div className="truncate font-mono text-[10px] opacity-80">
           {formatTime(event.start)} – {formatTime(displayEnd)}
         </div>
       )}
@@ -1336,7 +1336,7 @@ function EventBlock({
           draggable={false}
           onMouseDown={handleResizeMouseDown}
           onClick={(e) => e.stopPropagation()}
-          className="absolute bottom-0 left-0 right-0 h-1.5 cursor-ns-resize bg-zinc-400/80 opacity-0 transition-opacity group-hover:opacity-100 dark:bg-zinc-500/80"
+          className="absolute bottom-0 left-0 right-0 h-1.5 cursor-ns-resize bg-muted/60 opacity-0 transition-opacity group-hover:opacity-100"
           aria-label="Resize event"
         />
       )}
@@ -1391,11 +1391,11 @@ function MonthView({
   const currentMonth = viewStart.getMonth();
 
   return (
-    <div className="grid grid-cols-7 gap-px overflow-hidden rounded-xl border border-zinc-200 bg-zinc-200 dark:border-zinc-700 dark:bg-zinc-700">
+    <div className="grid grid-cols-7 gap-px overflow-hidden rounded-xl border border-rule bg-rule">
       {WEEKDAY_LABELS_SUN_FIRST.map((label) => (
         <div
           key={label}
-          className="bg-white px-2 py-1.5 text-center text-xs font-medium text-zinc-500 dark:bg-zinc-800"
+          className="bg-surface px-2 py-1.5 text-center font-mono text-xs font-medium text-muted"
         >
           {label}
         </div>
@@ -1449,15 +1449,15 @@ function MonthCell({
   };
 
   const dayNumberClass = isToday
-    ? "inline-flex h-6 w-6 items-center justify-center rounded-full bg-zinc-900 text-xs font-bold text-white dark:bg-white dark:text-zinc-900"
+    ? "inline-flex h-6 w-6 items-center justify-center rounded-full bg-ink font-serif text-sm text-paper"
     : inCurrentMonth
-      ? "inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold text-zinc-900 transition-colors hover:bg-zinc-100 dark:text-zinc-100 dark:hover:bg-zinc-700"
-      : "inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold text-zinc-400";
+      ? "inline-flex h-6 w-6 items-center justify-center rounded-full font-serif text-sm text-ink transition-colors hover:bg-rule-soft"
+      : "inline-flex h-6 w-6 items-center justify-center rounded-full font-serif text-sm text-muted";
 
   return (
     <div
       onClick={handleClick}
-      className="flex min-h-[7rem] cursor-pointer flex-col gap-1 bg-white p-1.5 transition-colors hover:bg-zinc-50 dark:bg-zinc-800 dark:hover:bg-zinc-700/50"
+      className="flex min-h-[7rem] cursor-pointer flex-col gap-1 bg-surface p-1.5 transition-colors hover:bg-rule-soft"
     >
       <Link
         data-day-link
@@ -1476,7 +1476,7 @@ function MonthCell({
               e.stopPropagation();
               onEventClick(ev);
             }}
-            className="truncate rounded-md border-l-2 border-l-indigo-500 bg-indigo-50 px-1.5 py-0.5 text-left text-[11px] text-indigo-900 transition-colors hover:brightness-95 dark:bg-indigo-950/30 dark:text-indigo-100 dark:hover:brightness-110"
+            className="truncate rounded-md border-l-2 border-l-ink-2 bg-rule-soft px-1.5 py-0.5 text-left text-[11px] text-ink-2 transition-colors hover:brightness-95"
           >
             {ev.title}
             {ev.locked && (
@@ -1494,14 +1494,14 @@ function MonthCell({
           <Link
             data-day-link
             href={`/?view=day&start=${dateYMD}`}
-            className="px-1.5 text-[11px] text-zinc-500 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100"
+            className="px-1.5 font-mono text-[11px] text-muted transition-colors hover:text-ink"
           >
             +{more} more
           </Link>
         )}
         {sharedCount > 0 && (
           <span
-            className="truncate rounded-md border-l-2 border-l-zinc-400 px-1.5 py-0.5 text-left text-[11px] text-zinc-500 dark:border-l-zinc-500 dark:text-zinc-400"
+            className="truncate rounded-md border-l-2 border-l-muted px-1.5 py-0.5 text-left text-[11px] text-muted"
             style={{
               backgroundImage:
                 "repeating-linear-gradient(45deg, rgba(113,113,122,0.12), rgba(113,113,122,0.12) 4px, transparent 4px, transparent 8px)",

@@ -40,31 +40,31 @@ export default function TimeSlotsManager({ timeSlots }: { timeSlots: TimeSlotDat
       {timeSlots.map((slot) => (
         <div
           key={slot.id}
-          className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-zinc-200 p-3 text-sm dark:border-zinc-600"
+          className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-rule p-3 text-sm"
         >
           <p>
             <span className="font-medium">{slot.name}</span>{" "}
-            <span className="text-zinc-500">
+            <span className="text-ink-2">
               — {formatDays(slot.daysOfWeek)}, {formatTime(slot.startMin)}–{formatTime(slot.endMin)}
             </span>
           </p>
           <form action={deleteTimeSlotAction.bind(null, slot.id)}>
             <button
               type="submit"
-              className="rounded-full px-2.5 py-1 text-xs text-zinc-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/40 dark:hover:text-red-400"
+              className="rounded-full px-2.5 py-1 text-xs text-ink-2 transition-colors hover:bg-accent-wash hover:text-accent"
             >
               Delete
             </button>
           </form>
         </div>
       ))}
-      {timeSlots.length === 0 && <p className="text-sm text-zinc-400">No time slots yet.</p>}
+      {timeSlots.length === 0 && <p className="text-sm text-muted">No time slots yet.</p>}
 
       {!adding ? (
         <button
           type="button"
           onClick={() => setAdding(true)}
-          className="self-start text-sm text-indigo-600 hover:underline dark:text-indigo-400"
+          className="self-start text-sm text-accent hover:underline"
         >
           + Add time slot
         </button>
@@ -75,19 +75,19 @@ export default function TimeSlotsManager({ timeSlots }: { timeSlots: TimeSlotDat
             setAdding(false);
             setSelectedDays(WEEKDAYS_DEFAULT);
           }}
-          className="flex flex-col gap-3 rounded-lg border border-dashed border-zinc-300 p-3 dark:border-zinc-600"
+          className="flex flex-col gap-3 rounded-lg border border-dashed border-rule p-3"
         >
-          <label className="flex flex-col gap-1 text-xs text-zinc-500">
+          <label className="flex flex-col gap-1 text-xs text-ink-2">
             Name
             <input
               name="name"
               required
               placeholder="e.g. Work, Sleep, School"
-              className="w-full max-w-xs rounded-lg border border-zinc-200 bg-white px-2 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-800"
+              className="w-full max-w-xs rounded-lg border border-rule bg-surface px-2 py-1.5 text-sm"
             />
           </label>
 
-          <div className="flex flex-col gap-1 text-xs text-zinc-500">
+          <div className="flex flex-col gap-1 text-xs text-ink-2">
             Days
             <div className="flex gap-1">
               {WEEKDAY_CODES.map((code, i) => {
@@ -114,8 +114,8 @@ export default function TimeSlotsManager({ timeSlots }: { timeSlots: TimeSlotDat
                       }
                       className={
                         selected
-                          ? "flex h-7 w-7 items-center justify-center rounded-full bg-zinc-900 text-xs font-semibold text-white dark:bg-white dark:text-zinc-900"
-                          : "flex h-7 w-7 items-center justify-center rounded-full border border-zinc-200 text-xs font-semibold text-zinc-600 dark:border-zinc-600 dark:text-zinc-400"
+                          ? "flex h-7 w-7 items-center justify-center rounded-full bg-ink text-xs font-semibold text-paper"
+                          : "flex h-7 w-7 items-center justify-center rounded-full border border-rule text-xs font-semibold text-ink-2"
                       }
                     >
                       {WEEKDAY_SHORT[i]}
@@ -127,22 +127,22 @@ export default function TimeSlotsManager({ timeSlots }: { timeSlots: TimeSlotDat
           </div>
 
           <div className="flex items-end gap-2">
-            <label className="flex flex-col gap-1 text-xs text-zinc-500">
+            <label className="flex flex-col gap-1 text-xs text-ink-2">
               Start
               <input
                 name="startTime"
                 type="time"
                 defaultValue="09:00"
-                className="rounded-lg border border-zinc-200 bg-white px-2 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-800"
+                className="rounded-lg border border-rule bg-surface px-2 py-1.5 text-sm"
               />
             </label>
-            <label className="flex flex-col gap-1 text-xs text-zinc-500">
+            <label className="flex flex-col gap-1 text-xs text-ink-2">
               End
               <input
                 name="endTime"
                 type="time"
                 defaultValue="18:00"
-                className="rounded-lg border border-zinc-200 bg-white px-2 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-800"
+                className="rounded-lg border border-rule bg-surface px-2 py-1.5 text-sm"
               />
             </label>
             <Button type="submit">Add</Button>

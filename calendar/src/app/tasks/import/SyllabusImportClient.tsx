@@ -45,7 +45,7 @@ const WEEKDAY_SHORT_LABELS: Record<WeekdayCode, string> = {
 };
 
 const inputClass =
-  "w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800";
+  "w-full rounded-lg border border-rule bg-surface px-3 py-2 text-sm text-ink transition-colors focus:border-accent focus:outline-none";
 
 export default function SyllabusImportClient({
   projects,
@@ -266,9 +266,9 @@ export default function SyllabusImportClient({
       {!rows && (
         <>
           <label className="flex flex-col gap-1 text-sm">
-            <span className="text-zinc-500">
+            <span className="text-ink-2">
               Upload a file{" "}
-              <span className="text-zinc-400">
+              <span className="text-muted">
                 (.txt/.md/.docx, or PDF and other formats with the converter set up — fills in the text below)
               </span>
             </span>
@@ -277,18 +277,18 @@ export default function SyllabusImportClient({
               accept={IMPORT_FILE_ACCEPT}
               onChange={handleFileChange}
               disabled={isReadingFile}
-              className="text-sm text-zinc-500 file:mr-3 file:rounded-lg file:border-0 file:bg-zinc-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-zinc-700 hover:file:bg-zinc-200 dark:file:bg-zinc-700 dark:file:text-zinc-200 dark:hover:file:bg-zinc-600"
+              className="text-sm text-ink-2 file:mr-3 file:rounded-lg file:border file:border-rule file:bg-surface file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-ink-2 hover:file:bg-rule-soft"
             />
-            {isReadingFile && <span className="text-xs text-zinc-400">Reading file…</span>}
+            {isReadingFile && <span className="text-xs text-muted">Reading file…</span>}
             {fileName && !fileError && !isReadingFile && (
-              <span className="text-xs text-zinc-400">Loaded {fileName}.</span>
+              <span className="text-xs text-muted">Loaded {fileName}.</span>
             )}
             {fileError && (
-              <span className="text-xs text-amber-600 dark:text-amber-400">{fileError}</span>
+              <span className="text-xs text-accent">{fileError}</span>
             )}
           </label>
           <label className="flex flex-col gap-1 text-sm">
-            <span className="text-zinc-500">Syllabus text</span>
+            <span className="text-ink-2">Syllabus text</span>
             <textarea
               value={text}
               onChange={(e) => setText(e.target.value)}
@@ -299,20 +299,20 @@ export default function SyllabusImportClient({
           </label>
           <div className="grid grid-cols-2 gap-3">
             <label className="flex flex-col gap-1 text-sm">
-              <span className="text-zinc-500">
-                Term start <span className="text-zinc-400">(resolves "Week 3" style dates)</span>
+              <span className="text-ink-2">
+                Term start <span className="text-muted">(resolves "Week 3" style dates)</span>
               </span>
               <input type="date" value={termStart} onChange={(e) => setTermStart(e.target.value)} className={inputClass} />
             </label>
             <label className="flex flex-col gap-1 text-sm">
-              <span className="text-zinc-500">
-                Term end <span className="text-zinc-400">(bounds the class schedule below)</span>
+              <span className="text-ink-2">
+                Term end <span className="text-muted">(bounds the class schedule below)</span>
               </span>
               <input type="date" value={termEnd} onChange={(e) => setTermEnd(e.target.value)} className={inputClass} />
             </label>
           </div>
           {error && (
-            <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">
+            <p className="rounded-lg border border-accent bg-accent-wash px-3 py-2 text-sm text-accent">
               {error}
             </p>
           )}
@@ -325,7 +325,7 @@ export default function SyllabusImportClient({
       )}
 
       {importResult && (
-        <p className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700 dark:bg-green-950/40 dark:text-green-300">
+        <p className="rounded-lg border border-rule bg-surface px-3 py-2 text-sm text-ink-2">
           Created {importResult.taskCount} task{importResult.taskCount === 1 ? "" : "s"}
           {importResult.examEventCount > 0 ? `, ${importResult.examEventCount} exam event${importResult.examEventCount === 1 ? "" : "s"}` : ""}
           {importResult.classScheduleCreated ? ", and the class schedule" : ""}
@@ -337,7 +337,7 @@ export default function SyllabusImportClient({
         <>
           <div className="grid grid-cols-2 gap-3">
             <label className="flex flex-col gap-1 text-sm">
-              <span className="text-zinc-500">Course name</span>
+              <span className="text-ink-2">Course name</span>
               <input
                 value={courseName}
                 onChange={(e) => setCourseName(e.target.value)}
@@ -346,7 +346,7 @@ export default function SyllabusImportClient({
               />
             </label>
             <label className="flex flex-col gap-1 text-sm">
-              <span className="text-zinc-500">Project</span>
+              <span className="text-ink-2">Project</span>
               <select
                 value={useExistingProjectId}
                 onChange={(e) => setUseExistingProjectId(e.target.value)}
@@ -362,9 +362,9 @@ export default function SyllabusImportClient({
 
           {!useExistingProjectId && (
             <label className="flex flex-col gap-1 text-sm">
-              <span className="text-zinc-500">
+              <span className="text-ink-2">
                 Course summary{" "}
-                <span className="text-zinc-400">(saved as the project&apos;s notes)</span>
+                <span className="text-muted">(saved as the project&apos;s notes)</span>
               </span>
               <textarea
                 value={courseSummary}
@@ -377,10 +377,10 @@ export default function SyllabusImportClient({
           )}
 
           {!useExistingProjectId && (
-            <div className="grid grid-cols-2 gap-3 rounded-xl border border-zinc-200 p-3 dark:border-zinc-700">
+            <div className="grid grid-cols-2 gap-3 rounded-xl border border-rule p-3">
               {fields.map((f, i) => (
                 <label key={f.key} className="flex flex-col gap-1 text-sm">
-                  <span className="text-zinc-500">{f.label}</span>
+                  <span className="text-ink-2">{f.label}</span>
                   {f.fieldType === "LONG_TEXT" || f.fieldType === "LIST" ? (
                     <textarea
                       value={f.value}
@@ -398,14 +398,14 @@ export default function SyllabusImportClient({
 
           <div className="grid grid-cols-2 gap-3">
             <label className="flex flex-col gap-1 text-sm">
-              <span className="text-zinc-500">Class meeting time</span>
+              <span className="text-ink-2">Class meeting time</span>
               <div className="flex gap-2">
                 <input type="time" value={meetingStartTime} onChange={(e) => setMeetingStartTime(e.target.value)} className={inputClass} />
                 <input type="time" value={meetingEndTime} onChange={(e) => setMeetingEndTime(e.target.value)} className={inputClass} />
               </div>
             </label>
             <label className="flex flex-col gap-1 text-sm">
-              <span className="text-zinc-500">Class location</span>
+              <span className="text-ink-2">Class location</span>
               <input value={meetingLocation} onChange={(e) => setMeetingLocation(e.target.value)} className={inputClass} />
             </label>
           </div>
@@ -418,8 +418,8 @@ export default function SyllabusImportClient({
                 onClick={() => toggleMeetingDay(day)}
                 className={
                   meetingDays.includes(day)
-                    ? "flex h-9 w-9 items-center justify-center rounded-lg bg-zinc-900 text-xs font-semibold text-white dark:bg-white dark:text-zinc-900"
-                    : "flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-200 text-xs font-semibold text-zinc-600 dark:border-zinc-600 dark:text-zinc-400"
+                    ? "flex h-9 w-9 items-center justify-center rounded-lg bg-ink text-xs font-semibold text-paper"
+                    : "flex h-9 w-9 items-center justify-center rounded-lg border border-rule text-xs font-semibold text-ink-2"
                 }
               >
                 {WEEKDAY_SHORT_LABELS[day]}
@@ -432,9 +432,9 @@ export default function SyllabusImportClient({
               checked={createClassSchedule}
               onChange={(e) => setCreateClassSchedule(e.target.checked)}
               disabled={!canCreateClassSchedule}
-              className="h-4 w-4"
+              className="h-4 w-4 accent-accent"
             />
-            <span className={canCreateClassSchedule ? "text-zinc-700 dark:text-zinc-300" : "text-zinc-400"}>
+            <span className={canCreateClassSchedule ? "text-ink-2" : "text-muted"}>
               Create the recurring class-schedule event
               {!canCreateClassSchedule && " (needs meeting days/time above and a term start date)"}
             </span>
@@ -442,10 +442,10 @@ export default function SyllabusImportClient({
 
           {exams.length > 0 && (
             <div className="flex flex-col gap-2">
-              <span className="text-sm text-zinc-500">Exam dates</span>
+              <span className="text-sm text-ink-2">Exam dates</span>
               {exams.map((exam, i) => (
-                <div key={i} className="flex flex-wrap items-center gap-2 rounded-xl border border-zinc-200 bg-white p-3 text-sm dark:border-zinc-700 dark:bg-zinc-800">
-                  <input type="checkbox" checked={exam.include} onChange={(e) => updateExam(i, { include: e.target.checked })} className="h-4 w-4" aria-label="Include" />
+                <div key={i} className="flex flex-wrap items-center gap-2 rounded-xl border border-rule bg-surface p-3 text-sm">
+                  <input type="checkbox" checked={exam.include} onChange={(e) => updateExam(i, { include: e.target.checked })} className="h-4 w-4 accent-accent" aria-label="Include" />
                   <input
                     type="text"
                     value={exam.title}
@@ -466,7 +466,7 @@ export default function SyllabusImportClient({
                   </select>
                   <input type="date" value={exam.dateYMD ?? ""} onChange={(e) => updateExam(i, { dateYMD: e.target.value || null })} className={`${inputClass} flex-1`} aria-label="Exam date" />
                   {exam.type === "final" && (
-                    <span className="w-full text-xs text-amber-600 dark:text-amber-400">
+                    <span className="w-full text-xs text-accent">
                       Will be marked as an estimated time — final exam slots are often confirmed later.
                     </span>
                   )}
@@ -477,16 +477,16 @@ export default function SyllabusImportClient({
 
           {lectures.length > 0 && (
             <details className="text-sm">
-              <summary className="cursor-pointer text-zinc-500">
+              <summary className="cursor-pointer text-ink-2">
                 Lecture topics ({lectures.filter((l) => l.include).length}/{lectures.length})
               </summary>
               <div className="mt-2 flex max-h-64 flex-col gap-1.5 overflow-y-auto">
                 {lectures.map((l, i) => (
-                  <div key={i} className="flex flex-wrap items-center gap-2 rounded-lg border border-zinc-200 p-2 text-xs dark:border-zinc-600">
-                    <input type="checkbox" checked={l.include} onChange={(e) => updateLecture(i, { include: e.target.checked })} className="h-3.5 w-3.5" aria-label="Include" />
+                  <div key={i} className="flex flex-wrap items-center gap-2 rounded-lg border border-rule p-2 text-xs">
+                    <input type="checkbox" checked={l.include} onChange={(e) => updateLecture(i, { include: e.target.checked })} className="h-3.5 w-3.5 accent-accent" aria-label="Include" />
                     <input type="date" value={l.dateYMD ?? ""} onChange={(e) => updateLecture(i, { dateYMD: e.target.value || null })} className={`${inputClass} w-36 flex-shrink-0`} />
                     <input value={l.topic} onChange={(e) => updateLecture(i, { topic: e.target.value })} className={`${inputClass} flex-1`} />
-                    {!l.dateYMD && <span className="w-full text-amber-600 dark:text-amber-400">No date resolved — won't be added.</span>}
+                    {!l.dateYMD && <span className="w-full text-accent">No date resolved — won't be added.</span>}
                   </div>
                 ))}
               </div>
@@ -495,8 +495,8 @@ export default function SyllabusImportClient({
 
           {rows.length === 0 ? (
             <div className="flex flex-col gap-1">
-              <span className="text-sm text-zinc-500">Assignments</span>
-              <p className="rounded-lg border border-dashed border-zinc-200 py-6 text-center text-sm text-zinc-500 dark:border-zinc-700">
+              <span className="text-sm text-ink-2">Assignments</span>
+              <p className="rounded-lg border border-dashed border-rule py-6 text-center text-sm text-muted">
                 No deliverables found in that text.
               </p>
             </div>
@@ -504,20 +504,20 @@ export default function SyllabusImportClient({
             <>
               {recurringRows.length > 0 && (
                 <div className="flex flex-col gap-1">
-                  <span className="text-sm text-zinc-500">Recurring (every week)</span>
+                  <span className="text-sm text-ink-2">Recurring (every week)</span>
                   <ul className="flex flex-col gap-2">
                     {recurringRows.map((i) => {
                       const row = rows[i];
                       return (
                         <li
                           key={i}
-                          className="flex flex-wrap items-start gap-2 rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-800"
+                          className="flex flex-wrap items-start gap-2 rounded-xl border border-rule bg-surface p-3"
                         >
                           <input
                             type="checkbox"
                             checked={row.include}
                             onChange={(e) => updateRow(i, { include: e.target.checked })}
-                            className="mt-2.5 h-4 w-4"
+                            className="mt-2.5 h-4 w-4 accent-accent"
                             aria-label="Include"
                           />
                           <input
@@ -534,8 +534,8 @@ export default function SyllabusImportClient({
                                 onClick={() => toggleRowDay(i, day)}
                                 className={
                                   (row.recurringDays ?? []).includes(day)
-                                    ? "flex h-8 w-8 items-center justify-center rounded-lg bg-zinc-900 text-xs font-semibold text-white dark:bg-white dark:text-zinc-900"
-                                    : "flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-200 text-xs font-semibold text-zinc-600 dark:border-zinc-600 dark:text-zinc-400"
+                                    ? "flex h-8 w-8 items-center justify-center rounded-lg bg-ink text-xs font-semibold text-paper"
+                                    : "flex h-8 w-8 items-center justify-center rounded-lg border border-rule text-xs font-semibold text-ink-2"
                                 }
                               >
                                 {WEEKDAY_SHORT_LABELS[day]}
@@ -543,7 +543,7 @@ export default function SyllabusImportClient({
                             ))}
                           </div>
                           {!termStart && (
-                            <p className="w-full text-xs text-amber-600 dark:text-amber-400">
+                            <p className="w-full text-xs text-accent">
                               Needs a term start date above to create — see the field near the top.
                             </p>
                           )}
@@ -556,14 +556,14 @@ export default function SyllabusImportClient({
 
               {datedRows.length > 0 && (
                 <div className="flex flex-col gap-1">
-                  <span className="text-sm text-zinc-500">Assignments</span>
+                  <span className="text-sm text-ink-2">Assignments</span>
                   <ul className="flex flex-col gap-2">
                     {datedRows.map((i) => {
                       const row = rows[i];
                       return (
                         <li
                           key={i}
-                          className="flex flex-wrap items-start gap-2 rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-800"
+                          className="flex flex-wrap items-start gap-2 rounded-xl border border-rule bg-surface p-3"
                         >
                           <input
                             type="checkbox"
@@ -592,9 +592,9 @@ export default function SyllabusImportClient({
 
               {futureRows.length > 0 && (
                 <div className="flex flex-col gap-1">
-                  <span className="text-sm text-zinc-500">
+                  <span className="text-sm text-ink-2">
                     No date yet{" "}
-                    <span className="text-zinc-400">
+                    <span className="text-muted">
                       (the syllabus didn&apos;t give one — pick a date and check the box to create these)
                     </span>
                   </span>
@@ -604,13 +604,13 @@ export default function SyllabusImportClient({
                       return (
                         <li
                           key={i}
-                          className="flex flex-wrap items-start gap-2 rounded-xl border border-dashed border-zinc-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-800"
+                          className="flex flex-wrap items-start gap-2 rounded-xl border border-dashed border-rule bg-surface p-3"
                         >
                           <input
                             type="checkbox"
                             checked={row.include}
                             onChange={(e) => updateRow(i, { include: e.target.checked })}
-                            className="mt-2.5 h-4 w-4"
+                            className="mt-2.5 h-4 w-4 accent-accent"
                             aria-label="Include"
                           />
                           <input
@@ -625,7 +625,7 @@ export default function SyllabusImportClient({
                             className={`${inputClass} flex-1`}
                           />
                           {row.notes && (
-                            <p className="w-full text-xs text-amber-600 dark:text-amber-400">{row.notes}</p>
+                            <p className="w-full text-xs text-accent">{row.notes}</p>
                           )}
                         </li>
                       );
@@ -637,7 +637,7 @@ export default function SyllabusImportClient({
           )}
 
           <label className="flex flex-col gap-1 text-sm">
-            <span className="text-zinc-500">Assign to</span>
+            <span className="text-ink-2">Assign to</span>
             <select value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)} className={`${inputClass} max-w-xs`}>
               <option value="">Unassigned</option>
               {assignees.map((a) => (
@@ -649,7 +649,7 @@ export default function SyllabusImportClient({
           </label>
 
           {error && (
-            <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">
+            <p className="rounded-lg border border-accent bg-accent-wash px-3 py-2 text-sm text-accent">
               {error}
             </p>
           )}

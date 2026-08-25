@@ -11,7 +11,7 @@ export default function SettingsTabs({
 
   return (
     <div>
-      <div className="mt-6 inline-flex items-center gap-1 rounded-full bg-zinc-100 p-1 text-sm dark:bg-zinc-800">
+      <div className="mt-6 inline-flex items-center gap-1 rounded-full border border-rule bg-surface p-1 text-sm">
         {tabs.map((tab) => (
           <button
             key={tab.key}
@@ -19,8 +19,8 @@ export default function SettingsTabs({
             onClick={() => setActive(tab.key)}
             className={
               active === tab.key
-                ? "rounded-full bg-white px-3 py-1.5 font-medium text-zinc-900 dark:bg-zinc-700 dark:text-zinc-100"
-                : "rounded-full px-3 py-1.5 text-zinc-500 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100"
+                ? "rounded-full bg-ink px-3 py-1.5 font-medium text-paper"
+                : "rounded-full px-3 py-1.5 text-ink-2 transition-colors hover:text-ink"
             }
           >
             {tab.label}

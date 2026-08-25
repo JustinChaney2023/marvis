@@ -65,12 +65,19 @@ function toDateInputValue(d: Date): string {
 }
 
 const PRIORITY_LABEL = ["Low", "Medium", "High", "Urgent"];
+// Neutral for Low/Medium/High — the one accent color is reserved for the
+// due/overdue/primary-action states elsewhere in this file, so only
+// Urgent (effectively "treat like an error") borrows it.
 const PRIORITY_BADGE: Record<number, string> = {
-  0: "bg-zinc-100 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-300",
-  1: "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300",
-  2: "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300",
-  3: "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300",
+  0: "bg-rule-soft text-ink-2",
+  1: "bg-rule-soft text-ink-2",
+  2: "bg-rule-soft text-ink-2",
+  3: "bg-accent-wash text-accent",
 };
+// Project/label swatches are a categorical legend (users pick from this
+// same 8-color palette across Projects/Gantt/Tasks) — kept as literal
+// Tailwind hues rather than the single accent token, matching the
+// pattern already established in @/lib/eventColors.
 const PROJECT_COLOR_BADGE: Record<string, string> = {
   zinc: "bg-zinc-100 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-300",
   red: "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300",
@@ -266,13 +273,13 @@ export default function TaskRow({
   };
 
   return (
-    <li className="rounded-xl border border-zinc-200 bg-white p-3 transition-shadow hover:shadow-md dark:border-zinc-700 dark:bg-zinc-800">
+    <li className="rounded-xl border border-rule bg-surface p-3 transition-colors hover:bg-rule-soft/40">
       <div className="flex items-center gap-3">
         <form action={toggleTaskDone.bind(null, task.id, true)}>
           <button
             type="submit"
             aria-label="mark done"
-            className="h-5 w-5 shrink-0 rounded-full border border-zinc-300 bg-white transition-all hover:scale-110 hover:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:border-zinc-600 dark:bg-zinc-800 dark:focus:ring-offset-zinc-900"
+            className="h-5 w-5 shrink-0 rounded-full border border-rule bg-surface transition-all hover:scale-110 hover:border-accent focus:outline focus:outline-2 focus:outline-accent focus:outline-offset-2"
           />
         </form>
         <button
@@ -281,7 +288,7 @@ export default function TaskRow({
           className="min-w-0 flex-1 text-left"
         >
           <p className="truncate text-sm font-medium hover:underline">{task.title}</p>
-          <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-zinc-500">
+          <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted">
             <span
               className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_BADGE[displayStatus]}`}
             >
@@ -295,7 +302,7 @@ export default function TaskRow({
               </span>
             )}
             {task.assignee && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700 dark:bg-zinc-700 dark:text-zinc-300">
+              <span className="inline-flex items-center gap-1 rounded-full bg-rule-soft px-2 py-0.5 text-xs font-medium text-ink-2">
                 {task.assignee.type === "AI" ? (
                   <RobotIcon className="h-3 w-3" />
                 ) : (
@@ -323,15 +330,15 @@ export default function TaskRow({
             {task.dueAt && (
               <span>
                 · due {formatDueDateTime(task.dueAt)}
-                {!task.hardDeadline && <span className="text-zinc-400"> (soft)</span>}
+                {!task.hardDeadline && <span className="text-muted"> (soft)</span>}
               </span>
             )}
             {(isOverdue || isDueSoon) && (
               <span
                 className={
                   isOverdue
-                    ? "inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-950/40 dark:text-red-300"
-                    : "inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
+                    ? "inline-flex items-center gap-1 rounded-full bg-accent-wash px-2 py-0.5 text-xs font-medium text-accent"
+                    : "inline-flex items-center gap-1 rounded-full border border-accent px-2 py-0.5 text-xs font-medium text-accent"
                 }
                 title={isOverdue ? "Past due and not scheduled" : "Due soon and not scheduled"}
               >
@@ -351,13 +358,13 @@ export default function TaskRow({
               <span>
                 · {task.event.locked ? "scheduled" : "auto-scheduled"} {formatDueDateTime(task.event.start)}
                 {task.eventCount > 1 && (
-                  <span className="text-zinc-400"> (1 of {task.eventCount} chunks)</span>
+                  <span className="text-muted"> (1 of {task.eventCount} chunks)</span>
                 )}
               </span>
             )}
             {isBlocked && (
               <span
-                className="inline-flex items-center gap-1 rounded-full bg-zinc-200 px-2 py-0.5 text-xs font-medium text-zinc-700 dark:bg-zinc-700 dark:text-zinc-300"
+                className="inline-flex items-center gap-1 rounded-full bg-rule-soft px-2 py-0.5 text-xs font-medium text-ink-2"
                 title={`Blocked by: ${task.blockedBy.map((b) => b.title).join(", ")}`}
               >
                 Blocked
@@ -378,7 +385,7 @@ export default function TaskRow({
             <button
               type="submit"
               title="Mark as ongoing — you're working on this now"
-              className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700/60"
+              className="rounded-lg border border-rule bg-surface px-2.5 py-1 text-xs font-medium text-ink-2 transition-colors hover:bg-rule-soft"
             >
               Start
             </button>
@@ -389,7 +396,7 @@ export default function TaskRow({
             <button
               type="submit"
               title="Pause — stops the timer and folds elapsed time into tracked minutes"
-              className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700/60"
+              className="rounded-lg border border-rule bg-surface px-2.5 py-1 text-xs font-medium text-ink-2 transition-colors hover:bg-rule-soft"
             >
               Pause
             </button>
@@ -400,7 +407,7 @@ export default function TaskRow({
             <button
               type="submit"
               title="Clear the delayed status"
-              className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700/60"
+              className="rounded-lg border border-rule bg-surface px-2.5 py-1 text-xs font-medium text-ink-2 transition-colors hover:bg-rule-soft"
             >
               Un-delay
             </button>
@@ -411,7 +418,7 @@ export default function TaskRow({
             type="button"
             onClick={openDelay}
             title="Push the due date off and clear its calendar slot"
-            className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700/60"
+            className="rounded-lg border border-rule bg-surface px-2.5 py-1 text-xs font-medium text-ink-2 transition-colors hover:bg-rule-soft"
           >
             Delay
           </button>
@@ -425,7 +432,7 @@ export default function TaskRow({
         >
           <button
             type="submit"
-            className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700/60"
+            className="rounded-lg border border-rule bg-surface px-2.5 py-1 text-xs font-medium text-ink-2 transition-colors hover:bg-rule-soft"
           >
             {task.event ? "Unschedule" : "Schedule"}
           </button>
@@ -435,7 +442,7 @@ export default function TaskRow({
             type="submit"
             aria-label="delete task"
             title="Delete task"
-            className="flex h-6 w-6 items-center justify-center rounded-md text-zinc-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/40 dark:hover:text-red-400"
+            className="flex h-6 w-6 items-center justify-center rounded-md text-muted transition-colors hover:bg-accent-wash hover:text-accent"
           >
             <CloseIcon className="h-3.5 w-3.5" />
           </button>
@@ -445,25 +452,25 @@ export default function TaskRow({
       {delaying && (
         <form
           onSubmit={handleDelaySubmit}
-          className="mt-2 ml-8 flex items-center gap-2 rounded-lg border border-zinc-200 bg-zinc-50 p-2 dark:border-zinc-700 dark:bg-zinc-700/40"
+          className="mt-2 ml-8 flex items-center gap-2 rounded-lg border border-rule bg-rule-soft p-2"
         >
-          <span className="text-xs text-zinc-500">Push due date to</span>
+          <span className="text-xs text-muted">Push due date to</span>
           <input
             type="date"
             value={delayDate}
             onChange={(e) => setDelayDate(e.target.value)}
-            className="rounded-lg border border-zinc-200 bg-white px-2 py-1 text-xs dark:border-zinc-600 dark:bg-zinc-800"
+            className="rounded-lg border border-rule bg-surface px-2 py-1 text-xs"
           />
           <button
             type="submit"
-            className="rounded-lg bg-zinc-900 px-2.5 py-1 text-xs font-medium text-white hover:bg-zinc-700 dark:bg-white dark:text-zinc-900"
+            className="rounded-lg bg-ink px-2.5 py-1 text-xs font-medium text-paper hover:opacity-85"
           >
             Delay
           </button>
           <button
             type="button"
             onClick={() => setDelaying(false)}
-            className="text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
+            className="text-xs text-muted hover:text-ink"
           >
             Cancel
           </button>
@@ -474,7 +481,7 @@ export default function TaskRow({
         <button
           type="button"
           onClick={() => setExpanded((v) => !v)}
-          className="inline-flex items-center gap-1 text-xs text-zinc-500 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100"
+          className="inline-flex items-center gap-1 text-xs text-muted transition-colors hover:text-ink"
         >
           <ChevronRightIcon className={`h-3 w-3 transition-transform ${expanded ? "rotate-90" : ""}`} />
           {task.subtasks.length > 0
@@ -492,16 +499,16 @@ export default function TaskRow({
                     aria-label="toggle subtask done"
                     className={
                       sub.status === "DONE"
-                        ? "flex h-4 w-4 items-center justify-center rounded-full bg-zinc-900 dark:bg-white"
-                        : "h-4 w-4 rounded-full border border-zinc-300 bg-white transition-colors hover:border-indigo-500 dark:border-zinc-600 dark:bg-zinc-800"
+                        ? "flex h-4 w-4 items-center justify-center rounded-full bg-ink"
+                        : "h-4 w-4 rounded-full border border-rule bg-surface transition-colors hover:border-accent"
                     }
                   />
                 </form>
                 <span
                   className={
                     sub.status === "DONE"
-                      ? "flex-1 text-sm text-zinc-400 line-through"
-                      : "flex-1 text-sm text-zinc-700 dark:text-zinc-300"
+                      ? "flex-1 text-sm text-muted line-through"
+                      : "flex-1 text-sm text-ink-2"
                   }
                 >
                   {sub.title}
@@ -510,7 +517,7 @@ export default function TaskRow({
                   <button
                     type="submit"
                     aria-label="delete subtask"
-                    className="flex h-4 w-4 items-center justify-center rounded text-zinc-300 transition-colors hover:text-red-600 dark:hover:text-red-400"
+                    className="flex h-4 w-4 items-center justify-center rounded text-muted transition-colors hover:text-accent"
                   >
                     <CloseIcon className="h-3 w-3" />
                   </button>
@@ -522,12 +529,12 @@ export default function TaskRow({
                 value={newSubtask}
                 onChange={(e) => setNewSubtask(e.target.value)}
                 placeholder="New subtask…"
-                className="w-full max-w-xs rounded-lg border border-zinc-200 bg-white px-2 py-1 text-xs transition-colors focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800"
+                className="w-full max-w-xs rounded-lg border border-rule bg-surface px-2 py-1 text-xs transition-colors focus:border-accent focus:outline-none"
               />
               <button
                 type="submit"
                 disabled={isAddingSubtask || !newSubtask.trim()}
-                className="rounded-lg border border-zinc-200 px-2 py-1 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                className="rounded-lg border border-rule px-2 py-1 text-xs font-medium text-ink-2 transition-colors hover:bg-rule-soft disabled:opacity-50"
               >
                 Add
               </button>
@@ -538,32 +545,32 @@ export default function TaskRow({
                 type="button"
                 onClick={handleGenerateSubtasks}
                 disabled={isGenerating}
-                className="mt-1 inline-flex w-fit items-center gap-1 text-xs text-indigo-600 transition-colors hover:underline disabled:opacity-50 dark:text-indigo-400"
+                className="mt-1 inline-flex w-fit items-center gap-1 text-xs text-ink-2 transition-colors hover:underline disabled:opacity-50"
               >
                 <SparkleIcon className="h-3 w-3" />
                 {isGenerating ? "Thinking…" : "Generate subtasks with AI"}
               </button>
             )}
             {generateError && (
-              <p className="text-xs text-red-600 dark:text-red-400">{generateError}</p>
+              <p className="text-xs text-accent">{generateError}</p>
             )}
             {suggested && (
-              <div className="mt-1 flex flex-col gap-1.5 rounded-lg border border-dashed border-indigo-300 p-2 dark:border-indigo-700">
-                <p className="text-xs font-medium text-indigo-700 dark:text-indigo-300">
+              <div className="mt-1 flex flex-col gap-1.5 rounded-lg border border-dashed border-rule p-2">
+                <p className="text-xs font-medium text-ink">
                   Suggested subtasks
                 </p>
                 {suggested.length === 0 ? (
-                  <p className="text-xs text-zinc-500">No suggestions — try adding some notes to the task first.</p>
+                  <p className="text-xs text-muted">No suggestions — try adding some notes to the task first.</p>
                 ) : (
                   <ul className="flex flex-col gap-1">
                     {suggested.map((s, i) => (
-                      <li key={i} className="flex items-center justify-between gap-2 text-xs text-zinc-700 dark:text-zinc-300">
+                      <li key={i} className="flex items-center justify-between gap-2 text-xs text-ink-2">
                         <span className="min-w-0 truncate">{s}</span>
                         <button
                           type="button"
                           onClick={() => setSuggested((prev) => prev?.filter((_, idx) => idx !== i) ?? null)}
                           aria-label="remove suggestion"
-                          className="flex-shrink-0 text-zinc-300 hover:text-red-600 dark:hover:text-red-400"
+                          className="flex-shrink-0 text-muted hover:text-accent"
                         >
                           <CloseIcon className="h-3 w-3" />
                         </button>
@@ -575,7 +582,7 @@ export default function TaskRow({
                   <button
                     type="button"
                     onClick={() => setSuggested(null)}
-                    className="text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
+                    className="text-xs text-muted hover:text-ink"
                   >
                     Discard
                   </button>
@@ -584,7 +591,7 @@ export default function TaskRow({
                       type="button"
                       onClick={handleAcceptSuggested}
                       disabled={isAddingSubtask}
-                      className="rounded-lg bg-zinc-900 px-2 py-1 text-xs font-medium text-white hover:bg-zinc-700 disabled:opacity-50 dark:bg-white dark:text-zinc-900"
+                      className="rounded-lg bg-ink px-2 py-1 text-xs font-medium text-paper hover:opacity-85 disabled:opacity-50"
                     >
                       {isAddingSubtask ? "Adding…" : `Add ${suggested.length}`}
                     </button>
@@ -593,41 +600,41 @@ export default function TaskRow({
               </div>
             )}
 
-            <div className="mt-2 border-t border-zinc-100 pt-2 dark:border-zinc-700/60">
+            <div className="mt-2 border-t border-rule-soft pt-2">
               {!draft && (
                 <button
                   type="button"
                   onClick={handleDraftEmail}
                   disabled={isDrafting}
-                  className="inline-flex items-center gap-1 text-xs text-indigo-600 transition-colors hover:underline disabled:opacity-50 dark:text-indigo-400"
+                  className="inline-flex items-center gap-1 text-xs text-ink-2 transition-colors hover:underline disabled:opacity-50"
                 >
                   <SparkleIcon className="h-3 w-3" />
                   {isDrafting ? "Drafting…" : "Draft email with AI"}
                 </button>
               )}
               {draftError && (
-                <p className="text-xs text-red-600 dark:text-red-400">{draftError}</p>
+                <p className="text-xs text-accent">{draftError}</p>
               )}
               {draft && (
-                <div className="flex flex-col gap-1.5 rounded-lg border border-dashed border-indigo-300 p-2 dark:border-indigo-700">
-                  <p className="text-xs font-medium text-indigo-700 dark:text-indigo-300">
+                <div className="flex flex-col gap-1.5 rounded-lg border border-dashed border-rule p-2">
+                  <p className="text-xs font-medium text-ink">
                     {draft.subject}
                   </p>
-                  <p className="whitespace-pre-wrap text-xs text-zinc-600 dark:text-zinc-400">
+                  <p className="whitespace-pre-wrap text-xs text-ink-2">
                     {draft.body}
                   </p>
                   <div className="mt-1 flex items-center gap-2">
                     <button
                       type="button"
                       onClick={() => setDraft(null)}
-                      className="text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
+                      className="text-xs text-muted hover:text-ink"
                     >
                       Discard
                     </button>
                     <button
                       type="button"
                       onClick={handleCopyDraft}
-                      className="rounded-lg bg-zinc-900 px-2 py-1 text-xs font-medium text-white hover:bg-zinc-700 dark:bg-white dark:text-zinc-900"
+                      className="rounded-lg bg-ink px-2 py-1 text-xs font-medium text-paper hover:opacity-85"
                     >
                       {copyStatus === "copied" ? "Copied!" : "Copy"}
                     </button>
@@ -636,41 +643,41 @@ export default function TaskRow({
               )}
             </div>
 
-            <div className="mt-2 border-t border-zinc-100 pt-2 dark:border-zinc-700/60">
+            <div className="mt-2 border-t border-rule-soft pt-2">
               {!docDraft && (
                 <button
                   type="button"
                   onClick={handleDraftDoc}
                   disabled={isDraftingDoc}
-                  className="inline-flex items-center gap-1 text-xs text-indigo-600 transition-colors hover:underline disabled:opacity-50 dark:text-indigo-400"
+                  className="inline-flex items-center gap-1 text-xs text-ink-2 transition-colors hover:underline disabled:opacity-50"
                 >
                   <SparkleIcon className="h-3 w-3" />
                   {isDraftingDoc ? "Drafting…" : "Draft doc with AI"}
                 </button>
               )}
               {draftDocError && (
-                <p className="text-xs text-red-600 dark:text-red-400">{draftDocError}</p>
+                <p className="text-xs text-accent">{draftDocError}</p>
               )}
               {docDraft && (
-                <div className="flex flex-col gap-1.5 rounded-lg border border-dashed border-indigo-300 p-2 dark:border-indigo-700">
-                  <p className="text-xs font-medium text-indigo-700 dark:text-indigo-300">
+                <div className="flex flex-col gap-1.5 rounded-lg border border-dashed border-rule p-2">
+                  <p className="text-xs font-medium text-ink">
                     {docDraft.title}
                   </p>
-                  <p className="whitespace-pre-wrap text-xs text-zinc-600 dark:text-zinc-400">
+                  <p className="whitespace-pre-wrap text-xs text-ink-2">
                     {docDraft.body}
                   </p>
                   <div className="mt-1 flex items-center gap-2">
                     <button
                       type="button"
                       onClick={() => setDocDraft(null)}
-                      className="text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
+                      className="text-xs text-muted hover:text-ink"
                     >
                       Discard
                     </button>
                     <button
                       type="button"
                       onClick={handleCopyDoc}
-                      className="rounded-lg bg-zinc-900 px-2 py-1 text-xs font-medium text-white hover:bg-zinc-700 dark:bg-white dark:text-zinc-900"
+                      className="rounded-lg bg-ink px-2 py-1 text-xs font-medium text-paper hover:opacity-85"
                     >
                       {copyDocStatus === "copied" ? "Copied!" : "Copy"}
                     </button>

@@ -20,11 +20,11 @@ export default function HabitsManager({ habits }: { habits: HabitData[] }) {
       {habits.map((habit) => (
         <div
           key={habit.id}
-          className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-zinc-200 p-3 text-sm dark:border-zinc-600"
+          className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-rule p-3 text-sm"
         >
           <p>
-            <span className="font-medium">{habit.title}</span>{" "}
-            <span className="text-zinc-500">
+            <span className="font-medium text-ink">{habit.title}</span>{" "}
+            <span className="text-muted">
               — {habit.timesPerWeek}x/week, {habit.durationMin} min
             </span>
           </p>
@@ -32,7 +32,7 @@ export default function HabitsManager({ habits }: { habits: HabitData[] }) {
             <form action={toggleHabitAction.bind(null, habit.id, !habit.enabled)}>
               <button
                 type="submit"
-                className="rounded-full px-2.5 py-1 text-xs text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-700 dark:hover:text-zinc-100"
+                className="rounded-full px-2.5 py-1 text-xs text-muted transition-colors hover:bg-rule-soft hover:text-ink"
               >
                 {habit.enabled ? "Disable" : "Enable"}
               </button>
@@ -40,7 +40,7 @@ export default function HabitsManager({ habits }: { habits: HabitData[] }) {
             <form action={deleteHabitAction.bind(null, habit.id)}>
               <button
                 type="submit"
-                className="rounded-full px-2.5 py-1 text-xs text-zinc-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/40 dark:hover:text-red-400"
+                className="rounded-full px-2.5 py-1 text-xs text-muted transition-colors hover:bg-accent-wash hover:text-accent"
               >
                 Delete
               </button>
@@ -48,13 +48,13 @@ export default function HabitsManager({ habits }: { habits: HabitData[] }) {
           </div>
         </div>
       ))}
-      {habits.length === 0 && <p className="text-sm text-zinc-400">No habits yet.</p>}
+      {habits.length === 0 && <p className="text-sm text-muted">No habits yet.</p>}
 
       {!adding ? (
         <button
           type="button"
           onClick={() => setAdding(true)}
-          className="self-start text-sm text-indigo-600 hover:underline dark:text-indigo-400"
+          className="self-start text-sm text-accent hover:underline"
         >
           + Add habit
         </button>
@@ -64,18 +64,18 @@ export default function HabitsManager({ habits }: { habits: HabitData[] }) {
             await createHabitAction(formData);
             setAdding(false);
           }}
-          className="flex flex-wrap items-end gap-2 rounded-lg border border-dashed border-zinc-300 p-3 dark:border-zinc-600"
+          className="flex flex-wrap items-end gap-2 rounded-lg border border-dashed border-rule p-3"
         >
-          <label className="flex flex-col gap-1 text-xs text-zinc-500">
+          <label className="flex flex-col gap-1 text-xs text-muted">
             Title
             <input
               name="title"
               required
               placeholder="e.g. Exercise"
-              className="w-40 rounded-lg border border-zinc-200 bg-white px-2 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-800"
+              className="w-40 rounded-lg border border-rule bg-surface px-2 py-1.5 text-sm text-ink"
             />
           </label>
-          <label className="flex flex-col gap-1 text-xs text-zinc-500">
+          <label className="flex flex-col gap-1 text-xs text-muted">
             Duration (min)
             <input
               name="durationMin"
@@ -84,10 +84,10 @@ export default function HabitsManager({ habits }: { habits: HabitData[] }) {
               max={480}
               step={5}
               defaultValue={30}
-              className="w-24 rounded-lg border border-zinc-200 bg-white px-2 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-800"
+              className="w-24 rounded-lg border border-rule bg-surface px-2 py-1.5 text-sm text-ink"
             />
           </label>
-          <label className="flex flex-col gap-1 text-xs text-zinc-500">
+          <label className="flex flex-col gap-1 text-xs text-muted">
             Times per week
             <input
               name="timesPerWeek"
@@ -95,7 +95,7 @@ export default function HabitsManager({ habits }: { habits: HabitData[] }) {
               min={1}
               max={14}
               defaultValue={3}
-              className="w-24 rounded-lg border border-zinc-200 bg-white px-2 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-800"
+              className="w-24 rounded-lg border border-rule bg-surface px-2 py-1.5 text-sm text-ink"
             />
           </label>
           <div className="flex items-center gap-2">

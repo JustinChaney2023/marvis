@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import Button from "../ui/Button";
 
 function formatClock(totalSeconds: number): string {
   const s = Math.max(0, totalSeconds);
@@ -49,19 +50,19 @@ export default function TimerClient({
   const progress = 1 - secondsLeft / totalSeconds;
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-10 bg-zinc-950 text-zinc-50">
+    <div className="dark fixed inset-0 z-50 flex flex-col items-center justify-center gap-10 bg-paper text-ink">
       <Link
         href="/"
-        className="absolute top-6 right-6 text-sm text-zinc-500 hover:text-zinc-300"
+        className="absolute top-6 right-6 font-mono text-[10px] uppercase tracking-wide text-muted hover:text-ink"
       >
         Exit
       </Link>
 
-      <p className="text-lg text-zinc-400">{title}</p>
+      <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted">{title}</p>
 
       <div className="relative flex h-80 w-80 items-center justify-center">
         <svg viewBox="0 0 100 100" className="absolute h-full w-full -rotate-90">
-          <circle cx="50" cy="50" r="45" fill="none" strokeWidth="4" className="text-zinc-800" stroke="currentColor" />
+          <circle cx="50" cy="50" r="45" fill="none" strokeWidth="4" className="text-rule-soft" stroke="currentColor" />
           <circle
             cx="50"
             cy="50"
@@ -69,40 +70,41 @@ export default function TimerClient({
             fill="none"
             strokeWidth="4"
             strokeLinecap="round"
-            className={done ? "text-emerald-500" : "text-indigo-400"}
+            className="text-accent"
             stroke="currentColor"
             strokeDasharray={2 * Math.PI * 45}
             strokeDashoffset={2 * Math.PI * 45 * (1 - progress)}
           />
         </svg>
-        <span className="text-6xl font-bold tabular-nums">
+        <span className="font-mono text-6xl font-bold tabular-nums">
           {done ? "Done" : formatClock(secondsLeft)}
         </span>
       </div>
 
       <div className="flex items-center gap-4">
-        <button
+        <Button
           type="button"
           onClick={() => {
             if (!running) endAtRef.current = Date.now() + secondsLeft * 1000;
             setRunning((r) => !r);
           }}
           disabled={done}
-          className="rounded-lg bg-zinc-900 px-6 py-3 text-sm font-medium text-white transition-all hover:bg-zinc-700 active:scale-[0.98] disabled:opacity-40 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
+          className="px-6 py-3"
         >
           {running ? "Pause" : "Resume"}
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
+          variant="outline"
           onClick={() => {
             endAtRef.current = Date.now() + initialSecondsLeft * 1000;
             setSecondsLeft(initialSecondsLeft);
             setRunning(true);
           }}
-          className="rounded-lg border border-zinc-700 px-5 py-3 text-sm font-medium text-zinc-300 transition-colors hover:bg-zinc-900"
+          className="px-5 py-3"
         >
           Reset
-        </button>
+        </Button>
       </div>
     </div>
   );

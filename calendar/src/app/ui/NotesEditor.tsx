@@ -9,10 +9,10 @@ type Props = {
 };
 
 const inputClass =
-  "w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800";
+  "w-full rounded-lg border border-rule bg-surface px-3 py-2 text-[13px] transition-colors focus:border-ink focus:outline-none";
 
 const toolbarButtonClass =
-  "flex h-7 min-w-7 items-center justify-center rounded-md px-1.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700";
+  "flex h-7 min-w-7 items-center justify-center rounded-md px-1.5 text-xs font-medium text-ink-2 transition-colors hover:bg-rule-soft";
 
 /**
  * Task notes are plain markdown (Task.notes — no schema change), edited
@@ -105,7 +105,7 @@ export default function NotesEditor({ name, defaultValue }: Props) {
   return (
     <div>
       <input type="hidden" name={name} value={value} />
-      <div className="flex flex-wrap items-center gap-0.5 rounded-t-lg border border-b-0 border-zinc-200 bg-zinc-50 p-1 dark:border-zinc-600 dark:bg-zinc-900/40">
+      <div className="flex flex-wrap items-center gap-0.5 rounded-t-lg border border-b-0 border-rule bg-paper p-1">
         <button type="button" title="Bold" className={`${toolbarButtonClass} font-bold`} onClick={() => applyWrap("**", "**", "bold text")}>
           B
         </button>
@@ -115,7 +115,7 @@ export default function NotesEditor({ name, defaultValue }: Props) {
         <button type="button" title="Underline" className={`${toolbarButtonClass} underline`} onClick={() => applyWrap("<u>", "</u>", "underlined text")}>
           U
         </button>
-        <span className="mx-0.5 h-4 w-px bg-zinc-200 dark:bg-zinc-700" />
+        <span className="mx-0.5 h-4 w-px bg-rule" />
         <button type="button" title="Heading" className={toolbarButtonClass} onClick={() => applyLinePrefix("## ")}>
           H
         </button>
@@ -128,7 +128,7 @@ export default function NotesEditor({ name, defaultValue }: Props) {
         <button type="button" title="Checklist" className={toolbarButtonClass} onClick={() => applyLinePrefix("- [ ] ")}>
           ☐
         </button>
-        <span className="mx-0.5 h-4 w-px bg-zinc-200 dark:bg-zinc-700" />
+        <span className="mx-0.5 h-4 w-px bg-rule" />
         <button
           type="button"
           title="Link"
@@ -177,11 +177,11 @@ export default function NotesEditor({ name, defaultValue }: Props) {
         />
       ) : (
         <div
-          className="min-h-[7.5rem] rounded-b-lg border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800 [&_a]:text-indigo-600 [&_a]:underline dark:[&_a]:text-indigo-400 [&_img]:mt-1 [&_li]:ml-4 [&_ul]:list-disc [&_ol]:list-decimal [&_h1]:text-lg [&_h1]:font-semibold [&_h2]:text-base [&_h2]:font-semibold [&_p]:mb-2"
-          dangerouslySetInnerHTML={{ __html: value ? renderMarkdown(value) : "<p class='text-zinc-400'>Nothing to preview yet.</p>" }}
+          className="min-h-[7.5rem] rounded-b-lg border border-rule bg-surface px-3 py-2 text-[13px] [&_a]:text-accent [&_a]:underline [&_img]:mt-1 [&_li]:ml-4 [&_ul]:list-disc [&_ol]:list-decimal [&_h1]:font-serif [&_h1]:text-lg [&_h2]:font-serif [&_h2]:text-base [&_p]:mb-2"
+          dangerouslySetInnerHTML={{ __html: value ? renderMarkdown(value) : "<p class='text-muted'>Nothing to preview yet.</p>" }}
         />
       )}
-      {uploadError && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{uploadError}</p>}
+      {uploadError && <p className="mt-1 text-xs text-accent">{uploadError}</p>}
     </div>
   );
 }

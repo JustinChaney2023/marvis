@@ -60,10 +60,12 @@ export default function MeetingBanner() {
   );
 
   return (
-    <div className="flex shrink-0 items-center justify-between gap-3 border-b border-indigo-200 bg-indigo-50 px-4 py-2 text-sm print:hidden dark:border-indigo-900 dark:bg-indigo-950/40">
-      <span className="min-w-0 truncate text-indigo-900 dark:text-indigo-200">
+    <div className="flex shrink-0 items-center gap-3 bg-ink px-4 py-2.5 text-sm text-paper print:hidden">
+      <span className="font-mono text-[10px] tracking-wide text-accent uppercase">Live soon</span>
+      <span className="min-w-0 truncate">
         <span className="font-medium">{next.title}</span> — {describeTiming(next.startIso, Date.now())}
       </span>
+      <div className="flex-grow" />
       <div className="flex shrink-0 items-center gap-2">
         <a
           // Defense in depth — actions.ts's meetingUrlFromFormData already
@@ -74,7 +76,7 @@ export default function MeetingBanner() {
           href={next.meetingUrl && /^https?:\/\//i.test(next.meetingUrl) ? next.meetingUrl : "#"}
           target="_blank"
           rel="noreferrer"
-          className="rounded-full bg-zinc-900 px-3 py-1 text-xs font-medium text-white hover:bg-zinc-700 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
+          className="rounded-full bg-accent px-3 py-1 text-xs font-medium text-paper hover:bg-accent-hover"
         >
           Join call
         </a>
@@ -82,7 +84,7 @@ export default function MeetingBanner() {
           type="button"
           aria-label="Dismiss"
           onClick={() => setDismissedIds((prev) => new Set(prev).add(next.id))}
-          className="flex h-6 w-6 items-center justify-center rounded-full text-indigo-500 hover:bg-indigo-100 dark:text-indigo-400 dark:hover:bg-indigo-900/40"
+          className="flex h-6 w-6 items-center justify-center rounded-full text-paper/70 hover:bg-paper/10 hover:text-paper"
         >
           <CloseIcon className="h-3.5 w-3.5" />
         </button>

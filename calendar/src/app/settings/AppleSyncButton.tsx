@@ -30,7 +30,7 @@ export default function AppleSyncButton() {
       <Button type="button" onClick={handleSync} pending={isSyncing}>
         {isSyncing ? "Syncing…" : "Sync now"}
       </Button>
-      {result && <span className="text-sm text-zinc-500">{result}</span>}
+      {result && <span className="text-sm text-ink-2">{result}</span>}
     </div>
   );
 }

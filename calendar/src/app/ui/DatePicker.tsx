@@ -67,10 +67,10 @@ export default function DatePicker({ name, value, onChange, placeholder = "Pick 
           );
           setOpen((v) => !v);
         }}
-        className="flex w-full items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-left text-sm transition-colors hover:border-indigo-500 dark:border-zinc-600 dark:bg-zinc-800"
+        className="flex w-full items-center gap-2 rounded-lg border border-rule bg-surface px-3 py-2 text-left text-[13px] transition-colors hover:border-ink-2"
       >
-        <CalendarIcon className="h-3.5 w-3.5 flex-shrink-0 text-zinc-400" />
-        <span className={value ? "" : "text-zinc-400"}>
+        <CalendarIcon className="h-3.5 w-3.5 flex-shrink-0 text-muted" />
+        <span className={value ? "" : "text-muted"}>
           {selected
             ? selected.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
             : placeholder}
@@ -84,7 +84,7 @@ export default function DatePicker({ name, value, onChange, placeholder = "Pick 
               e.stopPropagation();
               onChange("");
             }}
-            className="ml-auto text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
+            className="ml-auto text-muted hover:text-ink"
           >
             <CloseIcon className="h-3 w-3" />
           </span>
@@ -92,17 +92,17 @@ export default function DatePicker({ name, value, onChange, placeholder = "Pick 
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full z-40 mt-1 flex w-max overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-lg ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
-          <div className="flex flex-col gap-0.5 border-r border-zinc-200 p-2 dark:border-zinc-700">
+        <div className="absolute left-0 top-full z-40 mt-1 flex w-max overflow-hidden rounded-xl border border-rule bg-surface">
+          <div className="flex flex-col gap-0.5 border-r border-rule p-2">
             {quickPicks.map((qp) => (
               <button
                 key={qp.label}
                 type="button"
                 onClick={() => pick(qp.date)}
-                className="flex items-center justify-between gap-3 rounded-md px-2 py-1 text-left text-xs text-zinc-600 transition-colors hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                className="flex items-center justify-between gap-3 rounded-md px-2 py-1 text-left text-xs text-ink-2 transition-colors hover:bg-rule-soft"
               >
                 <span>{qp.label}</span>
-                <span className="text-zinc-400">
+                <span className="font-mono text-muted">
                   {qp.date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
                 </span>
               </button>
@@ -115,23 +115,23 @@ export default function DatePicker({ name, value, onChange, placeholder = "Pick 
                 type="button"
                 onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))}
                 aria-label="Show previous month"
-                className="flex h-6 w-6 items-center justify-center rounded-md text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-700"
+                className="flex h-6 w-6 items-center justify-center rounded-md text-ink-2 hover:bg-rule-soft"
               >
                 <ChevronLeftIcon className="h-3.5 w-3.5" />
               </button>
-              <span className="text-sm font-medium">
+              <span className="font-serif text-base">
                 {cursor.toLocaleDateString(undefined, { month: "long", year: "numeric" })}
               </span>
               <button
                 type="button"
                 onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))}
                 aria-label="Show next month"
-                className="flex h-6 w-6 items-center justify-center rounded-md text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-700"
+                className="flex h-6 w-6 items-center justify-center rounded-md text-ink-2 hover:bg-rule-soft"
               >
                 <ChevronRightIcon className="h-3.5 w-3.5" />
               </button>
             </div>
-            <div className="mt-2 grid grid-cols-7 gap-y-1 text-center text-[10px] text-zinc-400">
+            <div className="mt-2 grid grid-cols-7 gap-y-1 text-center font-mono text-[10px] text-muted">
               {WEEKDAY_INITIALS.map((w) => (
                 <span key={w}>{w}</span>
               ))}
@@ -148,10 +148,10 @@ export default function DatePicker({ name, value, onChange, placeholder = "Pick 
                     onClick={() => pick(d)}
                     className={
                       isSelected
-                        ? "mx-auto flex h-6 w-6 items-center justify-center rounded-full bg-zinc-900 font-semibold text-white dark:bg-white dark:text-zinc-900"
+                        ? "mx-auto flex h-6 w-6 items-center justify-center rounded-full bg-ink font-semibold text-paper"
                         : isToday
-                          ? "mx-auto flex h-6 w-6 items-center justify-center rounded-full border border-zinc-400 font-semibold text-zinc-900 dark:border-zinc-500 dark:text-zinc-100"
-                          : "mx-auto flex h-6 w-6 items-center justify-center rounded-full text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                          ? "mx-auto flex h-6 w-6 items-center justify-center rounded-full border border-accent font-semibold text-ink"
+                          : "mx-auto flex h-6 w-6 items-center justify-center rounded-full text-ink-2 hover:bg-rule-soft"
                     }
                   >
                     {d.getDate()}

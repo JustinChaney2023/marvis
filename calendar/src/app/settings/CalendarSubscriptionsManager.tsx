@@ -40,22 +40,22 @@ export default function CalendarSubscriptionsManager({
           {subscriptions.map((sub) => (
             <li
               key={sub.id}
-              className="flex items-center justify-between gap-3 rounded-lg border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-600"
+              className="flex items-center justify-between gap-3 rounded-lg border border-rule px-3 py-2 text-sm"
             >
               <div className="min-w-0">
-                <p className="truncate font-medium">{sub.name}</p>
-                <p className="truncate text-xs text-zinc-400">{sub.url}</p>
+                <p className="truncate font-medium text-ink">{sub.name}</p>
+                <p className="truncate text-xs text-muted font-mono">{sub.url}</p>
                 {sub.lastError ? (
-                  <p className="text-xs text-red-600 dark:text-red-400">{sub.lastError}</p>
+                  <p className="text-xs text-accent">{sub.lastError}</p>
                 ) : (
-                  <p className="text-xs text-zinc-400">
+                  <p className="text-xs text-muted">
                     {sub.lastFetchedAt
                       ? `Synced ${sub.lastFetchedAt.toLocaleString()}`
                       : "Not synced yet"}
                   </p>
                 )}
                 {sub.importAsTasks && (
-                  <p className="text-xs text-indigo-600 dark:text-indigo-400">
+                  <p className="text-xs text-accent">
                     Importing as schedulable tasks
                   </p>
                 )}
@@ -81,28 +81,28 @@ export default function CalendarSubscriptionsManager({
       )}
       <form action={addCalendarSubscriptionAction} className="flex flex-wrap items-end gap-2">
         <label className="flex flex-col gap-1 text-sm">
-          <span className="text-zinc-500">Name</span>
+          <span className="text-muted">Name</span>
           <input
             type="text"
             name="name"
             placeholder="US Holidays"
             required
-            className="w-40 rounded-lg border border-zinc-200 bg-white px-2 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800"
+            className="w-40 rounded-lg border border-rule bg-surface px-2 py-2 text-sm text-ink"
           />
         </label>
         <label className="flex flex-col gap-1 text-sm">
-          <span className="text-zinc-500">ICS URL</span>
+          <span className="text-muted">ICS URL</span>
           <input
             type="url"
             name="url"
             placeholder="https://example.com/calendar.ics"
             required
-            className="w-72 rounded-lg border border-zinc-200 bg-white px-2 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800"
+            className="w-72 rounded-lg border border-rule bg-surface px-2 py-2 text-sm text-ink"
           />
         </label>
         <label className="flex max-w-xs cursor-pointer items-start gap-2 text-sm">
           <input type="checkbox" name="importAsTasks" className="mt-0.5" />
-          <span className="text-zinc-500">
+          <span className="text-muted">
             Create schedulable tasks (with auto-scheduled work time) instead
             of just showing on your calendar — good for an LMS assignment
             feed like Blackboard or Canvas.

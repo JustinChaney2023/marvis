@@ -28,12 +28,12 @@ export default function IcsImportForm() {
         name="file"
         accept=".ics,text/calendar"
         required
-        className="text-sm text-zinc-600 dark:text-zinc-400"
+        className="text-sm text-ink-2"
       />
       <Button type="submit" variant="secondary" pending={isSubmitting}>
         Import
       </Button>
-      {message && <span className="text-xs text-zinc-500">{message}</span>}
+      {message && <span className="text-xs text-muted">{message}</span>}
     </form>
   );
 }

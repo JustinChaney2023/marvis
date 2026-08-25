@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { toggleTaskDone } from "../actions";
 import { formatDueDateTime } from "@/lib/calendar-dates";
+import Button from "../ui/Button";
 
 export type FocusTask = {
   id: string;
@@ -81,8 +82,8 @@ export default function FocusClient({ queue }: { queue: FocusTask[] }) {
   if (!task) {
     return (
       <div className="mt-16 flex flex-col items-center gap-2 text-center">
-        <p className="text-lg font-medium">Nothing left to focus on.</p>
-        <p className="text-sm text-zinc-500">
+        <p className="font-serif text-xl text-ink">Nothing left to focus on.</p>
+        <p className="text-sm text-muted">
           Add a task or schedule one to see it here.
         </p>
       </div>
@@ -94,13 +95,13 @@ export default function FocusClient({ queue }: { queue: FocusTask[] }) {
 
   return (
     <div className="mt-10 flex flex-col items-center gap-8">
-      <div className="w-full rounded-2xl border border-zinc-200 bg-white p-6 text-center dark:border-zinc-700 dark:bg-zinc-800">
-        <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+      <div className="w-full rounded-2xl border border-rule bg-surface p-6 text-center">
+        <p className="font-mono text-[10px] font-medium uppercase tracking-wide text-muted">
           {task.eventStart ? "Scheduled now" : "Up next"}
         </p>
-        <h2 className="mt-2 text-xl font-semibold">{task.title}</h2>
-        <div className="mt-2 flex flex-wrap items-center justify-center gap-1.5 text-xs text-zinc-500">
-          <span className="inline-flex items-center rounded-full bg-zinc-100 px-2 py-0.5 dark:bg-zinc-700">
+        <h2 className="mt-2 font-serif text-2xl text-ink">{task.title}</h2>
+        <div className="mt-2 flex flex-wrap items-center justify-center gap-1.5 text-xs text-ink-2">
+          <span className="inline-flex items-center rounded-full border border-rule px-2 py-0.5 font-mono">
             {PRIORITY_LABEL[task.priority]}
           </span>
           {task.dueAt && <span>due {formatDueDateTime(task.dueAt)}</span>}
@@ -115,7 +116,7 @@ export default function FocusClient({ queue }: { queue: FocusTask[] }) {
             r="45"
             fill="none"
             strokeWidth="6"
-            className="text-zinc-200 dark:text-zinc-800"
+            className="text-rule-soft"
             stroke="currentColor"
           />
           <circle
@@ -125,56 +126,43 @@ export default function FocusClient({ queue }: { queue: FocusTask[] }) {
             fill="none"
             strokeWidth="6"
             strokeLinecap="round"
-            className="text-indigo-600 transition-[stroke-dashoffset] duration-500 dark:text-indigo-400"
+            className="text-accent transition-[stroke-dashoffset] duration-500"
             stroke="currentColor"
             strokeDasharray={2 * Math.PI * 45}
             strokeDashoffset={2 * Math.PI * 45 * (1 - progress)}
           />
         </svg>
-        <span className="text-3xl font-bold tabular-nums">
+        <span className="font-mono text-3xl font-bold tabular-nums text-ink">
           {formatClock(secondsLeft)}
         </span>
       </div>
 
       <div className="flex items-center gap-3">
-        <button
-          type="button"
-          onClick={() => setRunning((r) => !r)}
-          className="rounded-lg bg-zinc-900 px-5 py-2.5 text-sm font-medium text-white transition-all hover:bg-zinc-700 active:scale-[0.98] dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
-        >
+        <Button type="button" onClick={() => setRunning((r) => !r)}>
           {running ? "Pause" : secondsLeft === totalSeconds ? "Start" : "Resume"}
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
+          variant="outline"
           onClick={() => {
             setSecondsLeft(totalSeconds);
             setRunning(false);
           }}
-          className="rounded-lg border border-zinc-200 bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700/60"
         >
           Reset
-        </button>
+        </Button>
       </div>
 
       <div className="flex items-center gap-3">
-        <button
-          type="button"
-          onClick={handleMarkDone}
-          disabled={isMarkingDone}
-          className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-all hover:bg-zinc-800 active:scale-[0.98] disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
-        >
+        <Button type="button" variant="secondary" onClick={handleMarkDone} pending={isMarkingDone}>
           Mark done
-        </button>
-        <button
-          type="button"
-          onClick={handleSkip}
-          className="rounded-lg px-4 py-2 text-sm font-medium text-zinc-500 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100"
-        >
+        </Button>
+        <Button type="button" variant="ghost" onClick={handleSkip}>
           Skip
-        </button>
+        </Button>
       </div>
 
-      <p className="text-xs text-zinc-400">
+      <p className="font-mono text-xs text-muted">
         {index + 1} of {queue.length} in today&apos;s queue
       </p>
     </div>

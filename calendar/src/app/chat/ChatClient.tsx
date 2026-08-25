@@ -80,7 +80,7 @@ export default function ChatClient() {
     <div className="mt-6 flex flex-1 flex-col">
       <div className="flex-1 space-y-3 overflow-y-auto">
         {messages.length === 0 && (
-          <p className="rounded-xl border border-dashed border-zinc-200 py-8 text-center text-sm text-zinc-400 dark:border-zinc-700">
+          <p className="rounded-xl border border-dashed border-rule py-8 text-center text-sm text-muted">
             Ask a question, or ask it to create/reschedule/delete something.
           </p>
         )}
@@ -89,8 +89,8 @@ export default function ChatClient() {
             <p
               className={
                 m.role === "user"
-                  ? "max-w-[80%] whitespace-pre-wrap rounded-2xl bg-zinc-900 px-4 py-2 text-sm text-white dark:bg-white dark:text-zinc-900"
-                  : "max-w-[80%] whitespace-pre-wrap rounded-2xl border border-zinc-200 bg-white px-4 py-2 text-sm text-zinc-800 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200"
+                  ? "max-w-[80%] whitespace-pre-wrap rounded-2xl bg-ink px-4 py-2 text-sm text-paper"
+                  : "max-w-[80%] whitespace-pre-wrap rounded-2xl border border-rule bg-surface px-4 py-2 text-sm text-ink"
               }
             >
               {m.content}
@@ -98,9 +98,9 @@ export default function ChatClient() {
             {m.actions?.map((pending, ai) => (
               <div
                 key={ai}
-                className="w-full max-w-[80%] rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm dark:border-indigo-900 dark:bg-indigo-950/40"
+                className="w-full max-w-[80%] rounded-xl border border-accent bg-accent-wash px-4 py-2.5 text-sm"
               >
-                <p className="text-zinc-800 dark:text-zinc-200">{describeChatAction(pending.action)}</p>
+                <p className="text-ink">{describeChatAction(pending.action)}</p>
                 {pending.status === "pending" && (
                   <div className="mt-2 flex gap-2">
                     <Button
@@ -115,13 +115,13 @@ export default function ChatClient() {
                   </div>
                 )}
                 {pending.status === "confirmed" && (
-                  <p className="mt-1 text-xs font-medium text-green-700 dark:text-green-400">Done.</p>
+                  <p className="mt-1 text-xs font-medium text-ink-2">Done.</p>
                 )}
                 {pending.status === "cancelled" && (
-                  <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Cancelled.</p>
+                  <p className="mt-1 text-xs text-muted">Cancelled.</p>
                 )}
                 {pending.status === "error" && (
-                  <p className="mt-1 text-xs font-medium text-red-600 dark:text-red-400">
+                  <p className="mt-1 text-xs font-medium text-accent">
                     {pending.error ?? "Something went wrong."}
                   </p>
                 )}
@@ -131,7 +131,7 @@ export default function ChatClient() {
         ))}
         {isSending && (
           <div className="flex justify-start">
-            <p className="rounded-2xl border border-zinc-200 bg-white px-4 py-2 text-sm text-zinc-400 dark:border-zinc-700 dark:bg-zinc-800">
+            <p className="rounded-2xl border border-rule bg-surface px-4 py-2 text-sm text-muted">
               Thinking…
             </p>
           </div>
@@ -139,14 +139,14 @@ export default function ChatClient() {
         <div ref={bottomRef} />
       </div>
 
-      {error && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{error}</p>}
+      {error && <p className="mt-2 text-sm text-accent">{error}</p>}
 
       <form onSubmit={handleSubmit} className="mt-3 flex items-center gap-2">
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="What's on my plate this week?"
-          className="flex-1 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800"
+          className="flex-1 rounded-lg border border-rule bg-surface px-3 py-2 text-sm text-ink transition-colors focus:border-accent focus:outline-none"
         />
         <Button type="submit" pending={isSending} disabled={!input.trim()}>
           Send

@@ -55,7 +55,7 @@ export default async function FocusPage() {
 
   return (
     <main className="mx-auto flex w-full max-w-lg flex-1 flex-col px-6 py-12">
-      <p className="text-sm text-zinc-600 dark:text-zinc-400">{agendaText}</p>
+      <p className="font-serif text-lg italic text-ink-2">{agendaText}</p>
 
       <FocusClient queue={queue} />
       <ShutdownRitual />

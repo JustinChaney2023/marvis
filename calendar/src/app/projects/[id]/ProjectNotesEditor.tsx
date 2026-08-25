@@ -35,7 +35,7 @@ export default function ProjectNotesEditor({
         <Button type="submit" variant="secondary" pending={isSaving}>
           {isSaving ? "Saving…" : "Save notes"}
         </Button>
-        {saved && !isSaving && <span className="text-xs text-zinc-400">Saved.</span>}
+        {saved && !isSaving && <span className="text-xs text-muted">Saved.</span>}
       </div>
     </form>
   );

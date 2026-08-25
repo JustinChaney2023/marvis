@@ -28,12 +28,12 @@ export default function RsvpClient({ token, initialStatus }: { token: string; in
 
   if (status !== "PENDING") {
     return (
-      <p className="mt-4 rounded-lg bg-zinc-50 px-3 py-2 text-sm dark:bg-zinc-700/40">
+      <p className="mt-4 rounded-lg bg-rule-soft px-3 py-2 text-[13px] text-ink-2">
         You&apos;ve {STATUS_LABEL[status]} this invite.
         <button
           type="button"
           onClick={() => setStatus("PENDING")}
-          className="ml-2 text-indigo-600 underline dark:text-indigo-400"
+          className="ml-2 text-accent underline"
         >
           Change response
         </button>

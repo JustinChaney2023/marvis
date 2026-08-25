@@ -52,7 +52,7 @@ export default function ShortcutsHelp() {
 
   return (
     <div
-      className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
+      className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center bg-scrim p-4"
       onClick={(e) => {
         if (e.target === e.currentTarget) setOpen(false);
       }}
@@ -60,19 +60,19 @@ export default function ShortcutsHelp() {
       aria-modal="true"
       aria-label="Keyboard shortcuts"
     >
-      <div className="modal-panel w-full max-w-sm rounded-2xl border border-zinc-200 bg-white p-5 shadow-2xl ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-800">
-        <h2 className="text-lg font-semibold">Keyboard shortcuts</h2>
+      <div className="modal-panel w-full max-w-sm rounded-2xl border border-rule bg-surface p-5">
+        <h2 className="font-serif text-xl text-ink">Keyboard shortcuts</h2>
         <div className="mt-3 flex flex-col gap-4">
           {GROUPS.map((group) => (
             <div key={group.title}>
-              <h3 className="text-xs font-semibold tracking-wide text-zinc-400 uppercase">
+              <h3 className="font-mono text-[10px] tracking-wide text-muted uppercase">
                 {group.title}
               </h3>
               <ul className="mt-1.5 flex flex-col gap-1.5">
                 {group.shortcuts.map(([keys, desc]) => (
                   <li key={keys} className="flex items-center justify-between text-sm">
-                    <span className="text-zinc-600 dark:text-zinc-300">{desc}</span>
-                    <kbd className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs font-semibold text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">
+                    <span className="text-ink-2">{desc}</span>
+                    <kbd className="rounded border border-rule bg-rule-soft px-1.5 py-0.5 font-mono text-xs text-ink-2">
                       {keys}
                     </kbd>
                   </li>
@@ -81,7 +81,7 @@ export default function ShortcutsHelp() {
             </div>
           ))}
         </div>
-        <p className="mt-4 text-xs text-zinc-400">Press Esc to close.</p>
+        <p className="mt-4 text-xs text-muted">Press Esc to close.</p>
       </div>
     </div>
   );
