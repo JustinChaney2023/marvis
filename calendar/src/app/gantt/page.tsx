@@ -118,7 +118,8 @@ export default async function GanttPage() {
 
   return (
     <main className="mx-auto w-full max-w-6xl flex-1 px-6 py-12">
-      <p className="text-sm text-ink-2">
+      <h1 className="font-serif text-4xl leading-none text-ink">Project timeline</h1>
+      <p className="mt-2 text-sm text-ink-2">
         Open tasks by project, scheduled slot if placed, otherwise created
         date → due date.
       </p>

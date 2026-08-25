@@ -482,8 +482,8 @@ export default function CalendarClient({
   };
 
   return (
-    <>
-      <div className="flex justify-end gap-2 print:hidden">
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="flex flex-shrink-0 justify-end gap-2 print:hidden">
         <Button
           type="button"
           variant="secondary"
@@ -520,7 +520,7 @@ export default function CalendarClient({
         </Button>
       </div>
 
-      <div className="mt-2">
+      <div className="mt-2 flex min-h-0 flex-1 flex-col">
         {view === "month" ? (
           <MonthView
             days={range.days}
@@ -533,10 +533,10 @@ export default function CalendarClient({
           />
         ) : (
           <>
-            <div className="sm:hidden">
+            <div className="min-h-0 flex-1 overflow-y-auto sm:hidden">
               <AgendaView days={range.days} events={events} today={today} onEventClick={openEdit} />
             </div>
-            <div className="hidden sm:block">
+            <div className="hidden min-h-0 flex-1 sm:flex sm:flex-col">
               <HourGrid
                 days={range.days}
                 events={events}
@@ -637,7 +637,7 @@ export default function CalendarClient({
           onCreatedEvent={(event) => setModalState({ mode: "edit", event })}
         />
       )}
-    </>
+    </div>
   );
 }
 
@@ -799,9 +799,9 @@ function HourGrid({
   }, []);
 
   return (
-    <div className="overflow-x-auto">
-      <div style={{ minWidth: `${minWidthRem}rem` }}>
-        <div className="flex">
+    <div className="flex h-full min-h-0 flex-col overflow-x-auto">
+      <div className="flex h-full min-h-0 flex-col" style={{ minWidth: `${minWidthRem}rem` }}>
+        <div className="flex flex-shrink-0">
           {secondaryTimezone && <div className="w-14 flex-shrink-0" />}
           <div className="w-16 flex-shrink-0" />
           <div className="flex-1 grid" style={gridStyle}>
@@ -830,7 +830,7 @@ function HourGrid({
           </div>
         </div>
         {allDayPlacements.length > 0 && (
-          <div className="flex border-b border-rule">
+          <div className="flex flex-shrink-0 border-b border-rule">
             {secondaryTimezone && <div className="w-14 flex-shrink-0" />}
             <div className="flex w-16 flex-shrink-0 items-center justify-end pr-2 font-mono text-[10px] text-muted">
               All day
@@ -874,7 +874,7 @@ function HourGrid({
         )}
         <div
           ref={scrollRef}
-          className="calendar-scroll flex max-h-[70vh] overflow-y-auto"
+          className="calendar-scroll flex min-h-0 flex-1 overflow-y-auto"
         >
           {secondaryTimezone && (
             <div

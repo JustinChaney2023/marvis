@@ -354,7 +354,7 @@ export default async function Page(props: PageProps<"/">) {
             <CalendarSidebarLeft view={view} startYMD={startYMD} />
           </aside>
 
-          <div className="no-scrollbar min-w-0 overflow-y-auto">
+          <div className="no-scrollbar flex min-h-0 min-w-0 flex-col overflow-y-auto">
             <CalendarClient
               view={view}
               startYMD={startYMD}
