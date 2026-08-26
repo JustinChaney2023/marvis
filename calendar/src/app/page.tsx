@@ -340,7 +340,7 @@ export default async function Page(props: PageProps<"/">) {
       </header>
 
       <NowProvider>
-        <div className="mt-3 grid min-h-0 flex-1 grid-cols-1 gap-6 print:block lg:grid-cols-[13rem_1fr_15rem]">
+        <div className="mt-3 grid min-h-0 flex-1 grid-cols-1 gap-5 print:block xl:grid-cols-[1fr_13rem] 2xl:grid-cols-[11rem_1fr_13rem]">
           {/* Every column here needs `overflow` set (not just `visible`)
               or its natural content height becomes an input to the grid
               row's own auto-sizing — one tall column would stretch the
@@ -349,8 +349,14 @@ export default async function Page(props: PageProps<"/">) {
               hides the resulting scroll track everywhere except the
               calendar's own .calendar-scroll (that one's a real,
               deliberately visible/styled scroll surface — see
-              CalendarClient — not just structural overflow control). */}
-          <aside className="no-scrollbar hidden overflow-y-auto print:hidden lg:block">
+              CalendarClient — not just structural overflow control).
+              Two breakpoints, not one: the persistent left SideRail
+              (layout.tsx) permanently eats 11rem of viewport width now,
+              so the old single `lg` threshold squeezed the hour grid
+              into a horizontal scroll well before the page felt full —
+              the "needs attention" rail earns its keep sooner than the
+              mini-calendar does, so it appears first. */}
+          <aside className="no-scrollbar hidden overflow-y-auto print:hidden 2xl:block">
             <CalendarSidebarLeft view={view} startYMD={startYMD} />
           </aside>
 
@@ -366,7 +372,7 @@ export default async function Page(props: PageProps<"/">) {
             />
           </div>
 
-          <aside className="no-scrollbar hidden overflow-y-auto print:hidden lg:block">
+          <aside className="no-scrollbar hidden overflow-y-auto print:hidden xl:block">
             <CalendarSidebarRight
               tasks={attentionTasks}
               upcomingDays={upcomingDays}
