@@ -135,6 +135,28 @@ export async function getUpcomingMeetingBannerAction() {
     .filter((o) => o.meetingUrl);
 }
 
+/**
+ * The masterId of whatever event is happening right now, if any — any
+ * event, not just meeting-linked ones (unlike the banner above). Powers
+ * SideRail's hidden shortcut: clicking the Marvis mark during a live
+ * event jumps straight to its fullscreen timer instead of the calendar.
+ */
+export async function getCurrentEventIdAction(): Promise<string | null> {
+  const user = await requireUser();
+  const now = new Date();
+  const windowStart = new Date(now.getTime() - 24 * 60 * 60_000);
+  const windowEnd = new Date(now.getTime() + 60_000);
+  const rows = await prisma.event.findMany({
+    where: {
+      userId: user.id,
+      allDay: false,
+      OR: [{ recurrenceRule: { not: null } }, { start: { lt: windowEnd }, end: { gt: windowStart } }],
+    },
+  });
+  const current = expandEvents(rows, windowStart, windowEnd).find((o) => o.start <= now && now < o.end);
+  return current?.masterId ?? null;
+}
+
 function energyFromFormData(formData: FormData): "LOW" | "MEDIUM" | "HIGH" {
   const value = String(formData.get("energy") ?? "MEDIUM");
   return value === "LOW" || value === "HIGH" ? value : "MEDIUM";

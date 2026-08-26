@@ -693,7 +693,7 @@ export default function EventModal({
                     Record
                   </a>
                   <a
-                    href={`/focus?eventId=${event?.id}`}
+                    href={`/timer?eventId=${event?.id}`}
                     className="text-xs text-muted underline hover:text-ink-2"
                   >
                     Timer
