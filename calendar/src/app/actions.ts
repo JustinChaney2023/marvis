@@ -968,6 +968,15 @@ export async function deleteProject(projectId: string) {
   const user = await requireUser();
   await prisma.project.deleteMany({ where: { id: projectId, userId: user.id } });
   revalidatePath("/tasks");
+  revalidatePath("/projects");
+}
+
+// Same delete, but for the project's own detail page (/projects/[id]) —
+// that page's data is gone once the project is, so it has to navigate
+// away rather than just revalidate in place like the list views do.
+export async function deleteProjectAndRedirectAction(projectId: string) {
+  await deleteProject(projectId);
+  redirect("/projects");
 }
 
 // Snapshots a project's current top-level tasks (title/notes only — no

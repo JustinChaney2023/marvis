@@ -16,6 +16,22 @@ function extractRRule(recurrence: string[] | null | undefined): string | null {
   return rule ? rule.slice("RRULE:".length) : null;
 }
 
+// Per-item sync failures used to only ever reach console.error — a real
+// failure (an expired/revoked token that still passes the coarse
+// getAuthorizedClient check, an item Google rejects, a network blip)
+// looked identical to "nothing needed syncing" from Settings' Sync
+// button, since exported/imported just stayed 0 either way. Surface a
+// short reason instead so a broken sync is at least visibly broken.
+function describeGoogleError(err: unknown): string {
+  const status =
+    (err as { code?: number; response?: { status?: number } })?.response?.status ??
+    (err as { code?: number })?.code;
+  const message =
+    (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ??
+    (err instanceof Error ? err.message : String(err));
+  return status ? `${status} ${message}` : message;
+}
+
 /**
  * Pulls events from the connected Google calendar into local Event rows
  * tagged source: GOOGLE, upserted by googleEventId. Windowed (past 7 /
@@ -30,8 +46,17 @@ function extractRRule(recurrence: string[] | null | undefined): string | null {
  * Google, not through this app, removes the local copy on the next sync.
  */
 export async function importFromGoogle(googleAccountId: string) {
-  const auth = await getAuthorizedClient(googleAccountId);
-  if (!auth) return { imported: 0, deleted: 0 };
+  let auth;
+  try {
+    auth = await getAuthorizedClient(googleAccountId);
+  } catch (err) {
+    // Most commonly a dead refresh token (revoked access, or an
+    // unverified-app test token that expired) — without this, one
+    // account's auth failure threw straight out of syncGoogleCalendar's
+    // loop and skipped every account after it, not just this one.
+    return { imported: 0, deleted: 0, errors: [`Couldn't authorize: ${describeGoogleError(err)}`] };
+  }
+  if (!auth) return { imported: 0, deleted: 0, errors: [] };
   const calendar = google.calendar({ version: "v3", auth: auth.client });
 
   const timeMin = new Date(
@@ -56,6 +81,7 @@ export async function importFromGoogle(googleAccountId: string) {
   const items = res.data.items ?? [];
   let imported = 0;
   let deleted = 0;
+  const errors: string[] = [];
   for (const item of items) {
     try {
       if (!item.id) continue;
@@ -123,6 +149,7 @@ export async function importFromGoogle(googleAccountId: string) {
     } catch (err) {
       // One bad item shouldn't sink the rest of the batch.
       console.error(`importFromGoogle: skipping item ${item.id}:`, err);
+      errors.push(`"${item.summary ?? item.id}": ${describeGoogleError(err)}`);
     }
   }
 
@@ -131,7 +158,7 @@ export async function importFromGoogle(googleAccountId: string) {
     data: { lastSyncedAt: new Date() },
   });
 
-  return { imported, deleted };
+  return { imported, deleted, errors };
 }
 
 /**
@@ -143,8 +170,13 @@ export async function importFromGoogle(googleAccountId: string) {
  * permanently dirty regardless of any real local edit.
  */
 export async function exportToGoogle(googleAccountId: string) {
-  const auth = await getAuthorizedClient(googleAccountId);
-  if (!auth || !auth.account.userId) return { exported: 0 };
+  let auth;
+  try {
+    auth = await getAuthorizedClient(googleAccountId);
+  } catch (err) {
+    return { exported: 0, errors: [`Couldn't authorize: ${describeGoogleError(err)}`] };
+  }
+  if (!auth || !auth.account.userId) return { exported: 0, errors: [] };
   const calendar = google.calendar({ version: "v3", auth: auth.client });
 
   const owner = await prisma.user.findUniqueOrThrow({
@@ -167,6 +199,7 @@ export async function exportToGoogle(googleAccountId: string) {
   const toPush = all.filter((e) => !e.googleEventId || e.localDirty);
 
   let exported = 0;
+  const errors: string[] = [];
   for (const event of toPush) {
     try {
       const body = {
@@ -229,11 +262,12 @@ export async function exportToGoogle(googleAccountId: string) {
         console.error(`exportToGoogle: ${event.id} gone on Google, deleted locally`);
       } else {
         console.error(`exportToGoogle: skipping ${event.id}:`, err);
+        errors.push(`"${event.title}": ${describeGoogleError(err)}`);
       }
     }
   }
 
-  return { exported };
+  return { exported, errors };
 }
 
 /** Push local deletion of a Google-linked event before its row is removed. */
@@ -259,12 +293,14 @@ export async function syncGoogleCalendar(userId: string) {
   let exported = 0;
   let imported = 0;
   let deleted = 0;
+  const errors: string[] = [];
   for (const account of accounts) {
     const exportResult = await exportToGoogle(account.id);
     const importResult = await importFromGoogle(account.id);
     exported += exportResult.exported;
     imported += importResult.imported;
     deleted += importResult.deleted;
+    errors.push(...exportResult.errors, ...importResult.errors);
   }
-  return { exported, imported, deleted };
+  return { exported, imported, deleted, errors };
 }

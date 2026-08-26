@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth";
 import { PROJECT_EVENT_COLORS } from "@/lib/eventColors";
 import Button from "../ui/Button";
+import { ConfirmForm } from "../ui/ConfirmForm";
+import { deleteProject } from "../actions";
 
 // Same palette as the detail page's header dot, both derived from the
 // one shared source in @/lib/eventColors.
@@ -68,11 +70,8 @@ export default async function ProjectsPage() {
             // about.
             const overdue = p.tasks.filter((t) => t.dueAt && t.dueAt < now).length;
             return (
-              <li key={p.id}>
-                <Link
-                  href={`/projects/${p.id}`}
-                  className="flex items-center gap-3 rounded-xl border border-rule bg-surface p-4 transition-colors hover:bg-rule-soft"
-                >
+              <li className="flex items-center gap-3 rounded-xl border border-rule bg-surface p-4 transition-colors hover:bg-rule-soft">
+                <Link href={`/projects/${p.id}`} className="flex min-w-0 flex-1 items-center gap-3">
                   <span
                     className={`h-3 w-3 flex-shrink-0 rounded-full ${PROJECT_COLOR_DOT[p.color] ?? PROJECT_COLOR_DOT.zinc}`}
                     aria-hidden
@@ -92,6 +91,15 @@ export default async function ProjectsPage() {
                     </span>
                   )}
                 </Link>
+                <ConfirmForm message={`Delete "${p.name}"? This removes its tasks, notes, and files too.`} action={deleteProject.bind(null, p.id)}>
+                  <button
+                    type="submit"
+                    title="Delete project"
+                    className="flex-shrink-0 rounded-full px-2 py-1 text-xs text-muted transition-colors hover:text-accent"
+                  >
+                    Delete
+                  </button>
+                </ConfirmForm>
               </li>
             );
           })}

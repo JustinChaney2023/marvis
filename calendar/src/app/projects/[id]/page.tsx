@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth";
+import { deleteProjectAndRedirectAction } from "../../actions";
+import { ConfirmForm } from "../../ui/ConfirmForm";
 import TaskRow, { type TaskRowData } from "../../tasks/TaskRow";
 import ProjectNotesEditor from "./ProjectNotesEditor";
 import ProjectAttachments from "./ProjectAttachments";
@@ -69,7 +71,15 @@ export default async function ProjectDetailPage({
       </Link>
       <div className="mt-2 flex items-center gap-2">
         <span className={`h-2.5 w-2.5 rounded-full ${PROJECT_COLOR_DOT[project.color] ?? PROJECT_COLOR_DOT.zinc}`} />
-        <h1 className="font-serif text-3xl text-ink">{project.name}</h1>
+        <h1 className="min-w-0 flex-1 font-serif text-3xl text-ink">{project.name}</h1>
+        <ConfirmForm
+          message={`Delete "${project.name}"? This removes its tasks, notes, and files too.`}
+          action={deleteProjectAndRedirectAction.bind(null, project.id)}
+        >
+          <button type="submit" className="text-xs text-muted transition-colors hover:text-accent">
+            Delete project
+          </button>
+        </ConfirmForm>
       </div>
 
       {project.fields.length > 0 && (
