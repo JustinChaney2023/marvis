@@ -24,6 +24,13 @@ export function verifyPassword(password: string, stored: string): boolean {
   return hashBuffer.length === candidate.length && timingSafeEqual(hashBuffer, candidate);
 }
 
+// A fixed hash to check against when the account doesn't exist, so
+// loginAction pays the same scrypt cost either way — otherwise a
+// nonexistent email short-circuits before any hashing happens, and the
+// latency difference lets an attacker enumerate which emails have
+// accounts even though both cases show the same error message.
+export const DUMMY_PASSWORD_HASH = hashPassword(randomBytes(32).toString("hex"));
+
 /**
  * DB-backed session, not a signed/stateless cookie — logout and (future)
  * password-change flows need to actually revoke access, which a bare

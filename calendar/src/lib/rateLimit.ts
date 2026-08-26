@@ -22,10 +22,19 @@ export function createRateLimiter(limit: number, windowMs: number) {
   };
 }
 
-/** Best-effort caller IP from the request headers (behind a proxy or not). */
+/**
+ * Best-effort caller IP from the request headers. `x-forwarded-for` is
+ * fully client-controlled unless something in front of the app strips and
+ * resets it — a caller can rotate it per-request to get a fresh rate-limit
+ * bucket every time. `cf-connecting-ip` doesn't have that problem: it's
+ * only ever set by Cloudflare itself (any client-supplied copy is
+ * overwritten at Cloudflare's edge before reaching the origin), which is
+ * this app's actual deployment path, so prefer it when present.
+ */
 export async function requestIp(): Promise<string> {
   const headerStore = await headers();
   return (
+    headerStore.get("cf-connecting-ip") ??
     headerStore.get("x-forwarded-for")?.split(",")[0].trim() ??
     headerStore.get("x-real-ip") ??
     "unknown"

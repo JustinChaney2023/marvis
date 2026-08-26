@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import {
   createSession,
   destroySession,
+  DUMMY_PASSWORD_HASH,
   getCurrentSessionId,
   hashPassword,
   requireUser,
@@ -29,6 +30,14 @@ const isSignupRateLimited = createRateLimiter(5, 60 * 60 * 1000);
 // Bounded the same way as signup — a reset email is a real cost (an
 // actual send), not just a DB check.
 const isResetRequestRateLimited = createRateLimiter(5, 60 * 60 * 1000);
+// Guards currentPassword against brute force from a stolen/shared session
+// (requireUser only checks the session is valid, not that the caller
+// actually knows the password) — same shape as the login limiter.
+const isChangePasswordRateLimited = createRateLimiter(8, 15 * 60 * 1000);
+// Guards the reset-token-consumption step itself, not just requesting the
+// email — the token's 256 bits of entropy already make guessing
+// infeasible, but this keeps the auth surface consistent.
+const isResetConsumeRateLimited = createRateLimiter(8, 15 * 60 * 1000);
 
 export async function signupAction(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
@@ -102,7 +111,8 @@ export async function loginAction(formData: FormData) {
   }
 
   const user = await prisma.user.findUnique({ where: { email } });
-  if (!user || !verifyPassword(password, user.passwordHash)) {
+  const passwordOk = verifyPassword(password, user?.passwordHash ?? DUMMY_PASSWORD_HASH);
+  if (!user || !passwordOk) {
     redirect(`/login?next=${encodeURIComponent(next)}&error=1`);
   }
 
@@ -119,6 +129,13 @@ export async function changePasswordAction(formData: FormData) {
   const user = await requireUser();
   const currentPassword = String(formData.get("currentPassword") ?? "");
   const newPassword = String(formData.get("newPassword") ?? "");
+
+  if (isChangePasswordRateLimited(user.id)) {
+    redirect(
+      "/settings?password_error=" +
+        encodeURIComponent("Too many attempts — please try again later."),
+    );
+  }
 
   if (!verifyPassword(currentPassword, user.passwordHash)) {
     redirect("/settings?password_error=" + encodeURIComponent("Current password is incorrect."));
@@ -189,6 +206,12 @@ export async function forgotPasswordAction(formData: FormData) {
 export async function resetPasswordAction(formData: FormData) {
   const token = String(formData.get("token") ?? "");
   const newPassword = String(formData.get("newPassword") ?? "");
+
+  if (isResetConsumeRateLimited(await requestIp())) {
+    redirect(
+      `/reset-password?token=${encodeURIComponent(token)}&error=${encodeURIComponent("Too many attempts — please try again later.")}`,
+    );
+  }
 
   const record = token
     ? await prisma.passwordResetToken.findUnique({ where: { token } })

@@ -47,7 +47,16 @@ function foldLine(line: string): string {
 }
 
 function escapeIcsText(s: string): string {
-  return s.replace(/\\/g, "\\\\").replace(/,/g, "\\,").replace(/;/g, "\\;").replace(/\n/g, "\\n");
+  // \r must be escaped alongside \n — an unescaped raw CR is a line break
+  // to many real-world ICS parsers just like LF is, and this text can
+  // come from the public, unauthenticated booking form (see booking.ts),
+  // so a bare CR would let a booking submission inject extra-looking
+  // ICS properties into the calendar owner's exported file.
+  return s
+    .replace(/\\/g, "\\\\")
+    .replace(/,/g, "\\,")
+    .replace(/;/g, "\\;")
+    .replace(/\r\n|\r|\n/g, "\\n");
 }
 
 /** Builds a VCALENDAR document for one or more events (#33 — export). */

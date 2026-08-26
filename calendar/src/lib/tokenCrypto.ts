@@ -20,6 +20,15 @@ const ENC_PREFIX = "enc:v1:";
 const KEY_LEN = 32;
 const IV_LEN = 12;
 
+// A production/self-hosted deploy with a public DNS name is exactly the
+// threat model this file's own comment describes — warn loudly at
+// startup instead of letting it stay silently plaintext.
+if (process.env.NODE_ENV === "production" && !process.env.TOKEN_ENCRYPTION_KEY) {
+  console.warn(
+    "[tokenCrypto] TOKEN_ENCRYPTION_KEY is not set — Google/iCloud tokens are being stored in plaintext. Set it in .env (see .env.example).",
+  );
+}
+
 function getKey(): Buffer | null {
   const secret = process.env.TOKEN_ENCRYPTION_KEY;
   if (!secret) return null;

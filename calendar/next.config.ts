@@ -71,10 +71,13 @@ const nextConfig: NextConfig = {
     // route handler ever sees it, and FormData parsing throws.
     proxyClientMaxBodySize: "300mb",
   },
-  // Lets dev-mode HMR work when accessing the dev server over Tailscale
-  // instead of localhost — Next blocks cross-origin dev requests by
-  // default. No effect on a production build.
-  allowedDevOrigins: isDev ? ["100.93.49.60"] : undefined,
+  // Lets dev-mode HMR/RSC work when accessing the dev server over Tailscale
+  // or the useseason.app tunnel instead of localhost — Next blocks
+  // cross-origin dev requests by default, which silently breaks client
+  // interactivity (hydration looks fine, but actions/handlers routed
+  // through the blocked origin check don't run) rather than throwing a
+  // visible error. No effect on a production build.
+  allowedDevOrigins: isDev ? ["100.93.49.60", "useseason.app"] : undefined,
 };
 
 export default nextConfig;
