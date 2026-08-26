@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth";
 import { aiConfigFromSettings, getAppSettings } from "@/lib/settings";
@@ -40,15 +41,24 @@ async function resolveLiveEvent(userId: string, eventId?: string): Promise<LiveE
   };
 }
 
+// Its own async component, streamed in behind Suspense below — this is
+// the one part of the page that can take a while (an AI call to phrase
+// the summary, up to a 120s timeout if a local model is slow/unreachable).
+// Everything else on the page is a handful of fast DB reads; blocking the
+// whole page load on this one sentence was why clicking "Focus" felt slow.
+async function DailyAgenda({ userId }: { userId: string }) {
+  const { localAi, anthropicApiKey } = aiConfigFromSettings(await getAppSettings(userId));
+  const facts = await buildTodayFacts(userId);
+  const agendaText = await generateDailyAgendaText(facts, localAi, anthropicApiKey);
+  return <p className="font-serif text-lg italic text-ink-2">{agendaText}</p>;
+}
+
 export default async function FocusPage(props: PageProps<"/focus">) {
   const user = await requireUser();
   const sp = await props.searchParams;
   const rawEventId = sp?.eventId;
   const eventId = Array.isArray(rawEventId) ? rawEventId[0] : rawEventId;
 
-  const { localAi, anthropicApiKey } = aiConfigFromSettings(await getAppSettings(user.id));
-  const facts = await buildTodayFacts(user.id);
-  const agendaText = await generateDailyAgendaText(facts, localAi, anthropicApiKey);
   const liveEvent = await resolveLiveEvent(user.id, eventId);
 
   const scheduled = await prisma.task.findMany({
@@ -94,7 +104,9 @@ export default async function FocusPage(props: PageProps<"/focus">) {
 
   return (
     <main className="mx-auto flex w-full max-w-lg flex-1 flex-col px-6 py-12">
-      <p className="font-serif text-lg italic text-ink-2">{agendaText}</p>
+      <Suspense fallback={<p className="font-serif text-lg text-muted">Reading today's calendar…</p>}>
+        <DailyAgenda userId={user.id} />
+      </Suspense>
 
       <FocusClient queue={queue} liveEvent={liveEvent} />
       <ShutdownRitual />
