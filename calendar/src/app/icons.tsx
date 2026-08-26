@@ -257,6 +257,26 @@ export function MicIcon({ className = "h-4 w-4" }: IconProps) {
   );
 }
 
+// The app mark — a clock face with one quarter swept in accent (the
+// first block of the day, already spent). Two colors, so it can't be a
+// plain currentColor icon like the others above; the ink parts inherit
+// text color from their parent same as usual, the swept arc is always
+// accent regardless of context.
+export function MarkIcon({ className = "h-6 w-6" }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+      <circle cx="12" cy="12" r="9.25" className="stroke-current" strokeWidth={1.25} />
+      <path
+        d="M12 2.75 A9.25 9.25 0 0 1 21.25 12"
+        className="stroke-accent"
+        strokeWidth={2.75}
+        strokeLinecap="round"
+      />
+      <circle cx="12" cy="12" r="1.6" className="fill-current" />
+    </svg>
+  );
+}
+
 export function FolderIcon({ className = "h-4 w-4" }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

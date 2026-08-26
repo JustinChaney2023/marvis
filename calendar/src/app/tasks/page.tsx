@@ -151,7 +151,7 @@ export default async function Home(props: PageProps<"/tasks">) {
   };
 
   return (
-    <main className={`mx-auto w-full flex-1 px-6 py-12 ${view === "board" || view === "table" ? "max-w-6xl" : "max-w-2xl"}`}>
+    <main className="mx-auto w-full max-w-[100rem] flex-1 px-6 py-12">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <div className="font-mono text-[10px] tracking-wide text-muted uppercase">Everything open</div>
@@ -326,7 +326,7 @@ export default async function Home(props: PageProps<"/tasks">) {
           defaultProjectId={defaultProjectId}
         />
       ) : (
-        <ul className="mt-6 space-y-2">
+        <ul className="mt-6 grid grid-cols-1 items-start gap-3 2xl:grid-cols-2">
           {tasks.map((task) => (
             <TaskRow
               key={task.id}
@@ -340,7 +340,7 @@ export default async function Home(props: PageProps<"/tasks">) {
             />
           ))}
           {tasks.length === 0 && (
-            <li className="rounded-xl border border-dashed border-rule py-8 text-center text-sm text-muted">
+            <li className="col-span-full rounded-xl border border-dashed border-rule py-8 text-center text-sm text-muted">
               No open tasks.
             </li>
           )}

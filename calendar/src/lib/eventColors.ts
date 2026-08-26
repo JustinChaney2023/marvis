@@ -78,4 +78,16 @@ export const PROJECT_EVENT_COLORS: Record<
   },
 };
 
-export const DEFAULT_EVENT_COLOR = PROJECT_EVENT_COLORS.indigo;
+// A task/event with no project color set shouldn't grab a random hue
+// from the categorical palette above — that reads as an arbitrary,
+// unintentional accent (this used to default to `indigo`, which showed
+// up as a jarring saturated blue bar on every uncategorized event).
+// Neutral, using the same tokens as the rest of the app, so an
+// unassigned event just recedes instead of competing for attention.
+export const DEFAULT_EVENT_COLOR = {
+  bar: "border-l-muted",
+  bg: "bg-rule-soft",
+  text: "text-ink-2",
+  dot: "bg-muted",
+  badge: "bg-rule-soft text-ink-2",
+};

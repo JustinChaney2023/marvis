@@ -7,7 +7,7 @@ import NotificationWatcher from "./NotificationWatcher";
 import SyncWatcher from "./SyncWatcher";
 import TimezoneSync from "./TimezoneSync";
 import MeetingBanner from "./MeetingBanner";
-import TopBar from "./TopBar";
+import SideRail from "./SideRail";
 
 // Runs before paint so there's no flash of the wrong theme. Kept as a
 // plain string (not a .ts file) since it needs to execute inline, before
@@ -57,10 +57,12 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>
-      <body className="flex h-full flex-col overflow-hidden bg-paper text-ink transition-colors duration-200">
-        <TopBar />
-        <MeetingBanner />
-        <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
+      <body className="flex h-full flex-row overflow-hidden bg-paper text-ink transition-colors duration-200">
+        <SideRail />
+        <div className="flex min-h-0 flex-1 flex-col">
+          <MeetingBanner />
+          <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
+        </div>
         <QuickCapture />
         <ShortcutsHelp />
         <NotificationWatcher />

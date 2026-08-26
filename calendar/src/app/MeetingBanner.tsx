@@ -7,7 +7,7 @@ import { CloseIcon } from "./icons";
 
 const POLL_MS = 30_000;
 
-// Same public/pre-auth routes TopBar hides on — getUpcomingMeetingBannerAction
+// Same public/pre-auth routes SideRail hides on — getUpcomingMeetingBannerAction
 // requires a signed-in user, so polling here on a page nobody's logged in on
 // would just redirect(/login) every 30s for nothing.
 const HIDDEN_PREFIXES = ["/login", "/signup", "/forgot-password", "/reset-password", "/book/", "/rsvp/"];
@@ -23,7 +23,7 @@ function describeTiming(startIso: string, now: number): string {
   return `started ${minutesAgo} min ago`;
 }
 
-// Sits between TopBar and page content (see layout.tsx) rather than
+// Sits above the scrollable content column, below the side rail (see layout.tsx) rather than
 // floating over anything, same reasoning as the corner-button overlap fix
 // — it pushes content down instead of covering it.
 export default function MeetingBanner() {
