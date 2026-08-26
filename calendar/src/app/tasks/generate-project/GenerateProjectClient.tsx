@@ -27,6 +27,24 @@ export default function GenerateProjectClient({ assignees }: { assignees: Assign
   const [isCreating, setIsCreating] = useState(false);
   const [createdCount, setCreatedCount] = useState<number | null>(null);
 
+  // Skips straight to the same review screen the AI path lands on, just
+  // empty — the AI call was never a required step, only the fastest way
+  // to fill in the first draft. "Add task" below fills it in by hand.
+  const handleStartManual = () => {
+    setError(null);
+    setCreatedCount(null);
+    setProjectName("");
+    setRows([]);
+  };
+
+  const handleAddRow = () => {
+    setRows((prev) => [...(prev ?? []), { title: "", notes: null, include: true }]);
+  };
+
+  const handleRemoveRow = (index: number) => {
+    setRows((prev) => prev?.filter((_, i) => i !== index) ?? null);
+  };
+
   const handleGenerate = async () => {
     setIsGenerating(true);
     setError(null);
@@ -58,8 +76,8 @@ export default function GenerateProjectClient({ assignees }: { assignees: Assign
     setError(null);
     try {
       const items: GeneratedTaskInput[] = rows
-        .filter((r) => r.include)
-        .map((r) => ({ title: r.title, notes: r.notes }));
+        .filter((r) => r.include && r.title.trim())
+        .map((r) => ({ title: r.title.trim(), notes: r.notes }));
       const result = await createProjectFromPlanAction(projectName, items, assigneeId || null);
       setCreatedCount(result.created);
       setRows(null);
@@ -71,6 +89,8 @@ export default function GenerateProjectClient({ assignees }: { assignees: Assign
       setIsCreating(false);
     }
   };
+
+  const includedCount = (rows ?? []).filter((r) => r.include && r.title.trim()).length;
 
   return (
     <div className="mt-6 flex flex-col gap-4">
@@ -91,9 +111,12 @@ export default function GenerateProjectClient({ assignees }: { assignees: Assign
               {error}
             </p>
           )}
-          <div>
+          <div className="flex items-center gap-2">
             <Button type="button" onClick={handleGenerate} disabled={!prompt.trim()} pending={isGenerating}>
               {isGenerating ? "Thinking…" : "Generate project"}
+            </Button>
+            <Button type="button" variant="outline" onClick={handleStartManual}>
+              Or build it myself
             </Button>
           </div>
         </>
@@ -118,7 +141,7 @@ export default function GenerateProjectClient({ assignees }: { assignees: Assign
 
           {rows.length === 0 ? (
             <p className="rounded-lg border border-dashed border-rule py-6 text-center text-sm text-muted">
-              No tasks proposed.
+              No tasks yet — add one below.
             </p>
           ) : (
             <ul className="flex flex-col gap-2">
@@ -138,14 +161,30 @@ export default function GenerateProjectClient({ assignees }: { assignees: Assign
                     <input
                       value={row.title}
                       onChange={(e) => updateRow(i, { title: e.target.value })}
+                      placeholder="Task title"
                       className={inputClass}
                     />
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveRow(i)}
+                      aria-label="Remove task"
+                      title="Remove task"
+                      className="mt-1.5 flex-shrink-0 px-1 text-muted transition-colors hover:text-accent"
+                    >
+                      ×
+                    </button>
                   </div>
                   {row.notes && <p className="pl-6 text-xs text-muted">{row.notes}</p>}
                 </li>
               ))}
             </ul>
           )}
+
+          <div>
+            <Button type="button" variant="outline" onClick={handleAddRow}>
+              + Add task
+            </Button>
+          </div>
 
           <label className="flex flex-col gap-1 text-sm">
             <span className="text-ink-2">Assign every task to</span>
@@ -172,12 +211,12 @@ export default function GenerateProjectClient({ assignees }: { assignees: Assign
             <Button
               type="button"
               onClick={handleCreate}
-              disabled={!projectName.trim() || rows.every((r) => !r.include)}
+              disabled={!projectName.trim() || rows.every((r) => !r.include || !r.title.trim())}
               pending={isCreating}
             >
               {isCreating
                 ? "Creating…"
-                : `Create project with ${rows.filter((r) => r.include).length} task${rows.filter((r) => r.include).length === 1 ? "" : "s"}`}
+                : `Create project with ${includedCount} task${includedCount === 1 ? "" : "s"}`}
             </Button>
           </div>
         </>
