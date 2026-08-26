@@ -217,21 +217,10 @@ export default function FocusClient({
 
   if (liveEvent) return <LiveEventTimer liveEvent={liveEvent} />;
 
-  if (!task) {
-    return (
-      <div className="mt-16 flex flex-col items-center gap-2 text-center">
-        <p className="font-serif text-xl text-ink">Nothing left to focus on.</p>
-        <p className="text-sm text-muted">
-          Add a task or schedule one to see it here.
-        </p>
-      </div>
-    );
-  }
-
   if (fullscreen) {
     return (
       <FullscreenTimer
-        title={task.title}
+        title={task?.title ?? "Timer"}
         totalSeconds={totalSeconds}
         secondsLeft={secondsLeft}
         running={running}
@@ -246,18 +235,30 @@ export default function FocusClient({
 
   return (
     <div className="mt-10 flex flex-col items-center gap-8">
-      <div className="w-full rounded-2xl border border-rule bg-surface p-6 text-center">
-        <p className="font-mono text-[10px] font-medium uppercase tracking-wide text-muted">
-          {task.eventStart ? "Scheduled now" : "Up next"}
-        </p>
-        <h2 className="mt-2 font-serif text-2xl text-ink">{task.title}</h2>
-        <div className="mt-2 flex flex-wrap items-center justify-center gap-1.5 text-xs text-ink-2">
-          <span className="inline-flex items-center rounded-full border border-rule px-2 py-0.5 font-mono">
-            {PRIORITY_LABEL[task.priority]}
-          </span>
-          {task.dueAt && <span>due {formatDueDateTime(task.dueAt)}</span>}
+      {task ? (
+        <div className="w-full rounded-2xl border border-rule bg-surface p-6 text-center">
+          <p className="font-mono text-[10px] font-medium uppercase tracking-wide text-muted">
+            {task.eventStart ? "Scheduled now" : "Up next"}
+          </p>
+          <h2 className="mt-2 font-serif text-2xl text-ink">{task.title}</h2>
+          <div className="mt-2 flex flex-wrap items-center justify-center gap-1.5 text-xs text-ink-2">
+            <span className="inline-flex items-center rounded-full border border-rule px-2 py-0.5 font-mono">
+              {PRIORITY_LABEL[task.priority]}
+            </span>
+            {task.dueAt && <span>due {formatDueDateTime(task.dueAt)}</span>}
+          </div>
         </div>
-      </div>
+      ) : (
+        // The timer is also just a plain-utility "count down whatever
+        // I'm doing right now" tool (it absorbed the old standalone
+        // /timer route) — it shouldn't be gated behind having a task
+        // queued, the same way EventModal's "Timer" link on a live
+        // event works with no task involved at all.
+        <div className="w-full rounded-2xl border border-dashed border-rule p-6 text-center">
+          <p className="font-serif text-xl text-ink">Nothing left to focus on.</p>
+          <p className="mt-1 text-sm text-muted">Add a task, or just start the timer.</p>
+        </div>
+      )}
 
       <button
         type="button"
@@ -302,18 +303,22 @@ export default function FocusClient({
         </Button>
       </div>
 
-      <div className="flex items-center gap-3">
-        <Button type="button" variant="secondary" onClick={handleMarkDone} pending={isMarkingDone}>
-          Mark done
-        </Button>
-        <Button type="button" variant="ghost" onClick={handleSkip}>
-          Skip
-        </Button>
-      </div>
+      {task && (
+        <>
+          <div className="flex items-center gap-3">
+            <Button type="button" variant="secondary" onClick={handleMarkDone} pending={isMarkingDone}>
+              Mark done
+            </Button>
+            <Button type="button" variant="ghost" onClick={handleSkip}>
+              Skip
+            </Button>
+          </div>
 
-      <p className="font-mono text-xs text-muted">
-        {index + 1} of {queue.length} in today&apos;s queue
-      </p>
+          <p className="font-mono text-xs text-muted">
+            {index + 1} of {queue.length} in today&apos;s queue
+          </p>
+        </>
+      )}
     </div>
   );
 }
