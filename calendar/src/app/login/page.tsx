@@ -19,7 +19,7 @@ export default async function LoginPage(props: PageProps<"/login">) {
   return (
     <main className="mx-auto flex w-full max-w-sm flex-1 flex-col items-center justify-center px-6 py-12">
       <Card padding="lg" className="w-full">
-        <h1 className="font-serif text-2xl text-ink">Marvis Calendar</h1>
+        <h1 className="font-serif text-2xl text-ink">Season</h1>
         <p className="mt-1 text-sm text-ink-2">Sign in to continue.</p>
         <form action={loginAction} className="mt-4 flex flex-col gap-3">
           <input type="hidden" name="next" value={next} />

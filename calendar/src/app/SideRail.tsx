@@ -61,7 +61,7 @@ export default function SideRail() {
       >
         <MarkIcon className="h-6 w-6 flex-shrink-0" />
         <span className="min-w-0">
-          <span className="block font-serif text-lg leading-tight tracking-tight">Marvis</span>
+          <span className="block font-serif text-lg leading-tight tracking-tight">Season</span>
           <span className="block font-mono text-[9px] text-muted">v{APP_VERSION}</span>
         </span>
       </Link>

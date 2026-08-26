@@ -43,8 +43,8 @@ const plexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Marvis Calendar",
-  description: "Personal calendar and task planner",
+  title: "Season",
+  description: "A calm personal OS for your calendar, tasks, and focus time",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
