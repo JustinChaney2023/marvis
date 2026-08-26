@@ -984,6 +984,7 @@ export async function createProject(formData: FormData) {
 
   await prisma.project.create({ data: { userId: user.id, name, color } });
   revalidatePath("/tasks");
+  revalidatePath("/projects");
 }
 
 export async function deleteProject(projectId: string) {

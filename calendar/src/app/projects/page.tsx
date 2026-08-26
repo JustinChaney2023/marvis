@@ -4,13 +4,14 @@ import { requireUser } from "@/lib/auth";
 import { PROJECT_EVENT_COLORS } from "@/lib/eventColors";
 import Button from "../ui/Button";
 import { ConfirmForm } from "../ui/ConfirmForm";
-import { deleteProject } from "../actions";
+import { createProject, deleteProject } from "../actions";
 
 // Same palette as the detail page's header dot, both derived from the
 // one shared source in @/lib/eventColors.
 const PROJECT_COLOR_DOT: Record<string, string> = Object.fromEntries(
   Object.entries(PROJECT_EVENT_COLORS).map(([color, c]) => [color, c.dot]),
 );
+const PROJECT_COLOR_OPTIONS = Object.keys(PROJECT_EVENT_COLORS);
 
 /**
  * Project index. Projects previously had no entry point of their own —
@@ -46,20 +47,49 @@ export default async function ProjectsPage() {
             grading, and book details here.
           </p>
         </div>
-        <Link href="/tasks/import" className="flex-shrink-0">
-          <Button type="button" variant="primary">
-            Import syllabus
-          </Button>
-        </Link>
+        <div className="flex flex-shrink-0 items-center gap-2">
+          <details className="relative">
+            <summary className="flex list-none cursor-pointer items-center rounded-[9px] border border-rule bg-surface px-4 py-[10px] text-[13px] font-medium text-ink-2 transition-all hover:bg-rule-soft">
+              New project
+            </summary>
+            <form
+              action={createProject}
+              className="absolute right-0 z-10 mt-2 flex w-64 flex-col gap-2 rounded-xl border border-rule bg-surface p-3"
+            >
+              <input
+                name="name"
+                placeholder="Project name"
+                required
+                autoFocus
+                className="rounded-lg border border-rule bg-paper px-3 py-2 text-sm text-ink"
+              />
+              <select
+                name="color"
+                defaultValue="indigo"
+                className="rounded-lg border border-rule bg-paper px-3 py-2 text-sm text-ink"
+              >
+                {PROJECT_COLOR_OPTIONS.map((color) => (
+                  <option key={color} value={color}>
+                    {color}
+                  </option>
+                ))}
+              </select>
+              <Button type="submit" className="self-start">
+                Create
+              </Button>
+            </form>
+          </details>
+          <Link href="/tasks/import">
+            <Button type="button" variant="primary">
+              Import syllabus
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {projects.length === 0 ? (
         <p className="mt-8 rounded-xl border border-dashed border-rule px-4 py-10 text-center text-sm text-ink-2">
-          No projects yet. Import a syllabus, or create one from the{" "}
-          <Link href="/tasks" className="text-accent">
-            Tasks page
-          </Link>
-          .
+          No projects yet — create one above, or import a syllabus.
         </p>
       ) : (
         <ul className="mt-6 flex flex-col gap-2">
