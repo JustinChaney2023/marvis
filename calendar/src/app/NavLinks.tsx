@@ -2,13 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarIcon, ListIcon, TargetIcon, BarsIcon, UsersIcon, ChatIcon, MicIcon, FolderIcon, ClockIcon } from "./icons";
+import { CalendarIcon, ListIcon, TargetIcon, BarsIcon, UsersIcon, ChatIcon, MicIcon, FolderIcon } from "./icons";
 
 const LINKS = [
   { href: "/", label: "Calendar", icon: CalendarIcon },
   { href: "/tasks", label: "Tasks", icon: ListIcon },
   { href: "/focus", label: "Focus", icon: TargetIcon },
-  { href: "/timer", label: "Timer", icon: ClockIcon },
   { href: "/projects", label: "Projects", icon: FolderIcon },
   { href: "/gantt", label: "Gantt", icon: BarsIcon },
   { href: "/recordings", label: "Record", icon: MicIcon },

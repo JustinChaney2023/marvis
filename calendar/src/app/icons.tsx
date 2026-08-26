@@ -153,15 +153,6 @@ export function CalendarIcon({ className = "h-4 w-4" }: IconProps) {
   );
 }
 
-export function ClockIcon({ className = "h-4 w-4" }: IconProps) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className={className} aria-hidden="true">
-      <circle cx="12" cy="12" r="8.5" />
-      <path strokeLinecap="round" d="M12 7.5V12l3 2" />
-    </svg>
-  );
-}
-
 export function ListIcon({ className = "h-4 w-4" }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className={className} aria-hidden="true">
