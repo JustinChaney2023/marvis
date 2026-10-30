@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth";
 import { expandEvents } from "@/lib/recurrence";
+import { userTimeZone } from "@/lib/timezone";
 import TimerClient from "./TimerClient";
 
 const WINDOW_MS = 12 * 60 * 60 * 1000;
@@ -31,7 +32,7 @@ export default async function TimerPage({
     },
   });
 
-  const occurrences = expandEvents(rows, windowStart, windowEnd);
+  const occurrences = expandEvents(rows, windowStart, windowEnd, userTimeZone(user));
   // Prefer whichever occurrence is actually in progress right now — that's
   // what makes joining mid-class start the timer already caught up, rather
   // than back at the full period length.

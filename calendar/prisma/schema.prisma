@@ -51,6 +51,7 @@ model User {
   timeLogEntries          TimeLogEntry[]
   habits                  Habit[]
   timeSlots               TimeSlot[]
+  reservedProfiles        ReservedProfile[]
   sharesGiven             CalendarShare[] @relation("SharesGiven")
   sharesReceived          CalendarShare[] @relation("SharesReceived")
   calendarSubscriptions   CalendarSubscription[]
@@ -152,21 +153,25 @@ model Event {
   // every sync) — localDirty is set only by actual user edits and cleared
   // once exportToGoogle successfully pushes it.
   source          EventSource @default(LOCAL)
-  // Which of the user's (possibly several) connected Google accounts
-  // this event syncs to. Null = not tied to a specific account yet — an
-  // untagged LOCAL event exports to whichever account is currently
-  // isDefault (see exportToGoogle); it's tagged with that account's id
+  // Which of the user's (possibly several) subscribed Google calendars
+  // this event syncs to. Null = not tied to a specific calendar yet — an
+  // untagged LOCAL event exports to whichever calendar is currently
+  // isDefault (see exportToGoogle); it's tagged with that calendar's id
   // the moment it's first pushed, so a later default change doesn't
   // reroute an event that already has a home. SetNull on delete: the
-  // event just stops syncing, it isn't destroyed with the account.
-  googleAccountId String?
-  googleAccount   GoogleAccount? @relation(fields: [googleAccountId], references: [id], onDelete: SetNull)
+  // event just stops syncing, it isn't destroyed with the calendar.
+  googleCalendarId String?
+  googleCalendar   GoogleCalendar? @relation(fields: [googleCalendarId], references: [id], onDelete: SetNull)
   googleEventId   String?
   googleUpdatedAt DateTime?
   localDirty      Boolean     @default(false)
   // CalDAV UID for Apple-synced events (src/lib/apple-sync.ts) — read-only
   // overlay, no push-back, so unlike Google there's no dirty-tracking here.
-  appleEventUid   String?     @unique
+  // Scoped per-user (see @@unique below), not globally unique — the same
+  // iCalendar UID legitimately recurs across different users' copies of a
+  // shared/invited event (RFC 5545), and a global unique constraint let one
+  // user's sync silently overwrite another's Event row.
+  appleEventUid   String?
   // ICS-subscription overlay (#32, src/lib/calendarSubscriptions.ts) — same
   // read-only, locked, no-push-back treatment as Apple, but scoped to one
   // subscription's uid rather than globally unique (two different
@@ -225,7 +230,8 @@ model Event {
   // on start. Free to add now, before rows accumulate over months.
   @@index([userId, start])
   @@unique([subscriptionId, subscriptionEventUid])
-  @@unique([googleAccountId, googleEventId])
+  @@unique([googleCalendarId, googleEventId])
+  @@unique([userId, appleEventUid])
 }
 
 /**
@@ -317,15 +323,42 @@ model GoogleAccount {
   accessToken  String
   refreshToken String
   expiresAt    DateTime
-  // Google's primary calendar id (usually the account email) events sync
-  // to/from — kept explicit rather than hardcoding "primary" everywhere.
-  calendarId   String    @default("primary")
-  lastSyncedAt DateTime?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
-  events       Event[]
+  // One Google login can have several calendars subscribed independently
+  // (e.g. primary + a shared "Family" calendar) — see GoogleCalendar.
+  calendars    GoogleCalendar[]
 
   @@unique([userId, email])
+}
+
+// One calendar within a connected GoogleAccount that this app actually
+// syncs. A Google login can expose many calendars (primary, secondary,
+// shared/subscribed ones); each gets its own row here so they sync
+// independently instead of the account being pinned to a single
+// calendarId. Auth (tokens) stays on the parent GoogleAccount — only the
+// sync target and its own sync bookkeeping live here.
+model GoogleCalendar {
+  id              String    @id @default(cuid())
+  googleAccountId String
+  googleAccount   GoogleAccount @relation(fields: [googleAccountId], references: [id], onDelete: Cascade)
+  // Google's calendar id, e.g. "primary" or an opaque group-calendar id
+  // (see src/lib/google-auth.ts's listGoogleCalendars).
+  calendarId      String
+  // Google's own display name for this calendar, cached at add-time so
+  // Settings can show it without an extra API round trip.
+  summary         String
+  // Exactly one true per GoogleAccount (enforced in actions.ts, not a DB
+  // constraint SQLite can't express cleanly) — the calendar a brand-new
+  // local event exports to when it has no explicit Event.googleCalendarId
+  // of its own and its account is the user's isDefault account.
+  isDefault       Boolean   @default(false)
+  lastSyncedAt    DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  events          Event[]
+
+  @@unique([googleAccountId, calendarId])
 }
 
 // One connected Apple/iCloud CalDAV account per user — read-only overlay
@@ -534,6 +567,12 @@ model TaskActivity {
   kind      String
   detail    String
   createdAt DateTime @default(now())
+
+  // getTaskActivityAction runs every time a task's detail/activity panel
+  // opens, filtering + sorting by exactly these columns — without this,
+  // it's a full-table scan across every task's activity, not just this
+  // one, and it only gets slower as history accrues.
+  @@index([taskId, createdAt])
 }
 
 // Lightweight tag, not a full custom-field builder — quick visual
@@ -545,6 +584,9 @@ model Label {
   name      String
   color     String   @default("zinc")
   tasks     Task[]
+  // Reverse side of ReservedProfile.exemptLabels — which profiles' hours
+  // a task carrying this label is allowed to be auto-scheduled into.
+  exemptFromProfiles ReservedProfile[] @relation("ReservedProfileExemptLabels")
   createdAt DateTime @default(now())
 
   @@unique([userId, name])
@@ -922,7 +964,20 @@ model Habit {
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   title        String
   durationMin  Int
-  timesPerWeek Int
+  // "WEEKLY" tops up to timesPerWeek each week (habits.ts, week-aligned).
+  // "INTERVAL" spaces occurrences intervalDays apart on a rolling basis,
+  // for a "every other day" style habit that isn't naturally a weekly
+  // count. "MANUAL" gets no automatic placement at all — scheduleNextHabitOccurrence
+  // (habits.ts), wired to a "Schedule now" button, places one occurrence
+  // on demand for an "as needed" habit.
+  cadence      String   @default("WEEKLY")
+  timesPerWeek Int      @default(1) // used when cadence = "WEEKLY"
+  intervalDays Int? // used when cadence = "INTERVAL"
+  // Copied onto every occurrence's own Event.notes at placement time (and
+  // patched onto already-placed future ones by updateHabitNotesAction) —
+  // a plan/protocol that should show up on the calendar block itself,
+  // not just in Settings.
+  notes        String?
   priority     Int      @default(0) // same 0=Low..3=Urgent scale as Task.priority
   enabled      Boolean  @default(true)
   events       Event[]
@@ -950,4 +1005,45 @@ model TimeSlot {
   tasks      Task[]
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+}
+
+// A named collection of recurring weekly "don't auto-schedule other
+// stuff there" blocks (a fixed job shift, a class schedule, sleep) —
+// distinct from TimeSlot above: a TimeSlot is a window a *task opts
+// into*, a profile is the opposite, time the *auto-scheduler opts out
+// of* by default for everyone except tasks tagged with one of its
+// exemptLabels. Multiple profiles let different reserved commitments
+// (Work vs. School) exempt different labels independently — a task
+// labeled "work" can land inside the Work profile's hours but is still
+// blocked by a School profile's, unless also labeled for that one.
+model ReservedProfile {
+  id           String          @id @default(cuid())
+  userId       String
+  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name         String
+  blocks       ReservedBlock[]
+  // Tasks carrying any of these labels are exempt from *this profile's*
+  // blocks specifically (not other profiles') — see scheduleTask.
+  exemptLabels Label[]         @relation("ReservedProfileExemptLabels")
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+}
+
+// One independent day/range within a ReservedProfile (not a shared
+// start/end across a day set) so Monday and Wednesday can have
+// completely different hours, or a day can have more than one block (a
+// split shift). Only the auto-scheduler (scheduler.ts's scheduleTask)
+// checks these — manually dragging or starting a task during a reserved
+// block is never blocked.
+model ReservedBlock {
+  id        String          @id @default(cuid())
+  profileId String
+  profile   ReservedProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  dayOfWeek Int // 0=Sunday..6=Saturday, matches getZonedWeekday
+  startMin  Int // minutes after midnight
+  endMin    Int
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@index([profileId])
 }

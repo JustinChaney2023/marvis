@@ -7,6 +7,29 @@ import { ChatActionSchema, type ChatAction } from "@/lib/chatActions";
 const CONTEXT_HORIZON_DAYS = 30;
 const MAX_CONTEXT_ITEMS = 200; // safety cap, not a real-world limit at personal-calendar scale
 
+const fmt = (d: Date) =>
+  d.toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+
+/** One line of the chat context's event list — pulled out of buildScheduleContext so its exact wording is testable without a DB. */
+export function formatEventLine(e: { masterId: string; start: Date; end: Date; title: string }): string {
+  return `- [${e.masterId}] ${fmt(e.start)}–${e.end.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}: ${e.title}`;
+}
+
+/** One line of the chat context's task list — pulled out of buildScheduleContext so its exact wording is testable without a DB. */
+export function formatTaskLine(t: {
+  id: string;
+  title: string;
+  project: { name: string } | null;
+  status: string;
+  events: unknown[];
+  dueAt: Date | null;
+}): string {
+  const parts = [t.title];
+  if (t.project) parts.push(`[${t.project.name}]`);
+  parts.push(`(${t.status.toLowerCase()}${t.events.length > 0 ? ", scheduled" : ", unscheduled"}${t.dueAt ? `, due ${fmt(t.dueAt)}` : ""})`);
+  return `- [${t.id}] ${parts.join(" ")}`;
+}
+
 /**
  * Plain-text dump of the user's own upcoming events and open tasks —
  * read-only context for the chat, not a tool-calling agent. Simpler than
@@ -15,7 +38,7 @@ const MAX_CONTEXT_ITEMS = 200; // safety cap, not a real-world limit at personal
  * real need for anything fancier — see MAX_CONTEXT_ITEMS if that ever
  * stops being true.
  */
-async function buildScheduleContext(userId: string): Promise<string> {
+async function buildScheduleContext(userId: string, timeZone: string): Promise<string> {
   const now = new Date();
   const horizonEnd = new Date(now.getTime() + CONTEXT_HORIZON_DAYS * 86_400_000);
 
@@ -26,7 +49,7 @@ async function buildScheduleContext(userId: string): Promise<string> {
     },
     orderBy: { start: "asc" },
   });
-  const events = expandEvents(eventRows, now, horizonEnd)
+  const events = expandEvents(eventRows, now, horizonEnd, timeZone)
     .sort((a, b) => a.start.getTime() - b.start.getTime())
     .slice(0, MAX_CONTEXT_ITEMS);
 
@@ -37,9 +60,6 @@ async function buildScheduleContext(userId: string): Promise<string> {
     take: MAX_CONTEXT_ITEMS,
   });
 
-  const fmt = (d: Date) =>
-    d.toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
-
   // Real ids included so a proposed action can reference an exact row —
   // the model never has to be trusted to re-find "the dentist thing" by
   // title at execute time, only to have copied an id it already saw.
@@ -47,15 +67,8 @@ async function buildScheduleContext(userId: string): Promise<string> {
   // `masterId::ISO` composite (recurrence.ts), but every action this
   // chat can propose (move/update/delete) acts on the real master row,
   // same as the calendar UI's own edit/delete already does.
-  const eventLines = events.map(
-    (e) => `- [${e.masterId}] ${fmt(e.start)}–${e.end.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}: ${e.title}`,
-  );
-  const taskLines = tasks.map((t) => {
-    const parts = [t.title];
-    if (t.project) parts.push(`[${t.project.name}]`);
-    parts.push(`(${t.status.toLowerCase()}${t.events.length > 0 ? ", scheduled" : ", unscheduled"}${t.dueAt ? `, due ${fmt(t.dueAt)}` : ""})`);
-    return `- [${t.id}] ${parts.join(" ")}`;
-  });
+  const eventLines = events.map(formatEventLine);
+  const taskLines = tasks.map(formatTaskLine);
 
   return [
     `Today is ${fmt(now)}.`,
@@ -80,8 +93,9 @@ export async function askScheduleChat(
   messages: ChatMessage[],
   localAi: LocalAiConfig | null,
   anthropicApiKey: string | null = null,
+  timeZone: string = Intl.DateTimeFormat().resolvedOptions().timeZone,
 ): Promise<ChatResult> {
-  const context = await buildScheduleContext(userId);
+  const context = await buildScheduleContext(userId, timeZone);
   const transcript = messages.map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`).join("\n\n");
 
   const system =

@@ -1,56 +1,52 @@
 import { RRule } from "rrule";
+import { getZonedWallTime, zonedWallTimeToUtc } from "@/lib/timezone";
 
 // rrule computes entirely in UTC calendar fields — it has no concept of
-// "local wall-clock time," so feeding it a real local Date means every
+// "local wall-clock time," so feeding it a real instant means every
 // occurrence is a fixed UTC instant, not a fixed local time. That's wrong
 // for "every Monday at 9am local": across a DST transition, the UTC
 // offset changes but rrule doesn't know to compensate, so the local wall-
 // clock time of each occurrence drifts by exactly the DST delta (an hour
-// in the US). The standard workaround: relabel the local calendar fields
-// as if they were UTC before handing them to rrule, do all rrule math in
-// that fake-UTC space (pure calendar arithmetic, immune to DST since
-// there's no real timezone involved anymore), then relabel the result's
-// UTC fields back as local. Applied consistently to dtstart, until, and
-// the between()/after() range bounds, this keeps every rrule comparison
-// internally consistent and yields occurrences at the correct local wall-
-// clock time regardless of DST.
-export function toFakeUTC(d: Date): Date {
-  return new Date(
-    Date.UTC(
-      d.getFullYear(),
-      d.getMonth(),
-      d.getDate(),
-      d.getHours(),
-      d.getMinutes(),
-      d.getSeconds(),
-      d.getMilliseconds(),
-    ),
-  );
+// in the US). The standard workaround: relabel the wall-clock calendar
+// fields *of the account's own timezone* as if they were UTC before
+// handing them to rrule, do all rrule math in that fake-UTC space (pure
+// calendar arithmetic, immune to DST since there's no real timezone
+// involved anymore), then relabel the result's UTC fields back into a real
+// instant in that same timezone. Applied consistently to dtstart, until,
+// and the between()/after() range bounds, this keeps every rrule
+// comparison internally consistent and yields occurrences at the correct
+// local wall-clock time regardless of DST — and, since it reads/writes via
+// `timeZone` explicitly rather than the server process's own zone, regardless
+// of what timezone the server host happens to be running in too.
+export function toFakeUTC(d: Date, timeZone: string): Date {
+  const p = getZonedWallTime(d, timeZone);
+  return new Date(Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second, d.getMilliseconds()));
 }
 
-export function fromFakeUTC(d: Date): Date {
-  return new Date(
+export function fromFakeUTC(d: Date, timeZone: string): Date {
+  return zonedWallTimeToUtc(
     d.getUTCFullYear(),
-    d.getUTCMonth(),
+    d.getUTCMonth() + 1,
     d.getUTCDate(),
     d.getUTCHours(),
     d.getUTCMinutes(),
+    timeZone,
     d.getUTCSeconds(),
     d.getUTCMilliseconds(),
   );
 }
 
 /**
- * Builds an RRule anchored to a local `dtstart`, correct across DST (see
- * toFakeUTC/fromFakeUTC above). Use this everywhere instead of
- * `new RRule({...RRule.parseString(rule), dtstart})` directly.
+ * Builds an RRule anchored to a local `dtstart` in `timeZone`, correct
+ * across DST (see toFakeUTC/fromFakeUTC above). Use this everywhere
+ * instead of `new RRule({...RRule.parseString(rule), dtstart})` directly.
  */
-export function buildLocalRRule(recurrenceRule: string, dtstart: Date): RRule {
+export function buildLocalRRule(recurrenceRule: string, dtstart: Date, timeZone: string): RRule {
   const options = RRule.parseString(recurrenceRule);
   return new RRule({
     ...options,
-    dtstart: toFakeUTC(dtstart),
-    until: options.until ? toFakeUTC(options.until) : null,
+    dtstart: toFakeUTC(dtstart, timeZone),
+    until: options.until ? toFakeUTC(options.until, timeZone) : null,
   });
 }
 
@@ -102,6 +98,7 @@ export function expandEventOccurrences(
   event: RecurringEventSource,
   rangeStart: Date,
   rangeEnd: Date,
+  timeZone: string,
 ): Occurrence[] {
   if (!event.recurrenceRule) {
     if (event.end <= rangeStart || event.start >= rangeEnd) return [];
@@ -119,18 +116,18 @@ export function expandEventOccurrences(
   }
 
   const durationMs = event.end.getTime() - event.start.getTime();
-  const rule = buildLocalRRule(event.recurrenceRule, event.start);
+  const rule = buildLocalRRule(event.recurrenceRule, event.start, timeZone);
   // The lookback must cover at least the occurrence's own duration —
   // otherwise an occurrence longer than the fixed lookback window can
   // start before it and still be missed, the same "vanishes mid-span" bug
   // fixed for non-recurring events, one layer down for recurring ones.
   const lookbackMs = Math.max(LOOKBACK_MS, durationMs);
   const fakeStarts = rule.between(
-    toFakeUTC(new Date(rangeStart.getTime() - lookbackMs)),
-    toFakeUTC(rangeEnd),
+    toFakeUTC(new Date(rangeStart.getTime() - lookbackMs), timeZone),
+    toFakeUTC(rangeEnd, timeZone),
     true,
   );
-  const starts = fakeStarts.map(fromFakeUTC);
+  const starts = fakeStarts.map((s) => fromFakeUTC(s, timeZone));
   const excluded = parseExcludedStarts(event.excludeDates);
   const endsBefore = event.recurrenceEndsBefore?.getTime();
 
@@ -153,8 +150,9 @@ export function expandEvents(
   events: RecurringEventSource[],
   rangeStart: Date,
   rangeEnd: Date,
+  timeZone: string,
 ): Occurrence[] {
-  return events.flatMap((e) => expandEventOccurrences(e, rangeStart, rangeEnd));
+  return events.flatMap((e) => expandEventOccurrences(e, rangeStart, rangeEnd, timeZone));
 }
 
 export const RECURRENCE_PRESETS = [
@@ -186,6 +184,65 @@ export function buildCustomWeeklyRule(days: WeekdayCode[]): string {
  * which this app's UI doesn't have controls for yet and just shows as an
  * unrecognized custom rule rather than trying to reverse-engineer it).
  */
+/**
+ * Encodes a local "end by" date/time as the ICAL UNTIL token, using the
+ * same fake-UTC convention buildLocalRRule applies to dtstart — the value
+ * this produces round-trips correctly through RRule.parseString().until
+ * + toFakeUTC() to mean "this local wall-clock instant," not a literal
+ * UTC one. See toFakeUTC's own comment for the full reasoning.
+ */
+export function toIcalUntil(localDate: Date, timeZone: string): string {
+  const u = toFakeUTC(localDate, timeZone);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${u.getUTCFullYear()}${pad(u.getUTCMonth() + 1)}${pad(u.getUTCDate())}T${pad(u.getUTCHours())}${pad(u.getUTCMinutes())}${pad(u.getUTCSeconds())}Z`;
+}
+
+export type RecurrenceEndCondition =
+  | { mode: "never" }
+  | { mode: "on"; onDateYMD: string }
+  | { mode: "count"; count: number };
+
+/** Reverse of toIcalUntil (for the "on" case) — reads a rule's UNTIL/COUNT clause, if any, back into UI state. */
+export function parseRecurrenceEndCondition(rule: string | null): RecurrenceEndCondition {
+  if (!rule) return { mode: "never" };
+  const countMatch = rule.match(/(?:^|;)COUNT=(\d+)/);
+  if (countMatch) return { mode: "count", count: Number(countMatch[1]) };
+  const untilMatch = rule.match(/(?:^|;)UNTIL=(\d{4})(\d{2})(\d{2})T\d{6}Z/);
+  if (untilMatch) {
+    const [, y, m, d] = untilMatch;
+    return { mode: "on", onDateYMD: `${y}-${m}-${d}` };
+  }
+  return { mode: "never" };
+}
+
+/** Strips any UNTIL/COUNT clause, e.g. so a saved rule can be re-matched against RECURRENCE_PRESETS or parseCustomWeeklyDays for editing. */
+export function stripRecurrenceEndCondition(rule: string): string {
+  return rule.replace(/;UNTIL=\d{8}T\d{6}Z/, "").replace(/;COUNT=\d+/, "");
+}
+
+/**
+ * Appends a parsed RecurrenceEndCondition onto a base rule (already built
+ * from a preset or buildCustomWeeklyRule). `timeZone` is the account's
+ * real IANA zone — the "on" date's end-of-day is a wall-clock instant in
+ * that zone, not the server process's own (see parseZonedWallTime).
+ */
+export function withRecurrenceEndCondition(
+  rule: string,
+  end: RecurrenceEndCondition,
+  timeZone: string,
+): string {
+  if (end.mode === "count" && end.count > 0) return `${rule};COUNT=${end.count}`;
+  if (end.mode === "on" && end.onDateYMD) {
+    const m = end.onDateYMD.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (m) {
+      const [, y, mo, d] = m;
+      const localEnd = zonedWallTimeToUtc(Number(y), Number(mo), Number(d), 23, 59, timeZone);
+      return `${rule};UNTIL=${toIcalUntil(localEnd, timeZone)}`;
+    }
+  }
+  return rule;
+}
+
 export function parseCustomWeeklyDays(
   rule: string | null,
 ): WeekdayCode[] | null {

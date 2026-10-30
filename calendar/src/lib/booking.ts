@@ -40,7 +40,7 @@ export async function getAvailableBookingSlots(
   const horizonEnd = new Date(now.getTime() + BOOKING_HORIZON_DAYS * 86_400_000);
 
   const busy = padForBuffer(
-    await fetchBusyIntervals(ownerUserId, now, horizonEnd),
+    await fetchBusyIntervals(ownerUserId, now, horizonEnd, timeZone),
     settings.bufferMin,
   );
   const getWindow = excludeDaysWindowFn(excludeDays, windowFnForWorkingHours(settings, timeZone), timeZone);
@@ -158,7 +158,7 @@ export async function createBooking(
     }
 
     const busy = padForBuffer(
-      await fetchBusyIntervals(ownerUserId, now, horizonEnd),
+      await fetchBusyIntervals(ownerUserId, now, horizonEnd, timeZone),
       settings.bufferMin,
     );
 

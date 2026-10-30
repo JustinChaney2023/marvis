@@ -23,12 +23,19 @@ import {
   WEEKDAY_LABELS_SUN_FIRST,
   type CalendarView,
 } from "@/lib/calendar-dates";
-import EventModal, { type EventModalEvent, type GoogleAccountOption } from "./EventModal";
+import EventModal, { type EventModalEvent, type GoogleCalendarOption } from "./EventModal";
+import { isTypingTarget, isAnyModalOpen } from "@/lib/keyboard";
 import { useNowContext } from "./NowContext";
+import { useCalendarVisibility } from "./CalendarVisibilityContext";
 import QuickCreatePopup from "./QuickCreatePopup";
-import { LockIcon, FlagIcon } from "../icons";
-import { moveEvent, deleteEvent } from "../actions";
-import { PROJECT_EVENT_COLORS, DEFAULT_EVENT_COLOR } from "@/lib/eventColors";
+import { LockIcon, FlagIcon, NoteIcon } from "../icons";
+import { moveEvent, deleteEvent, resizeEventOccurrence } from "../actions";
+import {
+  PROJECT_EVENT_COLORS,
+  DEFAULT_EVENT_COLOR,
+  isCustomColor,
+  customColorStyle,
+} from "@/lib/eventColors";
 import Button from "../ui/Button";
 
 export type CalendarEvent = {
@@ -54,11 +61,20 @@ export type CalendarEvent = {
   // EventBlock, showing every priority level would clutter a block this
   // small.
   taskPriority: number | null;
+  // The linked task's own id/status, or null for a manual event — lets
+  // the event modal offer Start/Finish for a task-backed block instead
+  // of only being reachable from the tasks list.
+  taskId: string | null;
+  taskStatus: "CREATED" | "ONGOING" | "DELAYED" | "DONE" | null;
   // Out-of-office/focus-time as distinct event types (#36) — mostly a
   // display distinction (EventBlock renders a small badge for either).
   eventType: "DEFAULT" | "OUT_OF_OFFICE" | "FOCUS_TIME";
   reminderMinutes: number | null;
-  googleAccountId: string | null;
+  googleCalendarId: string | null;
+  // Which sidebar "My calendars"/"Other calendars" checkbox this event
+  // belongs to — "tasks" | "habits" | `sub:${subscriptionId}` | "events".
+  // See CalendarSidebarLeft/CalendarVisibilityContext.
+  calendarKey: string;
 };
 
 // PROJECT_EVENT_COLORS/DEFAULT_EVENT_COLOR now live in @/lib/eventColors
@@ -87,7 +103,7 @@ type Props = {
   events: CalendarEvent[];
   sharedEvents?: SharedEvent[];
   secondaryTimezone?: string | null;
-  googleAccounts?: GoogleAccountOption[];
+  googleCalendars?: GoogleCalendarOption[];
 };
 
 const HOUR_HEIGHT = 48;
@@ -100,7 +116,12 @@ const TOTAL_HEIGHT = (HOUR_END - HOUR_START) * HOUR_HEIGHT;
 
 type PlacedEvent = { event: CalendarEvent; col: number; cols: number };
 
-type DraggingEvent = { id: string; masterId: string; durationMs: number };
+type DraggingEvent = {
+  id: string;
+  masterId: string;
+  durationMs: number;
+  locked: boolean;
+};
 
 export function layoutOverlappingEvents(events: CalendarEvent[]): PlacedEvent[] {
   const sorted = [...events].sort(
@@ -197,11 +218,17 @@ function computeNowTop(now: Date): number {
   return ((now.getHours() * 60 + now.getMinutes() - HOUR_START * 60) / 60) * HOUR_HEIGHT;
 }
 
+// `day` is which column this block is being drawn in — NOT necessarily
+// the day `start` falls on. An overnight event (10pm-2am) needs a block
+// drawn in both its start day's column (clipped at midnight) and the
+// next day's column (clipped from midnight), so the window has to come
+// from the column being rendered, not from the event's own start.
 function computeBlock(
+  day: Date,
   start: Date,
   end: Date,
 ): { top: number; height: number } | null {
-  const dayStart = new Date(start);
+  const dayStart = new Date(day);
   dayStart.setHours(0, 0, 0, 0);
   const windowStart = new Date(dayStart);
   windowStart.setHours(HOUR_START, 0, 0, 0);
@@ -275,11 +302,16 @@ export default function CalendarClient({
   view,
   startYMD,
   todayISO,
-  events,
+  events: allEvents,
   sharedEvents = [],
   secondaryTimezone = null,
-  googleAccounts = [],
+  googleCalendars = [],
 }: Props) {
+  const { isVisible } = useCalendarVisibility();
+  const events = useMemo(
+    () => allEvents.filter((e) => isVisible(e.calendarKey)),
+    [allEvents, isVisible],
+  );
   // "Upcoming" (right sidebar) links to a plain event as
   // `/?view=day&start=...&edit=<eventId>` — open its editor immediately
   // if that event is already in `events` (the day it was jumped to),
@@ -306,22 +338,44 @@ export default function CalendarClient({
         eventType: match.eventType,
         allDay: match.allDay,
         reminderMinutes: match.reminderMinutes,
-        googleAccountId: match.googleAccountId,
+        googleCalendarId: match.googleCalendarId,
+        taskId: match.taskId,
+        taskStatus: match.taskStatus,
       },
     };
   });
   const [draggingEvent, setDraggingEvent] = useState<DraggingEvent | null>(null);
   const [selectedEventIds, setSelectedEventIds] = useState<Set<string>>(new Set());
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [workdaysOnly, setWorkdaysOnly] = useState(false);
+  useEffect(() => {
+    // Deliberately in an effect, not a lazy useState initializer: localStorage
+    // doesn't exist during SSR, so reading it during render would make the
+    // client's first render disagree with the server-rendered HTML.
+    try {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (localStorage.getItem("marvis.workdaysOnly") === "true") setWorkdaysOnly(true);
+    } catch {
+      // ignore malformed/blocked storage
+    }
+  }, []);
   const start = useMemo(() => parseYMD(startYMD), [startYMD]);
   const today = useMemo(() => parseYMD(todayISO), [todayISO]);
   const range = useMemo(() => computeRange(view, start), [view, start]);
+  const visibleDays = view === "week" && workdaysOnly
+    ? range.days.filter((d) => d.getDay() !== 0 && d.getDay() !== 6)
+    : range.days;
   // A stale selection pointing at events no longer on screen (after
   // navigating to a different date/view) would leave the "N selected"
   // bar showing with nothing visibly selected — clear it on navigation.
-  useEffect(() => {
+  // Adjusted during render (not an effect) per
+  // https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes
+  const [prevNavKey, setPrevNavKey] = useState(`${view}:${startYMD}`);
+  const navKey = `${view}:${startYMD}`;
+  if (navKey !== prevNavKey) {
+    setPrevNavKey(navKey);
     setSelectedEventIds(new Set());
-  }, [view, startYMD]);
+  }
 
   const openCreate = (
     s: Date,
@@ -351,13 +405,20 @@ export default function CalendarClient({
   // single-event native HTML5 drag-and-drop (the hard, still-open half
   // of GitHub issue #3) — nudging the whole selection by a fixed amount
   // is a real, much smaller way to move several events together at once.
-  // Skips locked/recurring events, same as the per-event drag already does.
+  // Skips recurring events, same as the per-event drag already does.
+  // Locked ones are included but need one confirm for the whole batch.
   const handleBulkNudge = async (deltaMinutes: number) => {
     if (selectedEventIds.size === 0 || isBulkDeleting) return;
     const deltaMs = deltaMinutes * 60_000;
     const targets = events.filter(
-      (e) => selectedEventIds.has(e.id) && !e.locked && !e.isRecurring,
+      (e) => selectedEventIds.has(e.id) && !e.isRecurring,
     );
+    if (
+      targets.some((e) => e.locked) &&
+      !confirm("This includes locked events. Move them anyway?")
+    ) {
+      return;
+    }
     try {
       await Promise.all(
         targets.map((e) =>
@@ -374,6 +435,7 @@ export default function CalendarClient({
   };
   const handleBulkDelete = async () => {
     if (selectedEventIds.size === 0 || isBulkDeleting) return;
+    if (!confirm(`Delete ${selectedEventIds.size} event${selectedEventIds.size === 1 ? "" : "s"}?`)) return;
     setIsBulkDeleting(true);
     try {
       // Same recurring-event exclusion as handleBulkNudge — a recurring
@@ -408,7 +470,9 @@ export default function CalendarClient({
         eventType: event.eventType,
         allDay: event.allDay,
         reminderMinutes: event.reminderMinutes,
-        googleAccountId: event.googleAccountId,
+        googleCalendarId: event.googleCalendarId,
+        taskId: event.taskId,
+        taskStatus: event.taskStatus,
       },
     });
   };
@@ -425,14 +489,8 @@ export default function CalendarClient({
 
   const router = useRouter();
   useEffect(() => {
-    const isTypingTarget = (el: EventTarget | null) => {
-      if (!(el instanceof HTMLElement)) return false;
-      const tag = el.tagName;
-      return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
-    };
-
     const onKey = (e: KeyboardEvent) => {
-      if (modalState || isTypingTarget(e.target) || e.metaKey || e.ctrlKey) return;
+      if (modalState || isTypingTarget(e.target) || isAnyModalOpen() || e.metaKey || e.ctrlKey) return;
 
       if (e.key === "t") {
         const isAlreadyToday = formatYMD(start) === formatYMD(new Date());
@@ -474,8 +532,9 @@ export default function CalendarClient({
     id: string,
     masterId: string,
     durationMs: number,
+    locked: boolean,
   ) => {
-    setDraggingEvent({ id, masterId, durationMs });
+    setDraggingEvent({ id, masterId, durationMs, locked });
   };
   const handleEventDragEnd = () => {
     setDraggingEvent(null);
@@ -483,7 +542,28 @@ export default function CalendarClient({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
+      <MeetingBanner events={events} />
       <div className="flex flex-shrink-0 justify-end gap-2 print:hidden">
+        {view === "week" && (
+          <Button
+            type="button"
+            variant="secondary"
+            title={workdaysOnly ? "Switch to the full 7-day week" : "Switch to the 5-day work week"}
+            onClick={() => {
+              setWorkdaysOnly((v) => {
+                const next = !v;
+                try {
+                  localStorage.setItem("marvis.workdaysOnly", String(next));
+                } catch {
+                  // ignore
+                }
+                return next;
+              });
+            }}
+          >
+            {workdaysOnly ? "7-Day" : "5-Day"}
+          </Button>
+        )}
         <Button
           type="button"
           variant="secondary"
@@ -534,11 +614,11 @@ export default function CalendarClient({
         ) : (
           <>
             <div className="min-h-0 flex-1 overflow-y-auto sm:hidden">
-              <AgendaView days={range.days} events={events} today={today} onEventClick={openEdit} />
+              <AgendaView days={visibleDays} events={events} today={today} onEventClick={openEdit} />
             </div>
             <div className="hidden min-h-0 flex-1 sm:flex sm:flex-col">
               <HourGrid
-                days={range.days}
+                days={visibleDays}
                 events={events}
                 sharedEvents={sharedEvents}
                 today={today}
@@ -616,7 +696,7 @@ export default function CalendarClient({
           initialEventType={modalState.initialEventType}
           event={null}
           onClose={closeModal}
-          googleAccounts={googleAccounts}
+          googleCalendars={googleCalendars}
         />
       )}
       {modalState?.mode === "edit" && (
@@ -626,7 +706,7 @@ export default function CalendarClient({
           initialEnd={modalState.event.end}
           event={modalState.event}
           onClose={closeModal}
-          googleAccounts={googleAccounts}
+          googleCalendars={googleCalendars}
         />
       )}
       {modalState?.mode === "quick" && (
@@ -637,6 +717,80 @@ export default function CalendarClient({
           onCreatedEvent={(event) => setModalState({ mode: "edit", event })}
         />
       )}
+    </div>
+  );
+}
+
+// A live/upcoming video-meeting banner across the top of the calendar,
+// matching the design mockup's "LIVE IN 8 MIN ... Join/Record" strip.
+// Ticks its own clock every 30s rather than depending on NowContext,
+// which has no "current time" value to read, only a scroll-trigger.
+function MeetingBanner({ events }: { events: CalendarEvent[] }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const candidate = useMemo(() => {
+    const WINDOW_BEFORE_MS = 15 * 60_000;
+    const upcoming = events
+      .filter(
+        (e) =>
+          e.meetingUrl &&
+          e.end.getTime() > now &&
+          e.start.getTime() - now < WINDOW_BEFORE_MS,
+      )
+      .sort((a, b) => a.start.getTime() - b.start.getTime());
+    return upcoming[0] ?? null;
+  }, [events, now]);
+
+  if (!candidate) return null;
+
+  const minutesToStart = Math.round((candidate.start.getTime() - now) / 60_000);
+  const isLive = candidate.start.getTime() <= now;
+  const mapsHref = candidate.location
+    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(candidate.location)}`
+    : null;
+
+  return (
+    <div className="mb-2 flex flex-shrink-0 flex-wrap items-center gap-3 rounded-lg bg-ink px-4 py-2.5 text-paper print:hidden">
+      <span className="font-mono text-[10px] uppercase tracking-wide text-accent">
+        {isLive ? "In progress" : `Live in ${minutesToStart} min`}
+      </span>
+      <span className="truncate text-sm">{candidate.title}</span>
+      <span className="font-mono text-xs text-paper/70">
+        {formatTime(candidate.start)} – {formatTime(candidate.end)}
+        {candidate.location && (
+          <>
+            {" · "}
+            {mapsHref ? (
+              <a href={mapsHref} target="_blank" rel="noreferrer" className="underline hover:text-paper">
+                {candidate.location}
+              </a>
+            ) : (
+              candidate.location
+            )}
+          </>
+        )}
+      </span>
+      <div className="flex-grow" />
+      <div className="flex gap-2">
+        <a
+          href={`/recordings?eventId=${candidate.masterId}`}
+          className="rounded-md border border-paper/25 px-3 py-1 text-xs text-paper/90 hover:bg-paper/10"
+        >
+          Record
+        </a>
+        <a
+          href={candidate.meetingUrl!}
+          target="_blank"
+          rel="noreferrer"
+          className="rounded-md bg-accent px-3 py-1 text-xs text-paper hover:opacity-85"
+        >
+          Join
+        </a>
+      </div>
     </div>
   );
 }
@@ -666,7 +820,7 @@ function AgendaView({
     <div className="flex flex-col gap-4">
       {days.map((day) => {
         const dayEvents = events
-          .filter((e) => isSameDay(e.start, day))
+          .filter((e) => overlapsDay(e, day))
           .sort((a, b) => a.start.getTime() - b.start.getTime());
         return (
           <div key={day.toISOString()}>
@@ -683,13 +837,20 @@ function AgendaView({
             ) : (
               <ul className="mt-1.5 flex flex-col gap-1.5">
                 {dayEvents.map((e) => {
-                  const colors = e.projectColor ? PROJECT_EVENT_COLORS[e.projectColor] : null;
+                  const custom = isCustomColor(e.projectColor);
+                  const colors = !custom && e.projectColor ? PROJECT_EVENT_COLORS[e.projectColor] : null;
+                  const customStyle = custom ? customColorStyle(e.projectColor as string) : null;
                   return (
                     <li key={e.id}>
                       <button
                         type="button"
                         onClick={() => onEventClick(e)}
-                        className={`flex w-full items-center gap-2 rounded-lg border-l-4 px-3 py-2 text-left text-sm ${colors ? `${colors.bar} ${colors.bg} ${colors.text}` : "border-l-muted bg-rule-soft"}`}
+                        className={`flex w-full items-center gap-2 rounded-lg border-l-4 px-3 py-2 text-left text-sm ${colors ? `${colors.bar} ${colors.bg} ${colors.text}` : custom ? "" : "border-l-muted bg-rule-soft"}`}
+                        style={
+                          customStyle
+                            ? { ...customStyle.bar, ...customStyle.bg, ...customStyle.text }
+                            : undefined
+                        }
                       >
                         <span className="w-14 flex-shrink-0 font-mono text-xs text-muted">
                           {e.allDay
@@ -733,7 +894,7 @@ function HourGrid({
   onEmptyClick: (start: Date, end: Date) => void;
   onEventClick: (event: CalendarEvent) => void;
   draggingEvent: DraggingEvent | null;
-  onEventDragStart: (id: string, masterId: string, durationMs: number) => void;
+  onEventDragStart: (id: string, masterId: string, durationMs: number, locked: boolean) => void;
   onEventDragEnd: () => void;
   scrollToNowRef: React.MutableRefObject<(() => void) | null>;
   selectedEventIds: Set<string>;
@@ -956,7 +1117,7 @@ function DayColumn({
   onEmptyClick: (start: Date, end: Date) => void;
   onEventClick: (event: CalendarEvent) => void;
   draggingEvent: DraggingEvent | null;
-  onEventDragStart: (id: string, masterId: string, durationMs: number) => void;
+  onEventDragStart: (id: string, masterId: string, durationMs: number, locked: boolean) => void;
   onEventDragEnd: () => void;
   selectedEventIds: Set<string>;
   onToggleSelect: (id: string) => void;
@@ -968,6 +1129,11 @@ function DayColumn({
   // rather than React state, so it doesn't re-render/reflow the whole
   // column every 30s.
   const nowLineRef = useRef<HTMLDivElement>(null);
+  // Read in handleDrop instead of e.currentTarget's rect — a drop that
+  // lands on an event block (delegated the same handler, see EventBlock)
+  // has that block as currentTarget, not the day column, which would
+  // otherwise measure the drop position against the wrong element.
+  const columnRef = useRef<HTMLDivElement>(null);
   const nowTop = isToday
     ? computeNowTop(new Date())
     : null;
@@ -979,13 +1145,16 @@ function DayColumn({
     const id = setInterval(tick, 30_000);
     return () => clearInterval(id);
   }, [isToday]);
+  // overlapsDay, not isSameDay(e.start, day) — an overnight event (e.g.
+  // 10pm-2am) needs to show up in *both* days it spans, not just the one
+  // it started on.
   const dayEvents = useMemo(
-    () => events.filter((e) => !e.allDay && isSameDay(e.start, day)),
+    () => events.filter((e) => !e.allDay && overlapsDay(e, day)),
     [events, day],
   );
   const layout = useMemo(() => layoutOverlappingEvents(dayEvents), [dayEvents]);
   const daySharedEvents = useMemo(
-    () => sharedEvents.filter((e) => !e.allDay && isSameDay(e.start, day)),
+    () => sharedEvents.filter((e) => !e.allDay && overlapsDay(e, day)),
     [sharedEvents, day],
   );
 
@@ -1042,22 +1211,23 @@ function DayColumn({
     window.addEventListener("mouseup", onUp);
   };
 
-  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+  const handleDragOver = (e: React.DragEvent<HTMLElement>) => {
     if (draggingEvent) {
       e.preventDefault();
       e.dataTransfer.dropEffect = "move";
     }
   };
 
-  const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
+  const handleDrop = async (e: React.DragEvent<HTMLElement>) => {
     e.preventDefault();
     const active = draggingEvent;
     onEventDragEnd();
     if (!active) return;
-    const rect = e.currentTarget.getBoundingClientRect();
+    const rect = (columnRef.current ?? e.currentTarget).getBoundingClientRect();
     const minutesFromTop = yToMinutesFromColumnTop(e.clientY - rect.top);
     const start = snapMinutesToStart(day, minutesFromTop);
     if (!start) return;
+    if (active.locked && !confirm("This event is locked. Move it anyway?")) return;
     const end = new Date(start.getTime() + active.durationMs);
     try {
       await moveEvent(
@@ -1072,6 +1242,7 @@ function DayColumn({
 
   return (
     <div
+      ref={columnRef}
       className={
         isToday
           ? "relative border-l border-rule bg-rule-soft"
@@ -1123,7 +1294,7 @@ function DayColumn({
         />
       )}
       {daySharedEvents.map((event) => {
-        const block = computeBlock(event.start, event.end);
+        const block = computeBlock(day, event.start, event.end);
         if (!block) return null;
         return (
           <div
@@ -1147,7 +1318,7 @@ function DayColumn({
         );
       })}
       {layout.map(({ event, col, cols }) => {
-        const block = computeBlock(event.start, event.end);
+        const block = computeBlock(day, event.start, event.end);
         if (!block) return null;
         return (
           <EventBlock
@@ -1163,6 +1334,8 @@ function DayColumn({
             onClick={onEventClick}
             selected={selectedEventIds.has(event.id)}
             onToggleSelect={onToggleSelect}
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
           />
         );
       })}
@@ -1182,6 +1355,8 @@ function EventBlock({
   onClick,
   selected,
   onToggleSelect,
+  onDragOver,
+  onDrop,
 }: {
   event: CalendarEvent;
   top: number;
@@ -1189,14 +1364,24 @@ function EventBlock({
   left: string;
   width: string;
   isDragging: boolean;
-  onMoveStart: (id: string, masterId: string, durationMs: number) => void;
+  onMoveStart: (id: string, masterId: string, durationMs: number, locked: boolean) => void;
   onMoveEnd: () => void;
   onClick: (event: CalendarEvent) => void;
   selected: boolean;
   onToggleSelect: (id: string) => void;
+  // Delegated from the day column — an event block sits on top of (and
+  // hit-tests before) the column's own full-height drop target, so a
+  // drop that lands directly on a block never reaches it via bubbling
+  // (they're siblings, not ancestor/descendant). Wiring the same
+  // handlers here too is what makes dropping something onto an existing
+  // event actually work instead of silently doing nothing.
+  onDragOver: (e: React.DragEvent<HTMLButtonElement>) => void;
+  onDrop: (e: React.DragEvent<HTMLButtonElement>) => void;
 }) {
   const [previewEnd, setPreviewEnd] = useState<Date | null>(null);
   const [previewHeight, setPreviewHeight] = useState<number | null>(null);
+  const [previewTopDelta, setPreviewTopDelta] = useState<number | null>(null);
+  const [previewStart, setPreviewStart] = useState<Date | null>(null);
 
   const handleDragStart = (e: React.DragEvent<HTMLButtonElement>) => {
     e.dataTransfer.setData("text/plain", event.id);
@@ -1205,6 +1390,7 @@ function EventBlock({
       event.id,
       event.masterId,
       event.end.getTime() - event.start.getTime(),
+      event.locked,
     );
   };
 
@@ -1238,14 +1424,30 @@ function EventBlock({
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
       if (latestEndMs !== originalEnd) {
-        try {
-          await moveEvent(
-            event.masterId,
-            new Date(originalStart).toISOString(),
-            new Date(latestEndMs).toISOString(),
-          );
-        } catch (err) {
-          console.error(err);
+        if (
+          !event.isRecurring ||
+          confirm(
+            "This resizes just this one occurrence — the rest of the recurring series is unaffected. Continue?",
+          )
+        ) {
+          try {
+            if (event.isRecurring) {
+              await resizeEventOccurrence(
+                event.masterId,
+                new Date(originalStart).toISOString(),
+                new Date(originalStart).toISOString(),
+                new Date(latestEndMs).toISOString(),
+              );
+            } else {
+              await moveEvent(
+                event.masterId,
+                new Date(originalStart).toISOString(),
+                new Date(latestEndMs).toISOString(),
+              );
+            }
+          } catch (err) {
+            console.error(err);
+          }
         }
       }
       setPreviewEnd(null);
@@ -1256,22 +1458,98 @@ function EventBlock({
     window.addEventListener("mouseup", onUp);
   };
 
+  const handleResizeTopMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const startY = e.clientY;
+    const originalStart = event.start.getTime();
+    const originalEnd = event.end.getTime();
+    const maxStart = originalEnd - 15 * 60 * 1000;
+    let latestStartMs = originalStart;
+
+    const onMove = (ev: MouseEvent) => {
+      const deltaY = ev.clientY - startY;
+      const deltaMinutes = yToMinutesFromColumnTop(deltaY);
+      let newStartMs = originalStart + deltaMinutes * 60 * 1000;
+      newStartMs = Math.round(newStartMs / (15 * 60 * 1000)) * (15 * 60 * 1000);
+      if (newStartMs > maxStart) newStartMs = maxStart;
+      latestStartMs = newStartMs;
+      const deltaPx = ((newStartMs - originalStart) / 60000 / 60) * HOUR_HEIGHT;
+      const newMinutes = (originalEnd - newStartMs) / 60000;
+      setPreviewTopDelta(deltaPx);
+      setPreviewStart(new Date(newStartMs));
+      setPreviewHeight((newMinutes / 60) * HOUR_HEIGHT);
+    };
+
+    const onUp = async () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      if (latestStartMs !== originalStart) {
+        if (
+          !event.isRecurring ||
+          confirm(
+            "This resizes just this one occurrence — the rest of the recurring series is unaffected. Continue?",
+          )
+        ) {
+          try {
+            if (event.isRecurring) {
+              await resizeEventOccurrence(
+                event.masterId,
+                new Date(originalStart).toISOString(),
+                new Date(latestStartMs).toISOString(),
+                new Date(originalEnd).toISOString(),
+              );
+            } else {
+              await moveEvent(
+                event.masterId,
+                new Date(latestStartMs).toISOString(),
+                new Date(originalEnd).toISOString(),
+              );
+            }
+          } catch (err) {
+            console.error(err);
+          }
+        }
+      }
+      setPreviewTopDelta(null);
+      setPreviewStart(null);
+      setPreviewHeight(null);
+    };
+
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  };
+
+  const displayTop = top + (previewTopDelta ?? 0);
   const displayHeight = previewHeight ?? height;
+  // Each strip capped at a third of the block's own height, so short
+  // blocks always keep a clickable middle (see the handles' own comment).
+  const resizeHandleSize = Math.max(3, Math.min(12, displayHeight / 3));
+  const displayStart = previewStart ?? event.start;
   const displayEnd = previewEnd ?? event.end;
-  const color = event.projectColor
+  const custom = isCustomColor(event.projectColor);
+  const color = !custom && event.projectColor
     ? (PROJECT_EVENT_COLORS[event.projectColor] ?? DEFAULT_EVENT_COLOR)
     : DEFAULT_EVENT_COLOR;
+  const customStyle = custom ? customColorStyle(event.projectColor as string) : null;
+  const boxFill = custom
+    ? ""
+    : event.projectColor
+      ? `${color.bg} ${color.text}`
+      : "bg-surface/40 text-ink";
 
   return (
     <button
       data-event
-      // Locked only means "the scheduler won't auto-move this" — it
-      // doesn't stop the user from dragging it themselves. Recurring
+      // Locked doesn't stop the user from dragging it themselves, it
+      // just prompts for confirmation first (see handleDrop). Recurring
       // events still can't be dragged at all (unrelated limitation:
       // there's no per-occurrence override, only the whole series).
       draggable={!event.isRecurring}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
       onClick={(e) => {
         e.stopPropagation();
         if (e.shiftKey || e.metaKey || e.ctrlKey) {
@@ -1282,14 +1560,15 @@ function EventBlock({
       }}
       type="button"
       title="Shift/Cmd/Ctrl-click to select multiple events"
-      className={`group absolute overflow-hidden rounded-lg border-y border-r border-rule border-l-4 bg-surface/40 p-1.5 text-left text-ink transition-all hover:brightness-95 ${color.bar} ${
+      className={`group absolute overflow-hidden rounded-lg border-y border-r border-rule border-l-4 p-1.5 text-left transition-all hover:brightness-95 ${boxFill} ${custom ? "" : color.bar} ${
         isDragging ? "opacity-40" : ""
       } ${selected ? "outline outline-2 outline-accent" : ""}`}
       style={{
-        top: `${top}px`,
+        top: `${displayTop}px`,
         height: `${displayHeight}px`,
         left,
         width,
+        ...(customStyle ? { ...customStyle.bar, ...customStyle.bg, ...customStyle.text } : null),
       }}
     >
       {event.locked && (
@@ -1314,6 +1593,15 @@ function EventBlock({
           <FlagIcon className="h-2.5 w-2.5" />
         </span>
       )}
+      {Boolean(event.notes?.trim()) && (
+        <span
+          aria-label="Has notes"
+          title="Has notes"
+          className="absolute bottom-1 right-1 opacity-60"
+        >
+          <NoteIcon className="h-2.5 w-2.5" />
+        </span>
+      )}
       <div
         className={`truncate pr-3 text-xs font-medium ${
           event.taskPriority !== null && event.taskPriority >= 2 ? "pl-3" : ""
@@ -1328,18 +1616,43 @@ function EventBlock({
       </div>
       {displayHeight >= 32 && (
         <div className="truncate font-mono text-[10px] opacity-80">
-          {formatTime(event.start)} – {formatTime(displayEnd)}
+          {formatTime(displayStart)} – {formatTime(displayEnd)}
         </div>
       )}
-      {!event.isRecurring && (
-        <div
-          draggable={false}
-          onMouseDown={handleResizeMouseDown}
-          onClick={(e) => e.stopPropagation()}
-          className="absolute bottom-0 left-0 right-0 h-1.5 cursor-ns-resize bg-muted/60 opacity-0 transition-opacity group-hover:opacity-100"
-          aria-label="Resize event"
-        />
-      )}
+      {/* The visible accent is a thin 1.5px line, but the clickable area
+          is a wider strip around it — a hit target that thin is nearly
+          impossible to land a mouse drag on reliably, and missing it
+          drags the whole event (native HTML5 dnd on the parent button)
+          instead of resizing it. Capped at a third of the block's own
+          height (with the two strips' onClick stopping propagation to
+          the button below) — an uncapped 12px strip on each edge fully
+          covers a short block (≤30min = ≤24px tall), leaving no
+          click-through room at all to open it for editing. Allowed on
+          recurring events too — resizing one occurrence creates a
+          per-instance exception (see resizeEventOccurrence), same
+          mechanism as the "this event only" edit scope; only
+          whole-series drag-move stays off for recurring (the
+          `draggable` prop above). */}
+      <div
+        draggable={false}
+        onMouseDown={handleResizeTopMouseDown}
+        onClick={(e) => e.stopPropagation()}
+        style={{ height: resizeHandleSize }}
+        className="absolute top-0 left-0 right-0 z-10 cursor-ns-resize"
+        aria-label="Resize event start"
+      >
+        <div className="absolute inset-x-0 top-0 h-0.5 bg-muted/60 opacity-0 transition-opacity group-hover:opacity-100" />
+      </div>
+      <div
+        draggable={false}
+        onMouseDown={handleResizeMouseDown}
+        onClick={(e) => e.stopPropagation()}
+        style={{ height: resizeHandleSize }}
+        className="absolute bottom-0 left-0 right-0 z-10 cursor-ns-resize"
+        aria-label="Resize event end"
+      >
+        <div className="absolute inset-x-0 bottom-0 h-0.5 bg-muted/60 opacity-0 transition-opacity group-hover:opacity-100" />
+      </div>
     </button>
   );
 }

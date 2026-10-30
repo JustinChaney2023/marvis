@@ -14,7 +14,7 @@ export type DailyAgendaFacts = {
 // Meetings vs. deep-work blocks mirrors how a slot got onto the calendar:
 // a bare Event (nothing scheduled it) reads as an external meeting, while
 // an Event with a taskId is time this app carved out for a task.
-export async function buildTodayFacts(userId: string): Promise<DailyAgendaFacts> {
+export async function buildTodayFacts(userId: string, timeZone: string): Promise<DailyAgendaFacts> {
   const now = new Date();
   const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
@@ -32,7 +32,7 @@ export async function buildTodayFacts(userId: string): Promise<DailyAgendaFacts>
   });
 
   const taskIdByMasterId = new Map(rows.map((r) => [r.id, r.taskId]));
-  const occurrences = expandEvents(rows, dayStart, dayEnd);
+  const occurrences = expandEvents(rows, dayStart, dayEnd, timeZone);
 
   let meetingCount = 0;
   let deepWorkCount = 0;

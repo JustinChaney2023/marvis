@@ -6,6 +6,39 @@ import { ChevronLeftIcon, ChevronRightIcon } from "../icons";
 import { formatYMD, parseYMD, type CalendarView } from "@/lib/calendar-dates";
 import Card from "../ui/Card";
 import { useNowContext } from "./NowContext";
+import { useCalendarVisibility } from "./CalendarVisibilityContext";
+
+// Same swatch colors as PROJECT_EVENT_COLORS' `dot`, kept local since
+// these three are fixed (not user-chosen like a project's color).
+const MY_CALENDARS = [
+  { key: "events", label: "My Calendar", dot: "bg-indigo-500" },
+  { key: "tasks", label: "Tasks", dot: "bg-blue-500" },
+] as const;
+const HABITS_CALENDAR = { key: "habits", label: "Habits", dot: "bg-green-500" } as const;
+
+function CalendarCheckbox({
+  calendarKey,
+  label,
+  dot,
+}: {
+  calendarKey: string;
+  label: string;
+  dot: string;
+}) {
+  const { isVisible, toggle } = useCalendarVisibility();
+  const checked = isVisible(calendarKey);
+  return (
+    <label className="flex cursor-pointer items-center gap-2 py-0.5 text-sm text-ink-2">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={() => toggle(calendarKey)}
+        className={`h-3.5 w-3.5 rounded-sm accent-current ${dot.replace("bg-", "text-")}`}
+      />
+      <span className="truncate">{label}</span>
+    </label>
+  );
+}
 
 const WEEKDAY_INITIALS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 
@@ -28,9 +61,13 @@ function buildMonthGrid(monthDate: Date): (Date | null)[] {
 export default function CalendarSidebarLeft({
   view,
   startYMD,
+  hasHabits = false,
+  subscriptions = [],
 }: {
   view: CalendarView;
   startYMD: string;
+  hasHabits?: boolean;
+  subscriptions?: { id: string; name: string }[];
 }) {
   const start = parseYMD(startYMD);
   const [cursor, setCursor] = useState(() => new Date(start.getFullYear(), start.getMonth(), 1));
@@ -118,6 +155,36 @@ export default function CalendarSidebarLeft({
         >
           Now
         </button>
+      )}
+      <Card padding="sm">
+        <p className="font-serif text-sm">My calendars</p>
+        <div className="mt-1.5 flex flex-col">
+          {MY_CALENDARS.map((c) => (
+            <CalendarCheckbox key={c.key} calendarKey={c.key} label={c.label} dot={c.dot} />
+          ))}
+          {hasHabits && (
+            <CalendarCheckbox
+              calendarKey={HABITS_CALENDAR.key}
+              label={HABITS_CALENDAR.label}
+              dot={HABITS_CALENDAR.dot}
+            />
+          )}
+        </div>
+      </Card>
+      {subscriptions.length > 0 && (
+        <Card padding="sm">
+          <p className="font-serif text-sm">Other calendars</p>
+          <div className="mt-1.5 flex flex-col">
+            {subscriptions.map((s) => (
+              <CalendarCheckbox
+                key={s.id}
+                calendarKey={`sub:${s.id}`}
+                label={s.name}
+                dot="bg-zinc-400"
+              />
+            ))}
+          </div>
+        </Card>
       )}
     </div>
   );

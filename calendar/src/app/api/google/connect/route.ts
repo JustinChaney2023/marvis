@@ -1,8 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
-import { createOAuthClient } from "@/lib/google-auth";
+import { NextResponse } from "next/server";
+import { createOAuthClient, getAppOrigin } from "@/lib/google-auth";
 import { requireUser } from "@/lib/auth";
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   await requireUser();
   try {
     const client = createOAuthClient();
@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
     });
     return NextResponse.redirect(url);
   } catch (err) {
-    const settingsUrl = new URL("/settings", request.nextUrl.origin);
+    const settingsUrl = new URL("/settings", getAppOrigin());
     settingsUrl.searchParams.set(
       "google_error",
       err instanceof Error ? err.message : "unknown_error",

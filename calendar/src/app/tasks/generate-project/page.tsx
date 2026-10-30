@@ -23,7 +23,7 @@ export default async function GenerateProjectPage() {
       </p>
       <p className="mt-1 font-mono text-[10.5px] tracking-wide text-muted">
         {usingLocalAi ? (
-          <>Using your local AI (<code>{settings.localAiModel}</code> at {settings.localAiUrl}).</>
+          <>Using your local AI (<code>{settings.localAiModel}</code>).</>
         ) : (
           <>
             Using Claude Opus 5 (cloud).{" "}

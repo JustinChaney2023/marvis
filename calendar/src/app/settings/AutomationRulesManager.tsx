@@ -7,6 +7,7 @@ import {
   deleteAutomationRuleAction,
 } from "../actions";
 import Button from "../ui/Button";
+import { ConfirmForm } from "../ui/ConfirmForm";
 
 const STATUS_LABEL: Record<string, string> = {
   CREATED: "Created",
@@ -64,14 +65,14 @@ export default function AutomationRulesManager({
                   {rule.enabled ? "Disable" : "Enable"}
                 </button>
               </form>
-              <form action={deleteAutomationRuleAction.bind(null, rule.id)}>
+              <ConfirmForm message="Delete this automation rule?" action={deleteAutomationRuleAction.bind(null, rule.id)}>
                 <button
                   type="submit"
                   className="rounded-full px-2.5 py-1 text-xs text-muted transition-colors hover:bg-accent-wash hover:text-accent"
                 >
                   Delete
                 </button>
-              </form>
+              </ConfirmForm>
             </div>
           </div>
         );

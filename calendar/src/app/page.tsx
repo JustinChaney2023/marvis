@@ -1,26 +1,31 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth";
+import {
+  userTimeZone,
+  zonedAddDays,
+  zonedFormatYMD,
+  zonedParseYMD,
+  zonedStartOfDay,
+  zonedStartOfMonth,
+  zonedStartOfWeek,
+} from "@/lib/timezone";
 import MiniMonthPicker from "./MiniMonthPicker";
 import CalendarSearch from "./calendar/CalendarSearch";
+import ShortcutHint from "./ShortcutHint";
 import {
-  addDays,
-  addMonths,
-  computeRange,
   formatDayLabel,
   formatMonthLabel,
   formatWeekRangeLabel,
-  formatYMD,
-  isSameDay,
-  parseStartParam,
   parseViewParam,
-  startOfWeek,
   type CalendarView,
 } from "@/lib/calendar-dates";
 import { expandEvents } from "@/lib/recurrence";
 import { getAppSettings } from "@/lib/settings";
+import { scheduleHabitsForWeek } from "@/lib/habits";
 import CalendarClient, { type CalendarEvent, type SharedEvent } from "./calendar/CalendarClient";
 import { NowProvider } from "./calendar/NowContext";
+import { CalendarVisibilityProvider } from "./calendar/CalendarVisibilityContext";
 import CalendarSidebarLeft from "./calendar/CalendarSidebarLeft";
 import CalendarSidebarRight, {
   type AttentionTask,
@@ -28,13 +33,21 @@ import CalendarSidebarRight, {
   type UpcomingItem,
 } from "./calendar/CalendarSidebarRight";
 
+// Everything below computes calendar-day boundaries and nav targets in the
+// account's own timezone (`timeZone`), not the server host's — see the
+// zonedStartOfDay/zonedAddDays/etc. comment in timezone.ts. This is a
+// server component, so the JS engine's own "local" zone is the server
+// host's, not the viewer's; using it directly (as calendar-dates.ts's
+// plain helpers do, correctly, for client-side callers) silently
+// misplaces anything within the UTC-offset gap of the account's real day.
 function viewSwitchTargets(
   view: CalendarView,
   start: Date,
+  timeZone: string,
 ): Record<CalendarView, string> {
-  const dayStart = formatYMD(start);
-  const weekStart = formatYMD(startOfWeek(start));
-  const monthStart = formatYMD(new Date(start.getFullYear(), start.getMonth(), 1));
+  const dayStart = zonedFormatYMD(start, timeZone);
+  const weekStart = zonedFormatYMD(zonedStartOfWeek(start, timeZone), timeZone);
+  const monthStart = zonedFormatYMD(zonedStartOfMonth(start, timeZone), timeZone);
   return {
     day: dayStart,
     week: weekStart,
@@ -42,33 +55,66 @@ function viewSwitchTargets(
   };
 }
 
-function navTargets(view: CalendarView, start: Date): {
+function navTargets(
+  view: CalendarView,
+  start: Date,
+  timeZone: string,
+): {
   prev: string;
   next: string;
   label: string;
 } {
   if (view === "day") {
     return {
-      prev: formatYMD(addDays(start, -1)),
-      next: formatYMD(addDays(start, 1)),
-      label: formatDayLabel(start),
+      prev: zonedFormatYMD(zonedAddDays(start, -1, timeZone), timeZone),
+      next: zonedFormatYMD(zonedAddDays(start, 1, timeZone), timeZone),
+      label: formatDayLabel(start, timeZone),
     };
   }
   if (view === "week") {
-    const ws = startOfWeek(start);
-    const we = addDays(ws, 6);
+    const ws = zonedStartOfWeek(start, timeZone);
+    const we = zonedAddDays(ws, 6, timeZone);
     return {
-      prev: formatYMD(addDays(ws, -7)),
-      next: formatYMD(addDays(ws, 7)),
-      label: formatWeekRangeLabel(ws, we),
+      prev: zonedFormatYMD(zonedAddDays(ws, -7, timeZone), timeZone),
+      next: zonedFormatYMD(zonedAddDays(ws, 7, timeZone), timeZone),
+      label: formatWeekRangeLabel(ws, we, timeZone),
     };
   }
-  const monthStart = new Date(start.getFullYear(), start.getMonth(), 1);
+  const monthStart = zonedStartOfMonth(start, timeZone);
   return {
-    prev: formatYMD(addMonths(monthStart, -1)),
-    next: formatYMD(addMonths(monthStart, 1)),
-    label: formatMonthLabel(monthStart),
+    prev: zonedFormatYMD(zonedStartOfMonth(zonedAddDays(monthStart, -1, timeZone), timeZone), timeZone),
+    next: zonedFormatYMD(zonedStartOfMonth(zonedAddDays(monthStart, 32, timeZone), timeZone), timeZone),
+    label: formatMonthLabel(monthStart, timeZone),
   };
+}
+
+/** Zoned counterpart of calendar-dates.ts's computeRange — see the file-top comment. */
+function zonedComputeRange(
+  view: CalendarView,
+  start: Date,
+  timeZone: string,
+): { from: Date; to: Date; days: Date[] } {
+  if (view === "day") {
+    const from = zonedStartOfDay(start, timeZone);
+    const to = zonedAddDays(from, 1, timeZone);
+    return { from, to, days: [from] };
+  }
+  if (view === "week") {
+    const from = zonedStartOfWeek(start, timeZone);
+    const to = zonedAddDays(from, 7, timeZone);
+    const days = Array.from({ length: 7 }, (_, i) => zonedAddDays(from, i, timeZone));
+    return { from, to, days };
+  }
+  const monthStart = zonedStartOfMonth(start, timeZone);
+  const nextMonthStart = zonedStartOfMonth(zonedAddDays(monthStart, 32, timeZone), timeZone);
+  const monthEnd = zonedAddDays(nextMonthStart, -1, timeZone);
+  const from = zonedStartOfWeek(monthStart, timeZone);
+  const to = zonedAddDays(zonedStartOfWeek(monthEnd, timeZone), 7, timeZone);
+  const days: Date[] = [];
+  for (let d = from; d < to; d = zonedAddDays(d, 1, timeZone)) {
+    days.push(d);
+  }
+  return { from, to, days };
 }
 
 function linkClass(active: boolean): string {
@@ -79,11 +125,19 @@ function linkClass(active: boolean): string {
 
 export default async function Page(props: PageProps<"/">) {
   const user = await requireUser();
+  // Opportunistic top-up on every dashboard load, not just on habit
+  // create/toggle — no-ops (cheap: a handful of counts/queries) once every
+  // habit is at quota for the next few weeks, so it's safe to run on
+  // every render rather than needing a dedicated cron.
+  await scheduleHabitsForWeek(user.id);
+  const timeZone = userTimeZone(user);
   const sp = await props.searchParams;
   const view = parseViewParam(sp?.view);
-  const start = parseStartParam(sp?.start);
+  const startParam = Array.isArray(sp?.start) ? sp.start[0] : sp?.start;
+  const start = startParam ? zonedParseYMD(startParam, timeZone) : zonedStartOfDay(new Date(), timeZone);
+  const resolvedStart = Number.isNaN(start.getTime()) ? zonedStartOfDay(new Date(), timeZone) : start;
 
-  const { from, to } = computeRange(view, start);
+  const { from, to } = zonedComputeRange(view, resolvedStart, timeZone);
 
   const rows = await prisma.event.findMany({
     where: {
@@ -109,13 +163,27 @@ export default async function Page(props: PageProps<"/">) {
     rows.map((r) => [r.id, r.color ?? r.task?.color ?? r.task?.project?.color ?? null]),
   );
   const priorityByMasterId = new Map(rows.map((r) => [r.id, r.task?.priority ?? null]));
+  const taskIdByEventMasterId = new Map(rows.map((r) => [r.id, r.task?.id ?? null]));
+  const taskStatusByMasterId = new Map(rows.map((r) => [r.id, r.task?.status ?? null]));
   const meetingUrlByMasterId = new Map(rows.map((r) => [r.id, r.meetingUrl]));
   const eventTypeByMasterId = new Map(rows.map((r) => [r.id, r.eventType]));
   const reminderMinutesByMasterId = new Map(rows.map((r) => [r.id, r.reminderMinutes]));
   const notesByMasterId = new Map(rows.map((r) => [r.id, r.notes]));
   const locationByMasterId = new Map(rows.map((r) => [r.id, r.location]));
-  const googleAccountIdByMasterId = new Map(rows.map((r) => [r.id, r.googleAccountId]));
-  const events: CalendarEvent[] = expandEvents(rows, from, to)
+  const googleCalendarIdByMasterId = new Map(rows.map((r) => [r.id, r.googleCalendarId]));
+  const calendarKeyByMasterId = new Map(
+    rows.map((r) => [
+      r.id,
+      r.subscriptionId
+        ? `sub:${r.subscriptionId}`
+        : r.taskId
+          ? "tasks"
+          : r.habitId
+            ? "habits"
+            : "events",
+    ]),
+  );
+  const events: CalendarEvent[] = expandEvents(rows, from, to, userTimeZone(user))
     .map((o) => ({
       id: o.id,
       masterId: o.masterId,
@@ -130,10 +198,13 @@ export default async function Page(props: PageProps<"/">) {
       allDay: allDayByMasterId.get(o.masterId) ?? false,
       projectColor: colorByMasterId.get(o.masterId) ?? null,
       taskPriority: priorityByMasterId.get(o.masterId) ?? null,
+      taskId: taskIdByEventMasterId.get(o.masterId) ?? null,
+      taskStatus: taskStatusByMasterId.get(o.masterId) ?? null,
       meetingUrl: meetingUrlByMasterId.get(o.masterId) ?? null,
       eventType: eventTypeByMasterId.get(o.masterId) ?? "DEFAULT",
       reminderMinutes: reminderMinutesByMasterId.get(o.masterId) ?? null,
-      googleAccountId: googleAccountIdByMasterId.get(o.masterId) ?? null,
+      googleCalendarId: googleCalendarIdByMasterId.get(o.masterId) ?? null,
+      calendarKey: calendarKeyByMasterId.get(o.masterId) ?? "events",
     }))
     .sort((a, b) => a.start.getTime() - b.start.getTime());
 
@@ -142,16 +213,29 @@ export default async function Page(props: PageProps<"/">) {
   // than filtering client-side, so a real title never even reaches the
   // browser for a calendar that's only supposed to show as "Busy".
   // For EventModal's "Sync to" per-event override — only relevant once
-  // someone's connected 2+ accounts (see CalendarClient/EventModal).
-  const googleAccounts = await prisma.googleAccount.findMany({
-    where: { userId: user.id },
+  // someone's subscribed 2+ calendars (see CalendarClient/EventModal).
+  const googleCalendarRows = await prisma.googleCalendar.findMany({
+    where: { googleAccount: { userId: user.id } },
     orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
-    select: { id: true, label: true },
+    select: { id: true, summary: true, googleAccount: { select: { label: true } } },
   });
+  const googleCalendars = googleCalendarRows.map((c) => ({
+    id: c.id,
+    label: `${c.summary} (${c.googleAccount.label})`,
+  }));
+
+  // Sidebar's "My calendars" / "Other calendars" checklist (CalendarSidebarLeft)
+  // — subscriptions get one row each, habits only show a row when any exist.
+  const subscriptions = await prisma.calendarSubscription.findMany({
+    where: { userId: user.id },
+    orderBy: { createdAt: "asc" },
+    select: { id: true, name: true },
+  });
+  const hasHabits = (await prisma.habit.count({ where: { userId: user.id } })) > 0;
 
   const shares = await prisma.calendarShare.findMany({
     where: { sharedWithId: user.id, hiddenByRecipient: false },
-    include: { owner: { select: { id: true, name: true, email: true } } },
+    include: { owner: { select: { id: true, name: true, email: true, timezone: true } } },
   });
   const sharedEvents: SharedEvent[] = shares.length
     ? (
@@ -167,7 +251,7 @@ export default async function Page(props: PageProps<"/">) {
               },
             });
             const ownerLabel = share.owner.name ?? share.owner.email;
-            return expandEvents(ownerRows, from, to).map((o) => ({
+            return expandEvents(ownerRows, from, to, userTimeZone(share.owner)).map((o) => ({
               id: `${share.ownerId}:${o.id}`,
               start: o.start,
               end: o.end,
@@ -181,10 +265,10 @@ export default async function Page(props: PageProps<"/">) {
     : [];
 
   const today = new Date();
-  const todayISO = formatYMD(today);
-  const startYMD = formatYMD(start);
-  const nav = navTargets(view, start);
-  const switchTargets = viewSwitchTargets(view, start);
+  const todayISO = zonedFormatYMD(today, timeZone);
+  const startYMD = zonedFormatYMD(resolvedStart, timeZone);
+  const nav = navTargets(view, resolvedStart, timeZone);
+  const switchTargets = viewSwitchTargets(view, resolvedStart, timeZone);
 
   // Right sidebar's "needs attention" list — same overdue/due-soon-and-
   // unscheduled definition TaskRow uses, computed here instead since this
@@ -222,8 +306,8 @@ export default async function Page(props: PageProps<"/">) {
   // (all but today start collapsed), so a longer window no longer
   // forces the sidebar taller than the calendar next to it.
   const UPCOMING_AGENDA_DAYS = 7;
-  const agendaStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  const agendaEnd = new Date(agendaStart.getTime() + UPCOMING_AGENDA_DAYS * 86_400_000);
+  const agendaStart = zonedStartOfDay(today, timeZone);
+  const agendaEnd = zonedAddDays(agendaStart, UPCOMING_AGENDA_DAYS, timeZone);
   const upcomingRows = await prisma.event.findMany({
     where: {
       userId: user.id,
@@ -238,8 +322,8 @@ export default async function Page(props: PageProps<"/">) {
   const taskIdByMasterId = new Map(upcomingRows.map((r) => [r.id, r.task?.id ?? null]));
   const lockedByUpcomingMasterId = new Map(upcomingRows.map((r) => [r.id, r.locked]));
   const upcomingByDay = new Map<string, UpcomingItem[]>();
-  for (const o of expandEvents(upcomingRows, agendaStart, agendaEnd)) {
-    const dayKey = formatYMD(o.start);
+  for (const o of expandEvents(upcomingRows, agendaStart, agendaEnd, timeZone)) {
+    const dayKey = zonedFormatYMD(o.start, timeZone);
     const list = upcomingByDay.get(dayKey) ?? [];
     const taskId = taskIdByMasterId.get(o.masterId) ?? null;
     list.push({
@@ -258,11 +342,11 @@ export default async function Page(props: PageProps<"/">) {
     upcomingByDay.set(dayKey, list);
   }
   const upcomingDays: UpcomingDay[] = Array.from({ length: UPCOMING_AGENDA_DAYS }, (_, i) => {
-    const day = addDays(agendaStart, i);
-    const dayKey = formatYMD(day);
+    const day = zonedAddDays(agendaStart, i, timeZone);
+    const dayKey = zonedFormatYMD(day, timeZone);
     return {
       dayKey,
-      dayLabel: isSameDay(day, today) ? "Today" : formatDayLabel(day),
+      dayLabel: dayKey === todayISO ? "Today" : formatDayLabel(day, timeZone),
       items: (upcomingByDay.get(dayKey) ?? []).sort(
         (a, b) => new Date(a.startIso).getTime() - new Date(b.startIso).getTime(),
       ),
@@ -272,15 +356,15 @@ export default async function Page(props: PageProps<"/">) {
   const settings = await getAppSettings(user.id);
   let todayPlannedMinutes: number | null = null;
   if (settings.dailyCapMin) {
-    const dayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+    const dayStart = zonedStartOfDay(today, timeZone);
+    const dayEnd = zonedAddDays(dayStart, 1, timeZone);
     const todayRows = await prisma.event.findMany({
       where: {
         userId: user.id,
         OR: [{ start: { lt: dayEnd }, end: { gt: dayStart } }, { recurrenceRule: { not: null } }],
       },
     });
-    todayPlannedMinutes = expandEvents(todayRows, dayStart, dayEnd).reduce(
+    todayPlannedMinutes = expandEvents(todayRows, dayStart, dayEnd, timeZone).reduce(
       (sum, o) => sum + (o.end.getTime() - o.start.getTime()) / 60_000,
       0,
     );
@@ -332,14 +416,11 @@ export default async function Page(props: PageProps<"/">) {
             <MiniMonthPicker view={view} startYMD={startYMD} />
           </div>
         </div>
-        <p className="font-mono text-xs text-muted print:hidden">
-          Shortcuts: <kbd>j</kbd>/<kbd>k</kbd> prev/next, <kbd>d</kbd>/
-          <kbd>w</kbd>/<kbd>m</kbd> view, <kbd>t</kbd> today, <kbd>?</kbd> all
-          shortcuts
-        </p>
+        <ShortcutHint />
       </header>
 
       <NowProvider>
+      <CalendarVisibilityProvider>
         <div className="mt-3 grid min-h-0 flex-1 grid-cols-1 gap-5 print:block xl:grid-cols-[1fr_13rem] 2xl:grid-cols-[11rem_1fr_13rem]">
           {/* Every column here needs `overflow` set (not just `visible`)
               or its natural content height becomes an input to the grid
@@ -357,7 +438,12 @@ export default async function Page(props: PageProps<"/">) {
               the "needs attention" rail earns its keep sooner than the
               mini-calendar does, so it appears first. */}
           <aside className="no-scrollbar hidden overflow-y-auto print:hidden 2xl:block">
-            <CalendarSidebarLeft view={view} startYMD={startYMD} />
+            <CalendarSidebarLeft
+              view={view}
+              startYMD={startYMD}
+              hasHabits={hasHabits}
+              subscriptions={subscriptions}
+            />
           </aside>
 
           <div className="no-scrollbar flex min-h-0 min-w-0 flex-col overflow-y-auto">
@@ -368,7 +454,7 @@ export default async function Page(props: PageProps<"/">) {
               events={events}
               sharedEvents={sharedEvents}
               secondaryTimezone={settings.secondaryTimezone}
-              googleAccounts={googleAccounts}
+              googleCalendars={googleCalendars}
             />
           </div>
 
@@ -384,6 +470,7 @@ export default async function Page(props: PageProps<"/">) {
             />
           </aside>
         </div>
+      </CalendarVisibilityProvider>
       </NowProvider>
     </main>
   );

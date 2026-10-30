@@ -49,7 +49,9 @@ export async function POST(request: NextRequest) {
   await mkdir(dir, { recursive: true });
   const filename = `${randomUUID()}.${ext}`;
   const bytes = Buffer.from(await file.arrayBuffer());
-  await writeFile(path.join(dir, filename), bytes);
+  // UPLOADS_ROOT is a static path (see uploads.ts); the per-user segment is
+  // the only dynamic part, and traceability isn't needed at build time.
+  await writeFile(path.join(/* turbopackIgnore: true */ dir, filename), bytes);
 
   return NextResponse.json({ url: `/uploads/${user.id}/${filename}` });
 }

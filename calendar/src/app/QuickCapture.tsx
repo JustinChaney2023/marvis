@@ -3,20 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import { quickCaptureTask, quickCaptureEvent } from "./actions";
 import Button from "./ui/Button";
-
-function isTypingTarget(el: EventTarget | null): boolean {
-  if (!(el instanceof HTMLElement)) return false;
-  const tag = el.tagName;
-  return (
-    tag === "INPUT" ||
-    tag === "TEXTAREA" ||
-    tag === "SELECT" ||
-    el.isContentEditable
-  );
-}
+import { isTypingTarget, isAnyModalOpen, useModalOpen } from "@/lib/keyboard";
 
 export default function QuickCapture() {
   const [open, setOpen] = useState(false);
+  useModalOpen(open);
   const [value, setValue] = useState("");
   const [mode, setMode] = useState<"task" | "event">("task");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -28,7 +19,7 @@ export default function QuickCapture() {
         if (e.key === "Escape") setOpen(false);
         return;
       }
-      if (e.key === "c" && !isTypingTarget(e.target) && !e.metaKey && !e.ctrlKey) {
+      if (e.key === "c" && !isTypingTarget(e.target) && !isAnyModalOpen() && !e.metaKey && !e.ctrlKey) {
         e.preventDefault();
         setOpen(true);
       }

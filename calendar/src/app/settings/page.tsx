@@ -8,6 +8,7 @@ import {
   disconnectAppleAction,
   updateAiSettingsAction,
   updateSchedulingSettingsAction,
+  updateWorkingHoursAction,
   setUserTimezoneAction,
 } from "../actions";
 import GoogleAccountsManager from "./GoogleAccountsManager";
@@ -21,6 +22,7 @@ import ApiTokensManager from "./ApiTokensManager";
 import AutomationRulesManager from "./AutomationRulesManager";
 import HabitsManager from "./HabitsManager";
 import TimeSlotsManager from "./TimeSlotsManager";
+import ReservedHoursManager from "./ReservedHoursManager";
 import TranscriptionSettings from "./TranscriptionSettings";
 import MarkitdownSettings from "./MarkitdownSettings";
 import SettingsTabs from "./SettingsTabs";
@@ -52,7 +54,16 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
   const googleAccounts = await prisma.googleAccount.findMany({
     where: { userId: user.id },
     orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
-    select: { id: true, email: true, label: true, isDefault: true, lastSyncedAt: true, calendarId: true },
+    select: {
+      id: true,
+      email: true,
+      label: true,
+      isDefault: true,
+      calendars: {
+        orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
+        select: { id: true, calendarId: true, summary: true, isDefault: true, lastSyncedAt: true },
+      },
+    },
   });
   const appleAccount = await prisma.appleAccount.findUnique({ where: { userId: user.id } });
   const calendarSubscriptions = await prisma.calendarSubscription.findMany({
@@ -82,7 +93,16 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
     where: { userId: user.id },
     orderBy: { createdAt: "asc" },
   });
+  const reservedProfiles = await prisma.reservedProfile.findMany({
+    where: { userId: user.id },
+    include: { blocks: { orderBy: { dayOfWeek: "asc" } }, exemptLabels: true },
+    orderBy: { createdAt: "asc" },
+  });
   const projects = await prisma.project.findMany({
+    where: { userId: user.id },
+    orderBy: { createdAt: "asc" },
+  });
+  const labels = await prisma.label.findMany({
     where: { userId: user.id },
     orderBy: { createdAt: "asc" },
   });
@@ -166,40 +186,6 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
           action={updateSchedulingSettingsAction}
           className="mt-3 flex flex-wrap items-end gap-3"
         >
-          <div className="flex flex-col gap-1 text-sm">
-            <span className="text-ink-2">Working hours</span>
-            <div className="flex flex-wrap items-center gap-1.5">
-              {["SU", "MO", "TU", "WE", "TH", "FR", "SA"].map((code) => (
-                <label
-                  key={code}
-                  className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-rule text-xs font-semibold text-ink-2 transition-colors has-checked:border-ink has-checked:bg-ink has-checked:text-paper"
-                >
-                  <input
-                    type="checkbox"
-                    name="workDays"
-                    value={code}
-                    defaultChecked={settings.workDays.split(",").includes(code)}
-                    className="sr-only"
-                  />
-                  {code[0]}
-                  {code[1].toLowerCase()}
-                </label>
-              ))}
-              <input
-                type="time"
-                name="workStartMin"
-                defaultValue={minutesToTimeInput(settings.workStartMin)}
-                className="ml-2 rounded-lg border border-rule bg-surface px-2 py-2 text-sm"
-              />
-              <span className="text-ink-2">to</span>
-              <input
-                type="time"
-                name="workEndMin"
-                defaultValue={minutesToTimeInput(settings.workEndMin)}
-                className="rounded-lg border border-rule bg-surface px-2 py-2 text-sm"
-              />
-            </div>
-          </div>
           <label className="flex flex-col gap-1 text-sm">
             <span className="text-ink-2">World clock</span>
             <input
@@ -366,7 +352,7 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
       <section className="mt-6 rounded-xl border border-rule bg-surface p-5">
         <h2 className="font-serif text-xl text-ink">Habits</h2>
         <p className="mt-1 text-xs text-muted">
-          Flexible routine time — "exercise 3x a week" rather than a fixed
+          Flexible routine time — &quot;exercise 3x a week&quot; rather than a fixed
           recurring event. Placed into open slots each week, and re-placed
           (not dropped) if something else gets booked over a slot.
         </p>
@@ -380,11 +366,91 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
         <p className="mt-1 text-xs text-muted">
           Named availability windows (Work, Sleep, School, or your own) —
           assign a task to one on its edit form and the scheduler only
-          places it within that slot's days/hours instead of the default
+          places it within that slot&apos;s days/hours instead of the default
           9am-6pm weekdays.
         </p>
         <div className="mt-3">
           <TimeSlotsManager timeSlots={timeSlots} />
+        </div>
+      </section>
+
+              </>
+            ),
+          },
+          {
+            key: "hours",
+            label: "Hours",
+            content: (
+              <>
+      <section className="mt-6 rounded-xl border border-rule bg-surface p-5">
+        <h2 className="font-serif text-xl text-ink">Available hours</h2>
+        <p className="mt-1 text-xs text-muted">
+          The default window the auto-scheduler will place any task in —
+          not &quot;when you work,&quot; just when it&apos;s allowed to place
+          things at all, absent a more specific Time slot or Reserved
+          profile below.
+        </p>
+        <form
+          action={updateWorkingHoursAction}
+          className="mt-3 flex flex-wrap items-end gap-3"
+        >
+          <div className="flex flex-col gap-1 text-sm">
+            <span className="text-ink-2">Available hours</span>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {["SU", "MO", "TU", "WE", "TH", "FR", "SA"].map((code) => (
+                <label
+                  key={code}
+                  className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-rule text-xs font-semibold text-ink-2 transition-colors has-checked:border-ink has-checked:bg-ink has-checked:text-paper"
+                >
+                  <input
+                    type="checkbox"
+                    name="workDays"
+                    value={code}
+                    defaultChecked={settings.workDays.split(",").includes(code)}
+                    className="sr-only"
+                  />
+                  {code[0]}
+                  {code[1].toLowerCase()}
+                </label>
+              ))}
+              <input
+                type="time"
+                name="workStartMin"
+                defaultValue={minutesToTimeInput(settings.workStartMin)}
+                className="ml-2 rounded-lg border border-rule bg-surface px-2 py-2 text-sm"
+              />
+              <span className="text-ink-2">to</span>
+              <input
+                type="time"
+                name="workEndMin"
+                defaultValue={minutesToTimeInput(settings.workEndMin)}
+                className="rounded-lg border border-rule bg-surface px-2 py-2 text-sm"
+              />
+            </div>
+          </div>
+          <Button type="submit">Save</Button>
+        </form>
+      </section>
+
+      <section className="mt-6 rounded-xl border border-rule bg-surface p-5">
+        <h2 className="font-serif text-xl text-ink">Reserved hours</h2>
+        <p className="mt-1 text-xs text-muted">
+          Block off recurring commitments (a job shift, a class schedule)
+          so the auto-scheduler won&apos;t place tasks there — you can
+          still drag a task in yourself any time.
+        </p>
+        <details className="mt-1 text-xs text-muted">
+          <summary className="cursor-pointer hover:text-ink-2">More about exempt labels</summary>
+          <p className="mt-1">
+            Tag a task with one of a profile&apos;s exempt labels and it
+            can still be auto-scheduled into that profile&apos;s hours (a
+            real work task inside your Work profile, say) — everything
+            else stays blocked. Make one profile per commitment (Work,
+            School, ...).
+          </p>
+        </details>
+        <div className="mt-3">
+          <ReservedHoursManager reservedProfiles={reservedProfiles} labels={labels} />
         </div>
       </section>
               </>

@@ -2,9 +2,20 @@ import { google } from "googleapis";
 import { prisma } from "@/lib/prisma";
 import { decryptSecret, encryptSecret } from "@/lib/tokenCrypto";
 
+function getAppBaseUrl(): string {
+  return process.env.APP_URL ?? "http://localhost:3000";
+}
+
 export function getRedirectUri(): string {
-  const base = process.env.APP_URL ?? "http://localhost:3000";
-  return `${base}/api/google/callback`;
+  return `${getAppBaseUrl()}/api/google/callback`;
+}
+
+// Behind a reverse proxy, request.nextUrl.origin reflects the app's local
+// bind address, not the public host Google actually redirects back to —
+// building the post-OAuth redirect from it sends the browser to
+// http://localhost:3000 instead of the real APP_URL, which just hangs.
+export function getAppOrigin(): string {
+  return new URL(getAppBaseUrl()).origin;
 }
 
 export function createOAuthClient() {
@@ -22,6 +33,18 @@ export function createOAuthClient() {
 export async function listGoogleAccounts(userId: string) {
   return prisma.googleAccount.findMany({
     where: { userId },
+    orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
+  });
+}
+
+/**
+ * Every Google calendar this user actually syncs, across every connected
+ * account — one account can have several (see google-sync.ts, which
+ * loops these independently rather than one-per-account).
+ */
+export async function listGoogleCalendarSubscriptions(userId: string) {
+  return prisma.googleCalendar.findMany({
+    where: { googleAccount: { userId } },
     orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
   });
 }
@@ -59,11 +82,28 @@ export async function getAuthorizedClient(googleAccountId: string) {
 }
 
 /**
+ * Returns an OAuth2 client with valid credentials for one subscribed
+ * GoogleCalendar row, plus that row and its parent account — the shape
+ * google-sync.ts needs to both call the Calendar API (calendar.calendarId)
+ * and authorize (the parent account's tokens).
+ */
+export async function getAuthorizedClientForCalendar(googleCalendarId: string) {
+  const calendarRow = await prisma.googleCalendar.findUnique({
+    where: { id: googleCalendarId },
+    include: { googleAccount: true },
+  });
+  if (!calendarRow) return null;
+  const auth = await getAuthorizedClient(calendarRow.googleAccountId);
+  if (!auth) return null;
+  return { client: auth.client, account: auth.account, calendar: calendarRow };
+}
+
+/**
  * The calendars visible inside one connected Google account (e.g. its
  * primary calendar plus a separate "Family" calendar) — lets someone
- * point a connected account at a non-primary calendar instead of always
- * syncing "primary". Read-only listing call, no scope beyond the
- * already-granted full `calendar` scope.
+ * subscribe a non-primary calendar in addition to whatever's already
+ * synced. Read-only listing call, no scope beyond the already-granted
+ * full `calendar` scope.
  */
 export async function listGoogleCalendars(googleAccountId: string) {
   const auth = await getAuthorizedClient(googleAccountId);

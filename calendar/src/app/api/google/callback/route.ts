@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { google } from "googleapis";
 import { prisma } from "@/lib/prisma";
-import { createOAuthClient } from "@/lib/google-auth";
+import { createOAuthClient, getAppOrigin } from "@/lib/google-auth";
 import { requireUser } from "@/lib/auth";
 import { encryptSecret } from "@/lib/tokenCrypto";
 
@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
   const user = await requireUser();
   const code = request.nextUrl.searchParams.get("code");
   const error = request.nextUrl.searchParams.get("error");
-  const settingsUrl = new URL("/settings", request.nextUrl.origin);
+  const settingsUrl = new URL("/settings", getAppOrigin());
 
   if (error || !code) {
     settingsUrl.searchParams.set("google_error", error ?? "missing_code");
@@ -49,6 +49,11 @@ export async function GET(request: NextRequest) {
         accessToken: encryptSecret(tokens.access_token),
         refreshToken: encryptSecret(tokens.refresh_token),
         expiresAt: new Date(tokens.expiry_date ?? Date.now() + 3600_000),
+        // Every account starts synced to its own primary calendar —
+        // more can be added from Settings (GoogleAccountsManager).
+        calendars: {
+          create: { calendarId: "primary", summary: email, isDefault: true },
+        },
       },
       update: {
         accessToken: encryptSecret(tokens.access_token),

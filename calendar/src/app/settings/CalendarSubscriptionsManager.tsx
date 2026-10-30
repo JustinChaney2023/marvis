@@ -7,6 +7,7 @@ import {
   deleteCalendarSubscriptionAction,
 } from "../actions";
 import Button from "../ui/Button";
+import { ConfirmForm } from "../ui/ConfirmForm";
 
 export type Subscription = {
   id: string;
@@ -69,11 +70,11 @@ export default function CalendarSubscriptionsManager({
                 >
                   Sync
                 </Button>
-                <form action={deleteCalendarSubscriptionAction.bind(null, sub.id)}>
+                <ConfirmForm message="Remove this calendar subscription?" action={deleteCalendarSubscriptionAction.bind(null, sub.id)}>
                   <Button type="submit" variant="danger">
                     Remove
                   </Button>
-                </form>
+                </ConfirmForm>
               </div>
             </li>
           ))}

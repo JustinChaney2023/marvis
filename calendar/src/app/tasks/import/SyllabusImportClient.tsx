@@ -300,7 +300,7 @@ export default function SyllabusImportClient({
           <div className="grid grid-cols-2 gap-3">
             <label className="flex flex-col gap-1 text-sm">
               <span className="text-ink-2">
-                Term start <span className="text-muted">(resolves "Week 3" style dates)</span>
+                Term start <span className="text-muted">(resolves &quot;Week 3&quot; style dates)</span>
               </span>
               <input type="date" value={termStart} onChange={(e) => setTermStart(e.target.value)} className={inputClass} />
             </label>
@@ -486,7 +486,7 @@ export default function SyllabusImportClient({
                     <input type="checkbox" checked={l.include} onChange={(e) => updateLecture(i, { include: e.target.checked })} className="h-3.5 w-3.5 accent-accent" aria-label="Include" />
                     <input type="date" value={l.dateYMD ?? ""} onChange={(e) => updateLecture(i, { dateYMD: e.target.value || null })} className={`${inputClass} w-36 flex-shrink-0`} />
                     <input value={l.topic} onChange={(e) => updateLecture(i, { topic: e.target.value })} className={`${inputClass} flex-1`} />
-                    {!l.dateYMD && <span className="w-full text-accent">No date resolved — won't be added.</span>}
+                    {!l.dateYMD && <span className="w-full text-accent">No date resolved — won&apos;t be added.</span>}
                   </div>
                 ))}
               </div>

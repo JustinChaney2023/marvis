@@ -120,6 +120,7 @@ export default function RecordingsList({ recordings }: { recordings: Row[] }) {
   };
 
   const handleDelete = async (id: string) => {
+    if (!confirm("Delete this recording?")) return;
     setBusy(true);
     try {
       await deleteRecordingAction(id);

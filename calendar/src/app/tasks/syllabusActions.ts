@@ -1,6 +1,5 @@
 "use server";
 
-import mammoth from "mammoth";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth";
@@ -8,24 +7,15 @@ import { formatYMD, parseYMD, toLocalInputValue } from "@/lib/calendar-dates";
 import { aiConfigFromSettings, getAppSettings } from "@/lib/settings";
 import { buildCustomWeeklyRule, WEEKDAY_CODES, type WeekdayCode } from "@/lib/recurrence";
 import { estimateTaskMinutes } from "@/lib/taskDuration";
-import { convertToMarkdown } from "@/lib/markitdown";
-import { MAX_CONVERT_BYTES, isWithinSizeLimit, pickConverter } from "@/lib/documentConvert";
+import { convertFileBufferToText } from "@/lib/fileTextExtract";
+import { MAX_CONVERT_BYTES, isWithinSizeLimit } from "@/lib/documentConvert";
 import {
   extractSyllabusDates,
-  SCHOOL_COURSE_TEMPLATE,
   type ExtractSyllabusResult,
 } from "@/lib/syllabusExtract";
 import { createEvent, updateEventOccurrence } from "../actions";
 
-/**
- * Turns an uploaded file into Markdown text for the AI extraction step.
- *
- * .txt/.md never reach here — the client reads those itself. .docx stays on
- * mammoth in-process rather than going through the converter service: it
- * already works with nothing configured, and regressing a working offline
- * path into a service dependency would be a straight downgrade. Everything
- * else (PDF and friends) needs the markitdown service.
- */
+/** Turns an uploaded file into Markdown text for the AI extraction step. .txt/.md never reach here — the client reads those itself. */
 export async function extractFileTextAction(
   formData: FormData,
 ): Promise<{ ok: true; text: string } | { ok: false; error: string }> {
@@ -36,38 +26,9 @@ export async function extractFileTextAction(
     return { ok: false, error: `File must be non-empty and under ${MAX_CONVERT_BYTES / (1024 * 1024)}MB.` };
   }
 
-  const converter = pickConverter(file.name);
-  if (converter === null || converter === "text") {
-    return { ok: false, error: "That file type isn't supported — paste the text instead." };
-  }
-
   const buffer = Buffer.from(await file.arrayBuffer());
-
-  if (converter === "docx") {
-    try {
-      // mammoth 1.12 added convertToMarkdown at runtime, but its bundled
-      // index.d.ts hasn't caught up (still only declares convertToHtml/
-      // extractRawText) — cast rather than wait on the upstream types fix.
-      const mammothWithMarkdown = mammoth as unknown as {
-        convertToMarkdown: typeof mammoth.extractRawText;
-      };
-      const { value } = await mammothWithMarkdown.convertToMarkdown({ buffer });
-      if (!value.trim()) return { ok: false, error: "Couldn't find any text in that file." };
-      return { ok: true, text: value };
-    } catch {
-      return { ok: false, error: "Couldn't read that .docx file — it may be corrupted." };
-    }
-  }
-
   const { markitdownUrl } = await getAppSettings(user.id);
-  if (!markitdownUrl) {
-    return {
-      ok: false,
-      error:
-        "PDFs and other documents need the conversion service. Set it up in Settings → AI (see docs/markitdown-setup.md), or paste the text instead.",
-    };
-  }
-  return convertToMarkdown(buffer, file.name, file.type || "application/octet-stream", markitdownUrl);
+  return convertFileBufferToText(buffer, file.name, file.type || "application/octet-stream", markitdownUrl);
 }
 
 export async function extractSyllabusDatesAction(

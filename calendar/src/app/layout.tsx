@@ -57,7 +57,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>
-      <body className="flex h-full flex-row overflow-hidden bg-paper text-ink transition-colors duration-200">
+      <body className="flex h-full flex-col overflow-hidden bg-paper text-ink transition-colors duration-200 md:flex-row">
         <SideRail />
         <div className="flex min-h-0 flex-1 flex-col">
           <MeetingBanner />

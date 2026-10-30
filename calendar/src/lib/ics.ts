@@ -94,6 +94,14 @@ export type ParsedIcsEvent = {
   notes: string | null;
   location: string | null;
   excludeDates: string | null;
+  // True for a recurring series' modified-occurrence override
+  // (RECURRENCE-ID) — shares its UID with the master, so a caller that
+  // dedupes/upserts by uid (calendarSubscriptions.ts) needs to filter
+  // these out itself rather than colliding master and override on the
+  // same key. The one-off file-import caller (actions.ts's
+  // importIcsAction) doesn't dedupe by uid at all, so it's fine for it to
+  // keep both as separate one-off events same as before.
+  isRecurrenceException: boolean;
 };
 
 /**
@@ -126,6 +134,7 @@ export function parseIcsEvents(icsText: string): ParsedIcsEvent[] {
       notes: event.description || null,
       location: event.location || null,
       excludeDates,
+      isRecurrenceException: event.isRecurrenceException(),
     });
   }
   return events;

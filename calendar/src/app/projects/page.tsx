@@ -4,6 +4,7 @@ import { requireUser } from "@/lib/auth";
 import { PROJECT_EVENT_COLORS } from "@/lib/eventColors";
 import Button from "../ui/Button";
 import { ConfirmForm } from "../ui/ConfirmForm";
+import ColorPicker from "../ui/ColorPicker";
 import { createProject, deleteProject } from "../actions";
 
 // Same palette as the detail page's header dot, both derived from the
@@ -11,7 +12,6 @@ import { createProject, deleteProject } from "../actions";
 const PROJECT_COLOR_DOT: Record<string, string> = Object.fromEntries(
   Object.entries(PROJECT_EVENT_COLORS).map(([color, c]) => [color, c.dot]),
 );
-const PROJECT_COLOR_OPTIONS = Object.keys(PROJECT_EVENT_COLORS);
 
 /**
  * Project index. Projects previously had no entry point of their own —
@@ -48,7 +48,11 @@ export default async function ProjectsPage() {
           </p>
         </div>
         <div className="flex flex-shrink-0 items-center gap-2">
-          <details className="relative">
+          {/* Keyed by project count so creating one forces a fresh, closed
+              instance next render — a bare <details> otherwise keeps its
+              open/typed-into DOM state across the server-action refresh,
+              inviting an accidental duplicate create. */}
+          <details key={projects.length} className="relative">
             <summary className="flex list-none cursor-pointer items-center rounded-[9px] border border-rule bg-surface px-4 py-[10px] text-[13px] font-medium text-ink-2 transition-all hover:bg-rule-soft">
               New project
             </summary>
@@ -63,17 +67,7 @@ export default async function ProjectsPage() {
                 autoFocus
                 className="rounded-lg border border-rule bg-paper px-3 py-2 text-sm text-ink"
               />
-              <select
-                name="color"
-                defaultValue="indigo"
-                className="rounded-lg border border-rule bg-paper px-3 py-2 text-sm text-ink"
-              >
-                {PROJECT_COLOR_OPTIONS.map((color) => (
-                  <option key={color} value={color}>
-                    {color}
-                  </option>
-                ))}
-              </select>
+              <ColorPicker name="color" defaultValue="indigo" noneLabel="No color" />
               <Button type="submit" className="self-start">
                 Create
               </Button>
@@ -100,7 +94,7 @@ export default async function ProjectsPage() {
             // about.
             const overdue = p.tasks.filter((t) => t.dueAt && t.dueAt < now).length;
             return (
-              <li className="flex items-center gap-3 rounded-xl border border-rule bg-surface p-4 transition-colors hover:bg-rule-soft">
+              <li key={p.id} className="flex items-center gap-3 rounded-xl border border-rule bg-surface p-4 transition-colors hover:bg-rule-soft">
                 <Link href={`/projects/${p.id}`} className="flex min-w-0 flex-1 items-center gap-3">
                   <span
                     className={`h-3 w-3 flex-shrink-0 rounded-full ${PROJECT_COLOR_DOT[p.color] ?? PROJECT_COLOR_DOT.zinc}`}

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarIcon, ListIcon, TargetIcon, BarsIcon, UsersIcon, ChatIcon, MicIcon, FolderIcon } from "./icons";
+import { CalendarIcon, ListIcon, TargetIcon, BarsIcon, UsersIcon, ChatIcon, MicIcon, FolderIcon, GearIcon } from "./icons";
 
 const LINKS = [
   { href: "/", label: "Calendar", icon: CalendarIcon },
@@ -13,6 +13,7 @@ const LINKS = [
   { href: "/recordings", label: "Record", icon: MicIcon },
   { href: "/team", label: "Team", icon: UsersIcon },
   { href: "/chat", label: "Chat", icon: ChatIcon },
+  { href: "/settings", label: "Settings", icon: GearIcon },
 ] as const;
 
 // Lives in the persistent SideRail (see layout.tsx) rather than each

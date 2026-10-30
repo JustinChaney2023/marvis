@@ -5,6 +5,7 @@ import { formatTime } from "@/lib/calendar-dates";
 import { createQuickEventAction, createQuickTaskAction } from "../actions";
 import type { EventModalEvent } from "./EventModal";
 import Button from "../ui/Button";
+import { useModalOpen } from "@/lib/keyboard";
 
 type Props = {
   start: Date;
@@ -19,14 +20,21 @@ type Props = {
 };
 
 export default function QuickCreatePopup({ start, end, onClose, onCreatedEvent }: Props) {
+  useModalOpen(true);
   const [kind, setKind] = useState<"event" | "task">("event");
   const [title, setTitle] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = title.trim();
-    if (!trimmed || isSubmitting) return;
+    if (isSubmitting) return;
+    if (!trimmed) {
+      setError(`Give the ${kind} a name first.`);
+      return;
+    }
+    setError(null);
     setIsSubmitting(true);
     try {
       if (kind === "event") {
@@ -46,7 +54,9 @@ export default function QuickCreatePopup({ start, end, onClose, onCreatedEvent }
           eventType: "DEFAULT",
           allDay: false,
           reminderMinutes: 10,
-          googleAccountId: null,
+          googleCalendarId: null,
+          taskId: null,
+          taskStatus: null,
         });
       } else {
         await createQuickTaskAction(trimmed, start.toISOString(), end.toISOString());
@@ -71,6 +81,8 @@ export default function QuickCreatePopup({ start, end, onClose, onCreatedEvent }
         className="modal-panel w-full max-w-xs rounded-xl border border-rule bg-surface p-4"
       >
         <p className="font-mono text-xs text-muted">
+          {start.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
+          {" · "}
           {formatTime(start)} – {formatTime(end)}
         </p>
 
@@ -95,13 +107,16 @@ export default function QuickCreatePopup({ start, end, onClose, onCreatedEvent }
         <input
           autoFocus
           value={title}
-          onChange={(e) => setTitle(e.target.value)}
+          onChange={(e) => {
+            setTitle(e.target.value);
+            if (error) setError(null);
+          }}
           placeholder={kind === "event" ? "Event name" : "Task name"}
           className="mt-2 w-full rounded-lg border border-rule bg-paper px-3 py-2 text-sm transition-colors focus:border-accent focus:outline-none"
         />
+        {error && <p className="mt-1 text-xs text-accent">{error}</p>}
         <p className="mt-1 text-[11px] text-muted">
-          Placed here and locked — drag it again if it needs moving, or unlock it later to let
-          auto-scheduling manage it.
+          Locked here — drag to move, or unlock later to let auto-scheduling place it instead.
         </p>
 
         <div className="mt-3 flex items-center justify-end gap-2">

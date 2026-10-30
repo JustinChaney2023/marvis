@@ -132,6 +132,7 @@ export default function TaskTable({
             {
               id: editingTask.id,
               title: editingTask.title,
+              status: editingTask.status,
               notes: editingTask.notes,
               priority: editingTask.priority,
               durationMin: editingTask.durationMin,

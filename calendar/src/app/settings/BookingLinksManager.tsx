@@ -8,6 +8,7 @@ import {
   deleteBookingLinkAction,
 } from "../actions";
 import Button from "../ui/Button";
+import { ConfirmForm } from "../ui/ConfirmForm";
 
 const DURATION_PRESETS_MIN = [15, 30, 45, 60, 90];
 const WEEKDAY_CODES = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"];
@@ -200,14 +201,14 @@ function BookingLinkRow({ link }: { link: BookingLinkData }) {
         >
           Edit
         </button>
-        <form action={deleteBookingLinkAction.bind(null, link.id)}>
+        <ConfirmForm message="Delete this booking link?" action={deleteBookingLinkAction.bind(null, link.id)}>
           <button
             type="submit"
             className="rounded-full px-2.5 py-1 text-xs text-ink-2 transition-colors hover:bg-accent-wash hover:text-accent"
           >
             Delete
           </button>
-        </form>
+        </ConfirmForm>
       </div>
     </div>
   );

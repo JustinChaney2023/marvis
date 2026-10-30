@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
   toggleTaskDone,
@@ -15,10 +16,12 @@ import {
   setTaskStatusAction,
   delayTaskAction,
 } from "../actions";
+import { ConfirmForm } from "../ui/ConfirmForm";
 import { PersonIcon, RobotIcon, RepeatIcon, AlertTriangleIcon, ChevronRightIcon, CloseIcon, SparkleIcon } from "../icons";
 import { formatDueDateTime } from "@/lib/calendar-dates";
 import TaskModal, { type TaskModalTask } from "./TaskModal";
 import { STATUS_BADGE, STATUS_LABEL, type TaskStatus } from "./taskStatus";
+import { PROJECT_EVENT_COLORS, isCustomColor, customColorStyle } from "@/lib/eventColors";
 
 type Project = { id: string; name: string };
 type Assignee = { id: string; name: string; type: "HUMAN" | "AI" };
@@ -57,6 +60,39 @@ export type TaskRowData = {
   blockedBy: { id: string; title: string; status: TaskStatus }[];
 };
 
+// AI subtask suggestions and email/doc drafts used to live only in this
+// component's React state, so navigating away (or the page just
+// re-rendering) silently discarded them — after a ~30s generation, that
+// reads as "the app lost my work." Session-scoped, not persisted forever:
+// this is scratch output the user still needs to explicitly Add/Copy or
+// Discard, not a saved record.
+function subscribeNever() {
+  return () => {};
+}
+
+function readPersisted<T>(key: string): T | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = sessionStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : null;
+  } catch {
+    return null;
+  }
+}
+
+function usePersistedState<T>(key: string, initial: T | null) {
+  const [value, setValue] = useState<T | null>(() => readPersisted<T>(key) ?? initial);
+  useEffect(() => {
+    try {
+      if (value === null) sessionStorage.removeItem(key);
+      else sessionStorage.setItem(key, JSON.stringify(value));
+    } catch {
+      // best-effort — a full/unavailable sessionStorage shouldn't break the feature
+    }
+  }, [key, value]);
+  return [value, setValue] as const;
+}
+
 function toDateInputValue(d: Date): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -75,19 +111,11 @@ const PRIORITY_BADGE: Record<number, string> = {
   3: "bg-accent-wash text-accent",
 };
 // Project/label swatches are a categorical legend (users pick from this
-// same 8-color palette across Projects/Gantt/Tasks) — kept as literal
-// Tailwind hues rather than the single accent token, matching the
-// pattern already established in @/lib/eventColors.
-const PROJECT_COLOR_BADGE: Record<string, string> = {
-  zinc: "bg-zinc-100 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-300",
-  red: "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300",
-  amber: "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300",
-  green: "bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-300",
-  blue: "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300",
-  indigo: "bg-indigo-100 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300",
-  violet: "bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300",
-  pink: "bg-pink-100 text-pink-700 dark:bg-pink-950/40 dark:text-pink-300",
-};
+// same palette across Projects/Gantt/Tasks) — sourced from the one
+// shared palette in @/lib/eventColors instead of a second hand-copy of it.
+const PROJECT_COLOR_BADGE: Record<string, string> = Object.fromEntries(
+  Object.entries(PROJECT_EVENT_COLORS).map(([color, c]) => [color, c.badge]),
+);
 
 export default function TaskRow({
   task,
@@ -97,6 +125,9 @@ export default function TaskRow({
   labels,
   otherTasks,
   defaultProjectId,
+  blockingTitles = [],
+  onDragStart,
+  pending = false,
 }: {
   task: TaskRowData;
   projects: Project[];
@@ -105,6 +136,16 @@ export default function TaskRow({
   labels: Label[];
   otherTasks: TaskOption[];
   defaultProjectId: string;
+  // Titles of other open tasks that list this one as a blocker — deleting
+  // this task silently drops those tasks' "Blocked" state, so the delete
+  // confirmation says so instead of just vanishing it.
+  blockingTitles?: string[];
+  // Set only by TaskBoard — makes the card HTML5-draggable between
+  // Kanban columns. Omitted (undefined) everywhere else, so List/Table
+  // rows aren't draggable with nowhere to drop them.
+  onDragStart?: (e: React.DragEvent) => void;
+  // TaskBoard dims a card while its cross-column move is in flight.
+  pending?: boolean;
 }) {
   // Deep-link from the calendar's "Upcoming" list — `/tasks?edit=<id>`
   // opens this task's own edit modal immediately instead of just landing
@@ -112,18 +153,33 @@ export default function TaskRow({
   const searchParams = useSearchParams();
   const [editing, setEditing] = useState(() => searchParams.get("edit") === task.id);
   const [expanded, setExpanded] = useState(false);
+  // Reading sessionStorage during render is "impure" as far as React's
+  // purity rules are concerned (same reasoning as the Notification.
+  // permission / localStorage reads elsewhere in this app) — routed
+  // through useSyncExternalStore, purely to flag leftover AI output on
+  // the still-collapsed toggle rather than forcing it open (forcing it
+  // open would fight the user's own expand/collapse clicks — OR'd
+  // booleans can't be un-OR'd back to collapsed).
+  const hasPersistedContent = useSyncExternalStore(
+    subscribeNever,
+    () =>
+      readPersisted(`task-suggested-${task.id}`) !== null ||
+      readPersisted(`task-draft-email-${task.id}`) !== null ||
+      readPersisted(`task-draft-doc-${task.id}`) !== null,
+    () => false,
+  );
   const [newSubtask, setNewSubtask] = useState("");
   const [isAddingSubtask, setIsAddingSubtask] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
-  const [suggested, setSuggested] = useState<string[] | null>(null);
+  const [suggested, setSuggested] = usePersistedState<string[]>(`task-suggested-${task.id}`, null);
   const [isDrafting, setIsDrafting] = useState(false);
   const [draftError, setDraftError] = useState<string | null>(null);
-  const [draft, setDraft] = useState<{ subject: string; body: string } | null>(null);
+  const [draft, setDraft] = usePersistedState<{ subject: string; body: string; to?: string }>(`task-draft-email-${task.id}`, null);
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied">("idle");
   const [isDraftingDoc, setIsDraftingDoc] = useState(false);
   const [draftDocError, setDraftDocError] = useState<string | null>(null);
-  const [docDraft, setDocDraft] = useState<{ title: string; body: string } | null>(null);
+  const [docDraft, setDocDraft] = usePersistedState<{ title: string; body: string }>(`task-draft-doc-${task.id}`, null);
   const [copyDocStatus, setCopyDocStatus] = useState<"idle" | "copied">("idle");
   const [delaying, setDelaying] = useState(false);
   const [delayDate, setDelayDate] = useState("");
@@ -132,7 +188,11 @@ export default function TaskRow({
   // (task.event set) already has a slot on the calendar, so it's not
   // "at risk" in the same way even if the due date is close.
   const dueSoonMs = 48 * 60 * 60 * 1000;
-  const now = Date.now();
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, []);
   const isOverdue = Boolean(task.dueAt && task.dueAt.getTime() < now && !task.event);
   const isDueSoon =
     !isOverdue &&
@@ -172,6 +232,7 @@ export default function TaskRow({
   const modalTask: TaskModalTask = {
     id: task.id,
     title: task.title,
+    status: task.status,
     notes: task.notes,
     priority: task.priority,
     durationMin: task.durationMin,
@@ -245,7 +306,8 @@ export default function TaskRow({
 
   const handleCopyDraft = async () => {
     if (!draft) return;
-    await navigator.clipboard.writeText(`Subject: ${draft.subject}\n\n${draft.body}`);
+    const toLine = draft.to ? `To: ${draft.to}\n` : "";
+    await navigator.clipboard.writeText(`${toLine}Subject: ${draft.subject}\n\n${draft.body}`);
     setCopyStatus("copied");
     setTimeout(() => setCopyStatus("idle"), 2000);
   };
@@ -272,35 +334,64 @@ export default function TaskRow({
     setTimeout(() => setCopyDocStatus("idle"), 2000);
   };
 
+  // Clicking anywhere on the card opens the edit modal, except on the
+  // card's own interactive controls (checkbox, action buttons, subtask
+  // list, etc.) — those keep their own click handling.
+  const onCardClick = (e: React.MouseEvent<HTMLLIElement>) => {
+    if ((e.target as HTMLElement).closest("button, a, input, select, textarea, form")) return;
+    setEditing(true);
+  };
+
   return (
-    <li className="rounded-xl border border-rule bg-surface p-3 transition-colors hover:bg-rule-soft/40">
+    <li
+      onClick={onCardClick}
+      draggable={Boolean(onDragStart)}
+      onDragStart={onDragStart}
+      className={`rounded-xl border border-rule bg-surface p-3 transition-colors hover:bg-rule-soft/40 ${
+        onDragStart ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"
+      } ${pending ? "opacity-50" : ""}`}
+    >
       <div className="flex items-center gap-3">
-        <form action={toggleTaskDone.bind(null, task.id, true)}>
+        <form action={toggleTaskDone.bind(null, task.id, task.status !== "DONE")}>
           <button
             type="submit"
-            aria-label="mark done"
-            className="h-5 w-5 shrink-0 rounded-full border border-rule bg-surface transition-all hover:scale-110 hover:border-accent focus:outline focus:outline-2 focus:outline-accent focus:outline-offset-2"
-          />
+            aria-label={task.status === "DONE" ? "reopen task" : "mark done"}
+            title={task.status === "DONE" ? "Reopen" : "Mark done"}
+            className={
+              task.status === "DONE"
+                ? "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-ink bg-ink text-[10px] text-paper transition-all hover:scale-110 focus:outline focus:outline-2 focus:outline-accent focus:outline-offset-2"
+                : "h-5 w-5 shrink-0 rounded-full border border-rule bg-surface transition-all hover:scale-110 hover:border-accent focus:outline focus:outline-2 focus:outline-accent focus:outline-offset-2"
+            }
+          >
+            {task.status === "DONE" ? "✓" : ""}
+          </button>
         </form>
         <button
           type="button"
           onClick={() => setEditing(true)}
-          className="min-w-0 flex-1 text-left"
+          className="flex min-w-0 flex-1 flex-col justify-center text-left"
         >
-          <p className="truncate text-sm font-medium hover:underline">{task.title}</p>
+          <p className="truncate text-sm font-medium">{task.title}</p>
           <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted">
             <span
               className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_BADGE[displayStatus]}`}
             >
               {STATUS_LABEL[displayStatus]}
             </span>
-            {task.project && (
-              <span
-                className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${PROJECT_COLOR_BADGE[task.color ?? task.project.color] ?? PROJECT_COLOR_BADGE.zinc}`}
-              >
-                {task.project.name}
-              </span>
-            )}
+            {task.project && (() => {
+              const badgeColor = task.color ?? task.project.color;
+              const custom = isCustomColor(badgeColor);
+              return (
+                <span
+                  className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                    custom ? "" : (PROJECT_COLOR_BADGE[badgeColor] ?? PROJECT_COLOR_BADGE.zinc)
+                  }`}
+                  style={custom ? customColorStyle(badgeColor).badge : undefined}
+                >
+                  {task.project.name}
+                </span>
+              );
+            })()}
             {task.assignee && (
               <span className="inline-flex items-center gap-1 rounded-full bg-rule-soft px-2 py-0.5 text-xs font-medium text-ink-2">
                 {task.assignee.type === "AI" ? (
@@ -391,6 +482,15 @@ export default function TaskRow({
             </button>
           </form>
         )}
+        {(task.status === "CREATED" || task.status === "ONGOING") && (
+          <Link
+            href={`/focus?taskId=${task.id}`}
+            title="Start a focus session for this task"
+            className="rounded-lg border border-rule bg-surface px-2.5 py-1 text-xs font-medium text-ink-2 transition-colors hover:bg-rule-soft"
+          >
+            Focus
+          </Link>
+        )}
         {task.status === "ONGOING" && (
           <form action={setTaskStatusAction.bind(null, task.id, "CREATED")}>
             <button
@@ -437,7 +537,14 @@ export default function TaskRow({
             {task.event ? "Unschedule" : "Schedule"}
           </button>
         </form>
-        <form action={deleteTaskAction.bind(null, task.id)}>
+        <ConfirmForm
+          message={
+            blockingTitles.length > 0
+              ? `Delete this task? ${blockingTitles.join(", ")} ${blockingTitles.length > 1 ? "are" : "is"} blocked by it and will no longer be.`
+              : "Delete this task?"
+          }
+          action={deleteTaskAction.bind(null, task.id)}
+        >
           <button
             type="submit"
             aria-label="delete task"
@@ -446,7 +553,7 @@ export default function TaskRow({
           >
             <CloseIcon className="h-3.5 w-3.5" />
           </button>
-        </form>
+        </ConfirmForm>
       </div>
 
       {delaying && (
@@ -487,6 +594,9 @@ export default function TaskRow({
           {task.subtasks.length > 0
             ? `${doneSubtasks}/${task.subtasks.length} subtasks`
             : "Add subtask"}
+          {!expanded && hasPersistedContent && (
+            <span className="text-accent" title="Unsaved AI suggestions/drafts here">•</span>
+          )}
         </button>
 
         {expanded && (
@@ -513,7 +623,7 @@ export default function TaskRow({
                 >
                   {sub.title}
                 </span>
-                <form action={deleteTaskAction.bind(null, sub.id)}>
+                <ConfirmForm message="Delete this subtask?" action={deleteTaskAction.bind(null, sub.id)}>
                   <button
                     type="submit"
                     aria-label="delete subtask"
@@ -521,7 +631,7 @@ export default function TaskRow({
                   >
                     <CloseIcon className="h-3 w-3" />
                   </button>
-                </form>
+                </ConfirmForm>
               </div>
             ))}
             <form onSubmit={handleAddSubtask} className="mt-1 flex items-center gap-2">
@@ -545,6 +655,7 @@ export default function TaskRow({
                 type="button"
                 onClick={handleGenerateSubtasks}
                 disabled={isGenerating}
+                title="Also reads any files attached to this task — attach the assignment sheet for more accurate suggestions"
                 className="mt-1 inline-flex w-fit items-center gap-1 text-xs text-ink-2 transition-colors hover:underline disabled:opacity-50"
               >
                 <SparkleIcon className="h-3 w-3" />
@@ -617,6 +728,9 @@ export default function TaskRow({
               )}
               {draft && (
                 <div className="flex flex-col gap-1.5 rounded-lg border border-dashed border-rule p-2">
+                  {draft.to && (
+                    <p className="text-xs text-muted">To: {draft.to}</p>
+                  )}
                   <p className="text-xs font-medium text-ink">
                     {draft.subject}
                   </p>

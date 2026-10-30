@@ -66,8 +66,8 @@ export default async function ProjectDetailPage({
 
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 px-6 py-12">
-      <Link href="/tasks" className="text-xs text-muted hover:text-ink">
-        ← All tasks
+      <Link href="/projects" className="text-xs text-muted hover:text-ink">
+        ← Projects
       </Link>
       <div className="mt-2 flex items-center gap-2">
         <span className={`h-2.5 w-2.5 rounded-full ${PROJECT_COLOR_DOT[project.color] ?? PROJECT_COLOR_DOT.zinc}`} />

@@ -7,6 +7,7 @@ import {
   setCalendarShareHiddenAction,
 } from "../actions";
 import Button from "../ui/Button";
+import { ConfirmForm } from "../ui/ConfirmForm";
 
 export type OwnedShare = {
   id: string;
@@ -82,14 +83,14 @@ export default function CalendarSharingManager({
                   {share.sharedWithName ?? share.sharedWithEmail}{" "}
                   <span className="text-xs text-muted">({PERMISSION_LABEL[share.permission]})</span>
                 </span>
-                <form action={deleteCalendarShareAction.bind(null, share.id)}>
+                <ConfirmForm message="Revoke this calendar share?" action={deleteCalendarShareAction.bind(null, share.id)}>
                   <button
                     type="submit"
                     className="flex-shrink-0 text-xs text-muted transition-colors hover:text-accent"
                   >
                     Revoke
                   </button>
-                </form>
+                </ConfirmForm>
               </li>
             ))}
           </ul>

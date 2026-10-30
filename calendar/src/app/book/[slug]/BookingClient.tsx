@@ -33,12 +33,19 @@ function formatTime(iso: string): string {
 }
 
 function formatDayHeading(dayLabel: string): string {
-  // The lib passes `slot.toDateString()` (e.g. "Tue Aug 18 2026"); round-
-  // tripping through `new Date` so we can `toLocaleDateString` it back to
-  // a friendly long-form label.
-  const parsed = new Date(dayLabel);
-  if (Number.isNaN(parsed.getTime())) return dayLabel;
-  return parsed.toLocaleDateString(undefined, {
+  // dayLabel is a bare "YYYY-MM-DD" (the owner's calendar day — see
+  // getAvailableBookingSlots). `new Date("YYYY-MM-DD")` parses date-only
+  // strings as UTC midnight per spec; formatting that in the viewer's
+  // local timezone then shows the WRONG day for anyone west of UTC (all
+  // of the US), off by one — a booker could pick "Thursday" and land on
+  // the host's Friday. Parsing the Y/M/D components into the multi-arg
+  // Date constructor instead builds *local* midnight, so formatting it
+  // back reads the same calendar day regardless of the viewer's zone.
+  const match = dayLabel.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return dayLabel;
+  const [, y, m, d] = match;
+  const local = new Date(Number(y), Number(m) - 1, Number(d));
+  return local.toLocaleDateString(undefined, {
     weekday: "long",
     month: "long",
     day: "numeric",

@@ -17,7 +17,8 @@ export default function FeedbackButton() {
     pathname === "/signup" ||
     pathname === "/forgot-password" ||
     pathname === "/reset-password" ||
-    pathname.startsWith("/book/")
+    pathname.startsWith("/book/") ||
+    pathname.startsWith("/rsvp/")
   ) {
     return null;
   }

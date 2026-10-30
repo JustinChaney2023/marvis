@@ -1,9 +1,15 @@
 import assert from "node:assert/strict";
 import {
   buildCustomWeeklyRule,
+  buildLocalRRule,
   expandEventOccurrences,
   parseCustomWeeklyDays,
+  parseRecurrenceEndCondition,
+  stripRecurrenceEndCondition,
+  withRecurrenceEndCondition,
 } from "./recurrence";
+
+const TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
 // non-recurring event inside range -> one occurrence
 {
@@ -18,6 +24,7 @@ import {
     },
     new Date(2026, 7, 17, 0, 0),
     new Date(2026, 7, 18, 0, 0),
+    TZ,
   );
   assert.equal(occ.length, 1);
   assert.equal(occ[0].id, "a");
@@ -37,6 +44,7 @@ import {
     },
     new Date(2026, 7, 20, 0, 0),
     new Date(2026, 7, 21, 0, 0),
+    TZ,
   );
   assert.equal(occ.length, 0);
 }
@@ -56,6 +64,7 @@ import {
     },
     new Date(2026, 7, 17, 0, 0),
     new Date(2026, 8, 7, 0, 0), // 3 weeks later
+    TZ,
   );
   assert.equal(occ.length, 3);
   const days = occ.map((o) => o.start.getDate());
@@ -82,6 +91,7 @@ import {
     },
     new Date(2026, 7, 18, 0, 0),
     new Date(2026, 7, 19, 0, 0),
+    TZ,
   );
   assert.ok(occ.some((o) => o.start.getDate() === 17 && o.end.getDate() === 18));
 }
@@ -102,6 +112,7 @@ import {
     },
     new Date(2026, 7, 17, 0, 0),
     new Date(2026, 8, 7, 0, 0), // 3 weeks later
+    TZ,
   );
   const days = occ.map((o) => o.start.getDate());
   assert.deepEqual(days, [17, 31]);
@@ -144,6 +155,7 @@ import {
     },
     new Date(2026, 7, 3, 0, 0),
     new Date(2026, 8, 7, 0, 0), // 5 weeks later
+    TZ,
   );
   const days = occ.map((o) => o.start.getDate());
   assert.deepEqual(days, [3, 10]);
@@ -168,9 +180,84 @@ import {
     },
     new Date(2026, 7, 3, 0, 0),
     new Date(2026, 8, 7, 0, 0),
+    TZ,
   );
   const days = occ.map((o) => o.start.getDate());
   assert.deepEqual(days, [3]);
+}
+
+// withRecurrenceEndCondition + parseRecurrenceEndCondition round-trip for "on"
+{
+  const rule = withRecurrenceEndCondition(
+    "FREQ=WEEKLY;BYDAY=MO,WE,FR",
+    { mode: "on", onDateYMD: "2026-12-15" },
+    TZ,
+  );
+  assert.match(rule, /^FREQ=WEEKLY;BYDAY=MO,WE,FR;UNTIL=\d{8}T\d{6}Z$/);
+  const parsed = parseRecurrenceEndCondition(rule);
+  assert.equal(parsed.mode, "on");
+  assert.equal(parsed.mode === "on" && parsed.onDateYMD, "2026-12-15");
+}
+
+// count round-trip
+{
+  const rule = withRecurrenceEndCondition("FREQ=WEEKLY", { mode: "count", count: 12 }, TZ);
+  assert.equal(rule, "FREQ=WEEKLY;COUNT=12");
+  const parsed = parseRecurrenceEndCondition(rule);
+  assert.equal(parsed.mode, "count");
+  assert.equal(parsed.mode === "count" && parsed.count, 12);
+}
+
+// never = no-op
+{
+  const rule = withRecurrenceEndCondition("FREQ=DAILY", { mode: "never" }, TZ);
+  assert.equal(rule, "FREQ=DAILY");
+  assert.equal(parseRecurrenceEndCondition(rule).mode, "never");
+  assert.equal(parseRecurrenceEndCondition(null).mode, "never");
+}
+
+// stripRecurrenceEndCondition undoes withRecurrenceEndCondition, so a
+// saved rule can be re-matched against presets/custom-weekly for editing
+{
+  const base = "FREQ=WEEKLY;BYDAY=MO,WE,FR";
+  const withUntil = withRecurrenceEndCondition(base, { mode: "on", onDateYMD: "2026-12-15" }, TZ);
+  assert.equal(stripRecurrenceEndCondition(withUntil), base);
+  assert.deepEqual(parseCustomWeeklyDays(stripRecurrenceEndCondition(withUntil)), parseCustomWeeklyDays(base));
+
+  const withCount = withRecurrenceEndCondition(base, { mode: "count", count: 5 }, TZ);
+  assert.equal(stripRecurrenceEndCondition(withCount), base);
+}
+
+// An "ends on" rule actually stops producing occurrences after the
+// chosen local date — the real thing this feature is for. dtstart is a
+// Monday; BYDAY=MO,WE,FR with UNTIL end-of-day on a later Friday should
+// include that last Friday but nothing after it.
+{
+  const dtstart = new Date(2026, 7, 3, 9, 0); // Mon Aug 3 2026, 9:00 local
+  const rule = withRecurrenceEndCondition(
+    buildCustomWeeklyRule(["MO", "WE", "FR"]),
+    { mode: "on", onDateYMD: "2026-08-14" }, // a Friday
+    TZ,
+  );
+  const occurrences = buildLocalRRule(rule, dtstart, TZ).all();
+  assert.ok(occurrences.length > 0);
+  const last = occurrences[occurrences.length - 1];
+  assert.equal(last.getFullYear(), 2026);
+  assert.equal(last.getMonth(), 7);
+  assert.equal(last.getDate(), 14);
+  assert.ok(occurrences.every((d) => d.getTime() <= last.getTime()));
+}
+
+// COUNT=N produces exactly N occurrences
+{
+  const dtstart = new Date(2026, 7, 3, 9, 0);
+  const rule = withRecurrenceEndCondition(
+    buildCustomWeeklyRule(["MO", "WE", "FR"]),
+    { mode: "count", count: 5 },
+    TZ,
+  );
+  const occurrences = buildLocalRRule(rule, dtstart, TZ).all();
+  assert.equal(occurrences.length, 5);
 }
 
 console.log("recurrence.test.ts: all checks passed");

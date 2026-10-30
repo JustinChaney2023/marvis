@@ -68,6 +68,15 @@ export async function importFromApple(userId: string): Promise<AppleSyncResult> 
         for (const vevent of comp.getAllSubcomponents("vevent")) {
           const event = new ICAL.Event(vevent);
           if (!event.uid || !event.startDate || !event.endDate) continue;
+          // A recurring series' modified-occurrence override (RECURRENCE-ID)
+          // shares its UID with the master — upserting both under the same
+          // key would have one silently overwrite the other depending on
+          // iteration order. This app has a real per-occurrence exception
+          // model (Event.recurrenceExceptionOfId) but wiring external syncs
+          // into it is real feature work, not a safe unattended fix — for
+          // now, skip the override and keep the master's series intact
+          // rather than corrupt one or the other unpredictably.
+          if (event.isRecurrenceException()) continue;
 
           seenUids.add(event.uid);
           const rruleProp = vevent.getFirstPropertyValue("rrule") as
@@ -75,7 +84,7 @@ export async function importFromApple(userId: string): Promise<AppleSyncResult> 
             | null;
 
           await prisma.event.upsert({
-            where: { appleEventUid: event.uid },
+            where: { userId_appleEventUid: { userId, appleEventUid: event.uid } },
             create: {
               userId,
               title: event.summary || "(untitled)",

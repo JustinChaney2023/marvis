@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { expandEvents } from "@/lib/recurrence";
+import { deleteEventsWithGoogleCleanup } from "@/lib/google-sync";
 import { getAppSettings } from "@/lib/settings";
 import { getZonedDateParts, getZonedWeekday, zonedWallTimeToUtc } from "@/lib/timezone";
 import type { TaskEnergy } from "@prisma/client";
@@ -63,12 +64,10 @@ function workWindowFor(date: Date, timeZone: string) {
 export type DayWindow = { start: Date; end: Date };
 export type WindowFn = (date: Date) => DayWindow | null;
 
-// Default: the app's original hardcoded 9am-6pm-weekdays assumption,
-// still what a task with no assigned TimeSlot (settings/TimeSlotsManager)
-// schedules against, and what habits.ts uses (habits don't have their own
-// working-hours setting yet). Falls back to the server's own zone for an
-// account that hasn't set one yet (see User.timezone), so existing
-// behavior is unchanged until a browser reports a real zone for it.
+// Default: the app's original hardcoded 9am-6pm-weekdays assumption, kept
+// only as findEarliestSlot's fallback getWindow — every real caller (tasks
+// via windowFnForWorkingHours/windowFnForTimeSlot, habits via
+// windowFnForWorkingHours) passes its own window explicitly.
 export function defaultWindowFn(timeZone: string): WindowFn {
   return (date) => (isWorkDay(date, timeZone) ? workWindowFor(date, timeZone) : null);
 }
@@ -342,7 +341,39 @@ function applyDailyCap(
   return busy.concat(blocks);
 }
 
-export async function fetchBusyIntervals(userId: string, now: Date, horizonEnd: Date) {
+/**
+ * Expands a user's recurring weekly ReservedBlock rows into concrete UTC
+ * busy intervals within [now, horizonEnd) — same day-by-day walk as
+ * applyDailyCap, since a ReservedBlock is a plain weekday+minutes
+ * template, not an Event with its own RRULE machinery to reuse.
+ */
+export function expandReservedBlocks(
+  blocks: { dayOfWeek: number; startMin: number; endMin: number }[],
+  now: Date,
+  horizonEnd: Date,
+  timeZone: string,
+): { start: Date; end: Date }[] {
+  if (blocks.length === 0) return [];
+  const busy: { start: Date; end: Date }[] = [];
+  // Walks by the zone's own calendar day, not a fixed 24h/86,400,000ms step —
+  // a fixed step skips or repeats a day across a DST transition (a 23h or
+  // 25h local day), same reasoning as scheduler.ts's skipToNextDay above.
+  for (let day = new Date(now); day < horizonEnd; ) {
+    const weekday = getZonedWeekday(day, timeZone);
+    const { year, month, day: dayOfMonth } = getZonedDateParts(day, timeZone);
+    for (const block of blocks) {
+      if (block.dayOfWeek !== weekday) continue;
+      busy.push({
+        start: zonedWallTimeToUtc(year, month, dayOfMonth, 0, block.startMin, timeZone),
+        end: zonedWallTimeToUtc(year, month, dayOfMonth, 0, block.endMin, timeZone),
+      });
+    }
+    day = zonedWallTimeToUtc(year, month, dayOfMonth + 1, 0, 0, timeZone);
+  }
+  return busy;
+}
+
+export async function fetchBusyIntervals(userId: string, now: Date, horizonEnd: Date, timeZone: string) {
   // Recurring masters may have started long before `now` and still recur
   // into the horizon, so they can't be filtered by `start` — fetch them
   // unconditionally and expand into occurrences alongside one-off events.
@@ -361,7 +392,7 @@ export async function fetchBusyIntervals(userId: string, now: Date, horizonEnd: 
       ],
     },
   });
-  return expandEvents(existing, now, horizonEnd)
+  return expandEvents(existing, now, horizonEnd, timeZone)
     .map((o) => ({ start: o.start, end: o.end }))
     .sort((a, b) => a.start.getTime() - b.start.getTime());
 }
@@ -412,12 +443,14 @@ export async function findGroupSlot(
   horizonEnd: Date,
   bufferMin: number,
 ): Promise<{ start: Date; end: Date } | null> {
-  const [perUserBusy, users, perUserSettings] = await Promise.all([
-    Promise.all(userIds.map((id) => fetchBusyIntervals(id, now, horizonEnd))),
+  const [users, perUserSettings] = await Promise.all([
     prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, timezone: true } }),
     Promise.all(userIds.map((id) => getAppSettings(id))),
   ]);
   const timeZoneById = new Map(users.map((u) => [u.id, u.timezone ?? SERVER_TIMEZONE]));
+  const perUserBusy = await Promise.all(
+    userIds.map((id) => fetchBusyIntervals(id, now, horizonEnd, timeZoneById.get(id) ?? SERVER_TIMEZONE)),
+  );
   const combinedBusy = padForBuffer(perUserBusy.flat(), bufferMin).sort(
     (a, b) => a.start.getTime() - b.start.getTime(),
   );
@@ -448,7 +481,7 @@ export function splitIntoChunks(durationMin: number, chunkMin: number | null): n
 export async function scheduleTask(userId: string, taskId: string) {
   const task = await prisma.task.findFirstOrThrow({
     where: { id: taskId, userId },
-    include: { timeSlot: true, blockedBy: { select: { status: true } } },
+    include: { timeSlot: true, blockedBy: { select: { status: true } }, labels: { select: { id: true } } },
   });
   // A task blocked by an unfinished dependency doesn't get a slot at
   // all — same "couldn't place it" signal (null) as no slot fitting in
@@ -472,12 +505,30 @@ export async function scheduleTask(userId: string, taskId: string) {
     ? windowFnForTimeSlot(task.timeSlot, timeZone)
     : windowFnForWorkingHours(settings, timeZone);
   let busy = applyDailyCap(
-    padForBuffer(await fetchBusyIntervals(userId, now, horizonEnd), settings.bufferMin),
+    padForBuffer(await fetchBusyIntervals(userId, now, horizonEnd, timeZone), settings.bufferMin),
     now,
     horizonEnd,
     settings.dailyCapMin,
     timeZone,
   );
+  // Each ReservedProfile (a fixed job shift, a class schedule) only
+  // constrains the auto-scheduler, and only for tasks that don't carry
+  // one of that *specific* profile's exemptLabels — a task labeled
+  // "work" still lands inside the Work profile's hours, but stays
+  // blocked by e.g. a School profile's unless also labeled for that one.
+  // Manual drag/create never goes through scheduleTask at all, so those
+  // are never affected by any of this.
+  const taskLabelIds = new Set(task.labels.map((l) => l.id));
+  const profiles = await prisma.reservedProfile.findMany({
+    where: { userId },
+    include: { blocks: true, exemptLabels: { select: { id: true } } },
+  });
+  const reservedBusy = profiles
+    .filter((profile) => !profile.exemptLabels.some((l) => taskLabelIds.has(l.id)))
+    .flatMap((profile) => expandReservedBlocks(profile.blocks, now, horizonEnd, timeZone));
+  if (reservedBusy.length > 0) {
+    busy = [...busy, ...reservedBusy].sort((a, b) => a.start.getTime() - b.start.getTime());
+  }
   const projectScheduledDays = await getProjectScheduledDays(
     userId,
     task.projectId,
@@ -518,7 +569,7 @@ export async function scheduleTask(userId: string, taskId: string) {
   // Not an upsert — a chunked reschedule can produce a different number
   // of rows than last time (a shorter chunkMin now, say), so the old set
   // is cleared and replaced wholesale rather than trying to reconcile.
-  await prisma.event.deleteMany({ where: { taskId } });
+  await deleteEventsWithGoogleCleanup({ taskId });
   await prisma.event.createMany({
     data: slots.map((slot) => ({
       userId,
@@ -589,28 +640,59 @@ export async function rescheduleConflictsWith(
  */
 export async function rescheduleStaleTasks(userId: string) {
   const now = new Date();
-  const scheduledTasks = await prisma.task.findMany({
-    where: { userId, events: { some: {} } },
-    include: { events: true },
-  });
-  const allEvents = await prisma.event.findMany({ where: { userId } });
+  const [scheduledTasks, allEvents, owner] = await Promise.all([
+    prisma.task.findMany({
+      where: { userId, events: { some: {} } },
+      include: { events: true },
+    }),
+    prisma.event.findMany({ where: { userId } }),
+    prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { timezone: true } }),
+  ]);
+  const timeZone = owner.timezone ?? SERVER_TIMEZONE;
+
+  const eventConflicts = (event: { id: string; start: Date; end: Date }) => {
+    const windowStart = new Date(event.start.getTime() - 86_400_000);
+    const windowEnd = new Date(event.end.getTime() + 86_400_000);
+    const others = allEvents.filter((e) => e.id !== event.id);
+    const nearbyOccurrences = expandEvents(others, windowStart, windowEnd, timeZone);
+    return nearbyOccurrences.some((o) => o.start < event.end && o.end > event.start);
+  };
 
   let count = 0;
   for (const task of scheduledTasks) {
+    // A DONE task's block is history, not a live commitment — leave it
+    // exactly where it landed. Without this, marking a task done right as
+    // (or after) its block ends — the common case — makes its now-past
+    // event look "stale" on the very next sweep, silently wiping the
+    // completed block and rescheduling the finished task into a fresh
+    // future slot.
+    if (task.status === "DONE") continue;
+
     // Any locked chunk exempts the whole task — see rescheduleConflictsWith.
     if (task.events.some((e) => e.locked)) continue;
 
-    const isStale = task.events.some((event) => {
-      const isPast = event.end <= now;
-      const windowStart = new Date(event.start.getTime() - 86_400_000);
-      const windowEnd = new Date(event.end.getTime() + 86_400_000);
-      const others = allEvents.filter((e) => e.id !== event.id);
-      const nearbyOccurrences = expandEvents(others, windowStart, windowEnd);
-      const conflict = nearbyOccurrences.some(
-        (o) => o.start < event.end && o.end > event.start,
-      );
-      return isPast || conflict;
-    });
+    // An ONGOING task (timer running) whose block simply ran past its own
+    // end time isn't "missed" — the user is still actively in it. Instead
+    // of bumping it to a fresh slot elsewhere (which would make it look
+    // abandoned), grow that block in place to cover up to now, so it
+    // keeps expanding on every sweep until the task is marked DONE. A
+    // real conflict (something else now overlaps it) still falls through
+    // to the reschedule-elsewhere path below — only "just ran past its
+    // own end time with nothing else in the way" gets the expand
+    // treatment.
+    if (task.status === "ONGOING") {
+      const runningOver = task.events.find((e) => e.end <= now && !eventConflicts(e));
+      if (runningOver) {
+        await prisma.event.update({
+          where: { id: runningOver.id },
+          data: { end: roundUpToGranularity(now), localDirty: true },
+        });
+        count++;
+        continue;
+      }
+    }
+
+    const isStale = task.events.some((event) => event.end <= now || eventConflicts(event));
 
     if (isStale) {
       await unscheduleTask(userId, task.id);
@@ -628,9 +710,15 @@ export async function rescheduleStaleTasks(userId: string) {
  * the good slots. Tasks that don't fit in the horizon are left as-is.
  * DELAYED tasks are deliberately excluded — that's the whole point of
  * delaying one, and DONE tasks obviously don't need a slot.
+ *
+ * Returns `staleCount` (how many already-scheduled tasks got fixed up —
+ * rescheduled elsewhere or, for an ONGOING one, expanded in place) plus
+ * `results` for the brand-new placements, so a caller that only cares
+ * "did anything at all change" (the periodic auto-schedule poll) doesn't
+ * have to duplicate rescheduleStaleTasks's own bookkeeping.
  */
 export async function scheduleAllPendingTasks(userId: string) {
-  await rescheduleStaleTasks(userId);
+  const staleCount = await rescheduleStaleTasks(userId);
 
   const tasks = await prisma.task.findMany({
     // Subtasks are checklist items under a parent task, not independently
@@ -659,7 +747,7 @@ export async function scheduleAllPendingTasks(userId: string) {
     const events = await scheduleTask(userId, task.id);
     results.push({ taskId: task.id, scheduled: events !== null });
   }
-  return results;
+  return { staleCount, results };
 }
 
 /**
@@ -690,5 +778,5 @@ export async function unscheduleTask(userId: string, taskId: string) {
   // Losing its slot just puts it back in scheduleAllPendingTasks' sweep
   // (status in [CREATED, ONGOING] and no event), which needs no status
   // change to work.
-  await prisma.event.deleteMany({ where: { taskId, userId } });
+  await deleteEventsWithGoogleCleanup({ taskId, userId });
 }
