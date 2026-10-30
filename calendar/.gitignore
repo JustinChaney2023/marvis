@@ -60,3 +60,4 @@ next-env.d.ts
 /prisma/*.db-journal
 graphify-out/
 .claude/scheduled_tasks.lock
+/tests/e2e/.auth/
