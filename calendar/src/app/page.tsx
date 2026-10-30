@@ -287,10 +287,10 @@ export default async function Page(props: PageProps<"/">) {
   }
 
   return (
-    <main className="mx-auto flex h-full min-h-0 w-full max-w-[96rem] flex-col px-6 pb-6 pt-4 print:h-auto">
+    <main className="mx-auto flex h-full min-h-0 w-full max-w-[96rem] flex-col px-3 pb-4 pt-3 sm:px-6 sm:pb-6 sm:pt-4 print:h-auto">
       <header className="flex flex-col gap-3">
         <p className="hidden text-lg font-semibold print:block">{nav.label}</p>
-        <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
+        <div className="flex flex-wrap-reverse items-center justify-between gap-2 sm:flex-wrap sm:gap-3 print:hidden">
           <nav className="flex flex-wrap items-center gap-1">
             <div className="inline-flex items-center gap-1 rounded-full border border-rule bg-paper p-1">
               <Link
@@ -315,15 +315,23 @@ export default async function Page(props: PageProps<"/">) {
             <span className="mx-1 h-5 w-px bg-rule" />
             <Link
               href={`/?view=${view}&start=${nav.prev}`}
+              aria-label="Previous"
               className="rounded-full px-3 py-1.5 text-sm text-ink-2 transition-colors hover:bg-rule-soft hover:text-ink"
             >
-              ← Prev
+              ←<span className="hidden sm:inline"> Prev</span>
+            </Link>
+            <Link
+              href={`/?view=${view}`}
+              className="rounded-full px-2 py-1.5 text-sm text-ink-2 transition-colors hover:bg-rule-soft hover:text-ink"
+            >
+              Today
             </Link>
             <Link
               href={`/?view=${view}&start=${nav.next}`}
+              aria-label="Next"
               className="rounded-full px-3 py-1.5 text-sm text-ink-2 transition-colors hover:bg-rule-soft hover:text-ink"
             >
-              Next →
+              <span className="hidden sm:inline">Next </span>→
             </Link>
           </nav>
           <div className="flex items-center gap-1">
@@ -332,7 +340,7 @@ export default async function Page(props: PageProps<"/">) {
             <MiniMonthPicker view={view} startYMD={startYMD} />
           </div>
         </div>
-        <p className="font-mono text-xs text-muted print:hidden">
+        <p className="hidden font-mono text-xs text-muted md:block print:hidden">
           Shortcuts: <kbd>j</kbd>/<kbd>k</kbd> prev/next, <kbd>d</kbd>/
           <kbd>w</kbd>/<kbd>m</kbd> view, <kbd>t</kbd> today, <kbd>?</kbd> all
           shortcuts

@@ -37,7 +37,7 @@ import {
   type HardwareScan,
 } from "@/lib/hardware";
 import { createBooking, getAvailableBookingSlots } from "@/lib/booking";
-import { nextTaskOccurrence } from "@/lib/taskRecurrence";
+import { setTaskDone, stoppedTimerFields, logTrackedTime, findProjectByName } from "@/lib/taskOps";
 import { generateSubtasks, type GenerateSubtasksResult } from "@/lib/subtaskGenerate";
 import { generateEmailDraft, type DraftEmailResult } from "@/lib/emailDraft";
 import { generateTaskDoc, type DraftDocResult } from "@/lib/docDraft";
@@ -937,20 +937,61 @@ export async function deleteTaskAction(taskId: string) {
   revalidatePath("/");
 }
 
-export async function quickCaptureTask(text: string) {
-  const user = await requireUser();
-  const parsed = parseQuickCapture(text);
-  if (!parsed.title) return;
+export type QuickCaptureResult =
+  | { ok: true; title: string; projectName: string | null; scheduledFor: string | null; unmatchedProject: string | null }
+  | { ok: false; error: string };
 
-  await prisma.task.create({
+/**
+ * The global "c" / "+" quick-capture box. Same parser the MCP server's
+ * create_task uses, read in the user's own timezone. A "#tag" that
+ * doesn't match a project is reported back rather than silently creating
+ * one — a typo'd tag shouldn't spawn a stray project.
+ */
+export async function quickCaptureTask(
+  text: string,
+  options?: { schedule?: boolean; defaultProjectId?: string | null },
+): Promise<QuickCaptureResult> {
+  const user = await requireUser();
+  const timeZone = user.timezone ?? undefined;
+  const parsed = parseQuickCapture(text, new Date(), timeZone, 17);
+  if (!parsed.title) return { ok: false, error: "Add a title." };
+
+  // An explicit "#tag" wins; otherwise the caller's context (e.g. the
+  // Tasks page filtered to one project) supplies the default.
+  const project = parsed.projectName
+    ? await findProjectByName(user.id, parsed.projectName)
+    : options?.defaultProjectId
+      ? await prisma.project.findFirst({
+          where: { id: options.defaultProjectId, userId: user.id },
+          select: { id: true, name: true },
+        })
+      : null;
+
+  const task = await prisma.task.create({
     data: {
       userId: user.id,
       title: parsed.title,
       priority: parsed.priority,
       dueAt: parsed.dueAt,
+      ...(parsed.durationMin ? { durationMin: parsed.durationMin } : {}),
+      ...(project ? { projectId: project.id } : {}),
     },
   });
+
+  let scheduledFor: string | null = null;
+  if (options?.schedule) {
+    const events = await scheduleTask(user.id, task.id).catch(() => null);
+    if (events && events.length > 0) scheduledFor = events[0].start.toISOString();
+  }
   revalidatePath("/tasks");
+  revalidatePath("/");
+  return {
+    ok: true,
+    title: task.title,
+    projectName: project?.name ?? null,
+    scheduledFor,
+    unmatchedProject: parsed.projectName && !project ? parsed.projectName : null,
+  };
 }
 
 const DEFAULT_QUICK_EVENT_DURATION_MIN = 30;
@@ -958,22 +999,36 @@ const DEFAULT_QUICK_EVENT_DURATION_MIN = 30;
 /**
  * Quick-add for calendar events (#38) — same "c" quick-capture parser as
  * tasks, just materialized as an Event instead. A time with no explicit
- * duration ("for 30 min"/"for 1h") gets a 30-min default block; no
+ * duration ("for 30 min"/"1h") gets a 30-min default block; no
  * date/time at all falls back to starting now.
  */
-export async function quickCaptureEvent(text: string) {
+export async function quickCaptureEvent(text: string): Promise<QuickCaptureResult> {
   const user = await requireUser();
-  const parsed = parseQuickCapture(text);
-  if (!parsed.title) return;
+  // A bare day with no time ("friday") starts at 9am that day.
+  const parsed = parseQuickCapture(text, new Date(), user.timezone ?? undefined, 9);
+  if (!parsed.title) return { ok: false, error: "Add a title." };
 
   const start = parsed.dueAt ?? new Date();
   const durationMin = parsed.durationMin ?? DEFAULT_QUICK_EVENT_DURATION_MIN;
   const end = new Date(start.getTime() + durationMin * 60_000);
 
-  await prisma.event.create({
-    data: { userId: user.id, title: parsed.title, start, end },
+  const event = await prisma.event.create({
+    data: { userId: user.id, title: parsed.title, start, end, locked: true, localDirty: true },
   });
+  await rescheduleConflictsWith(user.id, start, end, event.id);
+  await rescheduleConflictedHabits(user.id, start, end, event.id);
   revalidatePath("/");
+  return { ok: true, title: event.title, projectName: null, scheduledFor: start.toISOString(), unmatchedProject: null };
+}
+
+/** For quick capture's "#" autocomplete. */
+export async function listProjectNamesAction(): Promise<{ id: string; name: string; color: string }[]> {
+  const user = await requireUser();
+  return prisma.project.findMany({
+    where: { userId: user.id },
+    select: { id: true, name: true, color: true },
+    orderBy: { createdAt: "asc" },
+  });
 }
 
 export async function createProject(formData: FormData) {
@@ -1224,80 +1279,9 @@ export async function deleteAssignee(assigneeId: string) {
   revalidatePath("/tasks");
 }
 
-// Folds elapsed time since `timerStartedAt` into `trackedMinutes` and
-// clears it — called by every action that moves a task away from
-// ONGOING, so time is never silently lost (only ever added once, since
-// timerStartedAt is cleared in the same write).
-function stoppedTimerFields(task: { timerStartedAt: Date | null; trackedMinutes: number }) {
-  if (!task.timerStartedAt) return { patch: {}, elapsedMin: 0 };
-  const elapsedMin = Math.max(0, Math.round((Date.now() - task.timerStartedAt.getTime()) / 60_000));
-  return {
-    patch: {
-      trackedMinutes: task.trackedMinutes + elapsedMin,
-      timerStartedAt: null,
-    },
-    elapsedMin,
-  };
-}
-
-// One row per timer stop, for the time-tracking report — the plain
-// cumulative Task.trackedMinutes total can't be bucketed by week on its
-// own. Fire-and-forget-adjacent (awaited, but never blocks/fails the
-// status change it's attached to since a broken report is much lower
-// stakes than a task update failing).
-async function logTrackedTime(userId: string, taskId: string, elapsedMin: number) {
-  if (elapsedMin <= 0) return;
-  try {
-    await prisma.timeLogEntry.create({ data: { userId, taskId, minutes: elapsedMin } });
-  } catch (err) {
-    console.error("logTrackedTime failed:", err);
-  }
-}
-
 export async function toggleTaskDone(taskId: string, done: boolean) {
   const user = await requireUser();
-  const existing = await prisma.task.findFirst({ where: { id: taskId, userId: user.id } });
-  if (!existing) return;
-
-  const timerStop = stoppedTimerFields(existing);
-  const task = await prisma.task.update({
-    where: { id: taskId },
-    data: {
-      status: done ? "DONE" : "CREATED",
-      ...timerStop.patch,
-    },
-  });
-  await logTrackedTime(user.id, taskId, timerStop.elapsedMin);
-  runAutomationsForStatusChange(user.id, taskId, task.status).catch((err) =>
-    console.error("automation error:", err),
-  );
-
-  // Recurring tasks aren't expanded like recurring events — completing one
-  // materializes the next occurrence as a new row, since a task carries
-  // per-instance state (status, its own scheduled event) that doesn't fit
-  // the "compute on the fly" model.
-  if (done && task.recurrenceRule && task.dueAt) {
-    const nextDueAt = nextTaskOccurrence(task.recurrenceRule, task.dueAt);
-    if (nextDueAt) {
-      await prisma.task.create({
-        data: {
-          userId: user.id,
-          title: task.title,
-          notes: task.notes,
-          priority: task.priority,
-          energy: task.energy,
-          durationMin: task.durationMin,
-          dueAt: nextDueAt,
-          projectId: task.projectId,
-          assigneeId: task.assigneeId,
-          recurrenceRule: task.recurrenceRule,
-          hardDeadline: task.hardDeadline,
-          color: task.color,
-        },
-      });
-    }
-  }
-
+  if (!(await setTaskDone(user.id, taskId, done))) return;
   revalidatePath("/tasks");
   revalidatePath("/");
 }

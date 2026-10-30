@@ -35,6 +35,11 @@ placement creates/updates the linked `Event` and flips the task to
 `SCHEDULED`. "Schedule all" runs this over every open task sequentially, so
 earlier (more urgent) tasks claim the better slots.
 
+## Claude (MCP)
+
+Season runs an MCP server at `/api/mcp` so Claude can see your agenda, add and
+complete tasks, and run the scheduler — see `docs/mcp.md` for setup.
+
 ## Status
 
 v0: task list with create/complete/schedule/unschedule, a `/calendar` week

@@ -7,14 +7,15 @@ import NavLinks from "./NavLinks";
 import ThemeToggle from "./ThemeToggle";
 import SettingsButton from "./SettingsButton";
 import FeedbackButton from "./FeedbackButton";
-import { MarkIcon } from "./icons";
+import { MarkIcon, PlusIcon } from "./icons";
+import { openQuickCapture } from "./quickCaptureEvents";
 import { getCurrentEventIdAction } from "./actions";
 
 const LIVE_EVENT_POLL_MS = 30_000;
 
 // Public/pre-auth routes render their own minimal chrome, so the app nav
 // and settings/feedback icons (which assume a logged-in user) stay hidden.
-const HIDDEN_PREFIXES = ["/login", "/signup", "/forgot-password", "/reset-password", "/book/", "/rsvp/"];
+export const HIDDEN_CHROME_PREFIXES = ["/login", "/signup", "/forgot-password", "/reset-password", "/book/", "/rsvp/"];
 
 // Keep in sync with package.json's "version" — duplicated rather than
 // imported so this client bundle doesn't pull in the whole package.json
@@ -27,7 +28,7 @@ const APP_VERSION = "0.1.0";
 // the shell shape the paper/chalkboard design language was drawn for.
 export default function SideRail() {
   const pathname = usePathname();
-  const hidden = HIDDEN_PREFIXES.some((p) => pathname.startsWith(p));
+  const hidden = HIDDEN_CHROME_PREFIXES.some((p) => pathname.startsWith(p));
 
   // A little hidden feature: during a live event, the mark itself jumps
   // straight to its fullscreen timer instead of home — no visible
@@ -54,7 +55,7 @@ export default function SideRail() {
   if (hidden) return null;
 
   return (
-    <aside className="flex h-full w-44 flex-shrink-0 flex-col gap-4 overflow-y-auto border-r border-rule bg-surface px-3 py-4 print:hidden">
+    <aside className="hidden h-full w-44 flex-shrink-0 flex-col gap-4 overflow-y-auto border-r border-rule bg-surface px-3 py-4 md:flex print:hidden">
       <Link
         href={liveEventId ? `/timer?eventId=${liveEventId}` : "/"}
         className="flex items-center gap-2 px-1.5 text-ink"
@@ -65,6 +66,17 @@ export default function SideRail() {
           <span className="block font-mono text-[9px] text-muted">v{APP_VERSION}</span>
         </span>
       </Link>
+
+      <button
+        type="button"
+        onClick={() => openQuickCapture()}
+        title="Quick add (c)"
+        className="flex items-center gap-2 rounded-lg border border-rule bg-paper px-2.5 py-2 text-sm text-ink-2 transition-colors hover:border-accent hover:text-ink"
+      >
+        <PlusIcon className="h-4 w-4 flex-shrink-0 text-accent" />
+        <span className="flex-1 text-left">Quick add</span>
+        <kbd className="font-mono text-[10px] text-muted">c</kbd>
+      </button>
 
       <NavLinks />
 

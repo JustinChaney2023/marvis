@@ -433,11 +433,11 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
       </section>
 
       <section className="mt-6 rounded-xl border border-rule bg-surface p-5">
-        <h2 className="font-serif text-xl text-ink">API tokens</h2>
+        <h2 className="font-serif text-xl text-ink">API tokens &amp; Claude</h2>
         <p className="mt-1 text-xs text-muted">
-          For external clients that can&apos;t sign in through the browser,
-          like the Obsidian plugin. Each token acts as you — treat it like a
-          password.
+          For external clients that can&apos;t sign in through the browser —
+          Claude (via Season&apos;s MCP server) or the Obsidian plugin. Each
+          token acts as you — treat it like a password.
         </p>
         <div className="mt-3">
           <ApiTokensManager tokens={apiTokens} />

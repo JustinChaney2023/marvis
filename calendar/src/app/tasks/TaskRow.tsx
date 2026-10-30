@@ -274,12 +274,15 @@ export default function TaskRow({
 
   return (
     <li className="rounded-xl border border-rule bg-surface p-3 transition-colors hover:bg-rule-soft/40">
-      <div className="flex items-center gap-3">
-        <form action={toggleTaskDone.bind(null, task.id, true)}>
+      {/* On phones the action buttons wrap to their own row under the
+          title (the w-full actions group below) instead of squeezing the
+          title down to a few characters. */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <form action={toggleTaskDone.bind(null, task.id, true)} className="self-start pt-0.5 sm:self-center sm:pt-0">
           <button
             type="submit"
             aria-label="mark done"
-            className="h-5 w-5 shrink-0 rounded-full border border-rule bg-surface transition-all hover:scale-110 hover:border-accent focus:outline focus:outline-2 focus:outline-accent focus:outline-offset-2"
+            className="block h-5 w-5 shrink-0 rounded-full border border-rule bg-surface transition-all hover:scale-110 hover:border-accent focus:outline focus:outline-2 focus:outline-accent focus:outline-offset-2"
           />
         </form>
         <button
@@ -287,13 +290,17 @@ export default function TaskRow({
           onClick={() => setEditing(true)}
           className="min-w-0 flex-1 text-left"
         >
-          <p className="truncate text-sm font-medium hover:underline">{task.title}</p>
+          <p className="line-clamp-2 text-sm font-medium hover:underline sm:truncate">{task.title}</p>
           <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted">
-            <span
-              className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_BADGE[displayStatus]}`}
-            >
-              {STATUS_LABEL[displayStatus]}
-            </span>
+            {/* "Created" is every task's resting state — only badge the
+                ones that say something (ongoing, delayed, done). */}
+            {displayStatus !== "CREATED" && (
+              <span
+                className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_BADGE[displayStatus]}`}
+              >
+                {STATUS_LABEL[displayStatus]}
+              </span>
+            )}
             {task.project && (
               <span
                 className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${PROJECT_COLOR_BADGE[task.color ?? task.project.color] ?? PROJECT_COLOR_BADGE.zinc}`}
@@ -380,6 +387,7 @@ export default function TaskRow({
             ))}
           </div>
         </button>
+        <div className="flex w-full items-center gap-2 pl-8 sm:w-auto sm:pl-0">
         {task.status === "CREATED" && (
           <form action={setTaskStatusAction.bind(null, task.id, "ONGOING")}>
             <button
@@ -447,6 +455,7 @@ export default function TaskRow({
             <CloseIcon className="h-3.5 w-3.5" />
           </button>
         </form>
+        </div>
       </div>
 
       {delaying && (

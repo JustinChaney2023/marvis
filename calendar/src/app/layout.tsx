@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Instrument_Serif, IBM_Plex_Sans, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
 import QuickCapture from "./QuickCapture";
@@ -8,6 +8,7 @@ import SyncWatcher from "./SyncWatcher";
 import TimezoneSync from "./TimezoneSync";
 import MeetingBanner from "./MeetingBanner";
 import SideRail from "./SideRail";
+import MobileNav from "./MobileNav";
 
 // Runs before paint so there's no flash of the wrong theme. Kept as a
 // plain string (not a .ts file) since it needs to execute inline, before
@@ -47,6 +48,18 @@ export const metadata: Metadata = {
   description: "A calm personal OS for your calendar, tasks, and focus time",
 };
 
+// viewport-fit=cover so the mobile tab bar can sit under the home
+// indicator (it pads itself with env(safe-area-inset-bottom)).
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f7f4ef" },
+    { media: "(prefers-color-scheme: dark)", color: "#232a27" },
+  ],
+};
+
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
@@ -61,8 +74,12 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <SideRail />
         <div className="flex min-h-0 flex-1 flex-col">
           <MeetingBanner />
-          <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
+          {/* Bottom padding clears MobileNav's fixed tab bar below md. */}
+          <div className="min-h-0 flex-1 overflow-y-auto pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0">
+            {children}
+          </div>
         </div>
+        <MobileNav />
         <QuickCapture />
         <ShortcutsHelp />
         <NotificationWatcher />

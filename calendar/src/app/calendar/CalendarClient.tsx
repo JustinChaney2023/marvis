@@ -488,6 +488,7 @@ export default function CalendarClient({
           type="button"
           variant="secondary"
           title="A locked block the auto-scheduler won't place tasks into"
+          className="max-sm:hidden"
           onClick={() => {
             const { start, end } = defaultNewEventTimes();
             openCreate(start, end, { title: "Focus time", locked: true, eventType: "FOCUS_TIME" });
@@ -499,6 +500,7 @@ export default function CalendarClient({
           type="button"
           variant="secondary"
           title="Blocks the day off and marks it distinctly on the calendar"
+          className="max-sm:hidden"
           onClick={() => {
             const start = new Date(today);
             start.setHours(0, 0, 0, 0);
