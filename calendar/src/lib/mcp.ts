@@ -638,6 +638,58 @@ const TOOLS: Tool<z.ZodType>[] = [
   }),
 
   defineTool({
+    name: "update_event",
+    description:
+      "Change a one-off calendar event: rename, move (start/end), or edit its location, meeting link, or notes. Recurring series and read-only feed events can't be edited here.",
+    input: z.object({
+      eventId: z.string(),
+      title: z.string().optional(),
+      start: timeString.optional(),
+      end: timeString.optional(),
+      location: z.string().nullable().optional(),
+      meetingUrl: z.string().nullable().optional(),
+      notes: z.string().nullable().optional(),
+    }),
+    run: async (args, { userId, timeZone }) => {
+      const event = await prisma.event.findFirst({ where: { id: args.eventId, userId } });
+      if (!event) throw new ToolError(`No event with id ${args.eventId}.`);
+      if (event.source === "APPLE" || event.source === "SUBSCRIBED") {
+        throw new ToolError("That event comes from a read-only calendar feed and can't be edited here.");
+      }
+      if (event.recurrenceRule) {
+        throw new ToolError("That's a recurring series — edit it in Season's calendar so you can pick which occurrences change.");
+      }
+      // Moving the start without an end keeps the event's length.
+      const start = args.start ? parseUserTime(args.start, timeZone, 9) : event.start;
+      const end = args.end
+        ? parseUserTime(args.end, timeZone, 9)
+        : args.start
+          ? new Date(start.getTime() + (event.end.getTime() - event.start.getTime()))
+          : event.end;
+      if (end <= start) throw new ToolError("end must be after start.");
+      const updated = await prisma.event.update({
+        where: { id: event.id },
+        data: {
+          ...(args.title?.trim() ? { title: args.title.trim() } : {}),
+          start,
+          end,
+          ...(args.location !== undefined ? { location: args.location } : {}),
+          ...(args.meetingUrl !== undefined ? { meetingUrl: args.meetingUrl } : {}),
+          ...(args.notes !== undefined ? { notes: args.notes } : {}),
+          // A deliberately placed time — same as a manual drag in the UI.
+          locked: true,
+          localDirty: true,
+        },
+      });
+      if (args.start || args.end) {
+        await rescheduleConflictsWith(userId, start, end, event.id);
+        await rescheduleConflictedHabits(userId, start, end, event.id);
+      }
+      return { id: updated.id, title: updated.title, when: `${formatLocal(start, timeZone)} – ${formatLocal(end, timeZone)}` };
+    },
+  }),
+
+  defineTool({
     name: "delete_event",
     description: "Delete a calendar event (the whole series, if recurring). Also removes it from Google Calendar if synced.",
     input: z.object({ eventId: z.string() }),

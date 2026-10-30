@@ -53,7 +53,7 @@ Desktop via config file: `npx -y mcp-remote https://YOUR-HOST/api/mcp --header "
 | `add_subtasks` | Checklist items under a task |
 | `schedule_tasks` | Run the auto-scheduler for one task or everything |
 | `list_projects` / `create_project` | Projects |
-| `list_events` / `create_event` / `delete_event` | Calendar (recurring events expanded) |
+| `list_events` / `create_event` / `update_event` / `delete_event` | Calendar (recurring events expanded) |
 
 Times are ISO 8601; a time without an offset is read in the user's own timezone
 (Settings → Scheduling), and a bare due date means 5pm that day.

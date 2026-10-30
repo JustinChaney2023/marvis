@@ -20,6 +20,7 @@ import { formatDueDateTime } from "@/lib/calendar-dates";
 import TaskModal, { type TaskModalTask } from "./TaskModal";
 import { STATUS_BADGE, STATUS_LABEL, type TaskStatus } from "./taskStatus";
 import { useNow } from "../useNow";
+import { showToast } from "../toast";
 
 type Project = { id: string; name: string };
 type Assignee = { id: string; name: string; type: "HUMAN" | "AI" };
@@ -127,6 +128,19 @@ export default function TaskRow({
   const [docDraft, setDocDraft] = useState<{ title: string; body: string } | null>(null);
   const [copyDocStatus, setCopyDocStatus] = useState<"idle" | "copied">("idle");
   const [delaying, setDelaying] = useState(false);
+
+  // Completing removes the row, so offer a way back. Not for recurring
+  // tasks: completing one already created the next occurrence, and an
+  // un-complete would leave both open.
+  const completeWithUndo = async () => {
+    await toggleTaskDone(task.id, true);
+    showToast({
+      message: `Completed “${task.title}”`,
+      action: task.recurrenceRule
+        ? undefined
+        : { label: "Undo", onClick: () => toggleTaskDone(task.id, false) },
+    });
+  };
   const [delayDate, setDelayDate] = useState("");
 
   // Unscheduled and either overdue or due within 48h — a scheduled task
@@ -279,7 +293,7 @@ export default function TaskRow({
           title (the w-full actions group below) instead of squeezing the
           title down to a few characters. */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <form action={toggleTaskDone.bind(null, task.id, true)} className="self-start pt-0.5 sm:self-center sm:pt-0">
+        <form action={completeWithUndo} className="self-start pt-0.5 sm:self-center sm:pt-0">
           <button
             type="submit"
             aria-label="mark done"

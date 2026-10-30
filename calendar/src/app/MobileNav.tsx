@@ -8,6 +8,7 @@ import ThemeToggle from "./ThemeToggle";
 import FeedbackButton from "./FeedbackButton";
 import { GearIcon, PlusIcon } from "./icons";
 import { openQuickCapture } from "./quickCaptureEvents";
+import { HELP_EVENT } from "./ShortcutsHelp";
 import { HIDDEN_CHROME_PREFIXES } from "./SideRail";
 
 // The three places you live day to day get a tab; everything else sits
@@ -70,6 +71,17 @@ export default function MobileNav() {
             <div className="mt-3 flex items-center justify-center gap-2">
               <ThemeToggle />
               <FeedbackButton />
+              <button
+                type="button"
+                onClick={() => {
+                  setMoreOpen(false);
+                  window.dispatchEvent(new Event(HELP_EVENT));
+                }}
+                aria-label="Help"
+                className="flex h-9 items-center justify-center rounded-full border border-rule bg-surface px-3 text-xs text-ink-2"
+              >
+                Shorthand help
+              </button>
             </div>
           </div>
         </div>
