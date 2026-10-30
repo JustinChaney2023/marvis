@@ -17,7 +17,7 @@ export default async function MeetPage() {
   });
 
   return (
-    <main className="mx-auto w-full max-w-lg flex-1 px-6 py-12">
+    <main className="mx-auto w-full max-w-lg flex-1 px-4 py-8 sm:px-6 sm:py-12">
       <h1 className="font-serif text-4xl leading-none text-ink">Find a group time</h1>
       <p className="mt-2 text-sm text-ink-2">
         Pick people who&apos;ve shared their calendar with you, and this

@@ -103,7 +103,7 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
   });
 
   return (
-    <main className="mx-auto w-full max-w-2xl flex-1 px-6 py-12">
+    <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-8 sm:px-6 sm:py-12">
       <div className="flex items-center justify-between">
         <h1 className="font-serif text-3xl text-ink">Settings</h1>
         <Link
@@ -366,7 +366,7 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
       <section className="mt-6 rounded-xl border border-rule bg-surface p-5">
         <h2 className="font-serif text-xl text-ink">Habits</h2>
         <p className="mt-1 text-xs text-muted">
-          Flexible routine time — "exercise 3x a week" rather than a fixed
+          Flexible routine time — &quot;exercise 3x a week&quot; rather than a fixed
           recurring event. Placed into open slots each week, and re-placed
           (not dropped) if something else gets booked over a slot.
         </p>
@@ -380,7 +380,7 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
         <p className="mt-1 text-xs text-muted">
           Named availability windows (Work, Sleep, School, or your own) —
           assign a task to one on its edit form and the scheduler only
-          places it within that slot's days/hours instead of the default
+          places it within that slot&apos;s days/hours instead of the default
           9am-6pm weekdays.
         </p>
         <div className="mt-3">

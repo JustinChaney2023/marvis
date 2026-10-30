@@ -43,7 +43,7 @@ export default async function RecordingsPage({
   const attachedTo = event?.title ?? project?.name ?? null;
 
   return (
-    <main className="mx-auto w-full max-w-3xl flex-1 px-6 py-12">
+    <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-8 sm:px-6 sm:py-12">
       <h1 className="font-serif text-4xl leading-none text-ink">Recordings</h1>
       <p className="mt-2 text-sm text-ink-2">
         Record a lecture or meeting, or upload one — it&apos;s transcribed and turned into notes with

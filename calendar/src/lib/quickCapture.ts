@@ -125,25 +125,32 @@ export function parseQuickCapture(
   let defaultHour: number | null = null;
 
   const weekdayRe = WEEKDAYS.join("|");
+  // Short forms are safe on their own except "sat"/"sun", which read as
+  // words ("SAT prep", "sun screen") — those need an on/by/due/next/this
+  // in front, handled by the full-or-short pattern below.
+  const shortSafe = "mon|tues?|wed|thu(?:rs?)?|fri";
+  const anyShort = `${shortSafe}|sat|sun`;
   const inMatch = take(/\sin (\d+) (days?|weeks?)(?=\s)/i);
   if (inMatch) {
     const n = Number(inMatch[1]) * (inMatch[2].toLowerCase().startsWith("w") ? 7 : 1);
     date = addDays(today, n);
   }
   if (!date) {
-    const m = take(new RegExp(`\\s(?:(?:on|by|due)\\s+)?next (${weekdayRe})(?=\\s)`, "i"));
+    const m = take(new RegExp(`\\s(?:(?:on|by|due)\\s+)?next (${weekdayRe}|${anyShort})(?=\\s)`, "i"));
     if (m) {
       // "next monday" from a Monday is a week out, never today.
-      let delta = WEEKDAYS.indexOf(m[1].toLowerCase()) - weekdayOf(today);
+      let delta = weekdayIndex(m[1]) - weekdayOf(today);
       if (delta <= 0) delta += 7;
       date = addDays(today, delta);
     }
   }
   if (!date) {
-    const m = take(new RegExp(`\\s(?:(?:on|by|due|this)\\s+)?(${weekdayRe})(?=\\s)`, "i"));
+    const m =
+      take(new RegExp(`\\s(?:(?:on|by|due|this)\\s+)?(${weekdayRe}|${shortSafe})(?=\\s)`, "i")) ??
+      take(new RegExp(`\\s(?:on|by|due|this)\\s+(sat|sun)(?=\\s)`, "i"));
     if (m) {
       // A bare weekday is its next occurrence — today counts.
-      let delta = WEEKDAYS.indexOf(m[1].toLowerCase()) - weekdayOf(today);
+      let delta = weekdayIndex(m[1]) - weekdayOf(today);
       if (delta < 0) delta += 7;
       date = addDays(today, delta);
     }
@@ -218,6 +225,11 @@ export function parseQuickCapture(
 
   const title = text.replace(/\s{2,}/g, " ").trim();
   return { title, dueAt, hasTime: time !== null, priority, durationMin, projectName };
+}
+
+function weekdayIndex(name: string): number {
+  const prefix = name.toLowerCase().slice(0, 2);
+  return WEEKDAYS.findIndex((d) => d.startsWith(prefix));
 }
 
 function toMinutes(amount: number, unit: string): number {

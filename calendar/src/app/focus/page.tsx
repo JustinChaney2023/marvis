@@ -63,8 +63,8 @@ export default async function FocusPage() {
   ].slice(0, 10);
 
   return (
-    <main className="mx-auto flex w-full max-w-lg flex-1 flex-col px-6 py-12">
-      <Suspense fallback={<p className="font-serif text-lg text-muted">Reading today's calendar…</p>}>
+    <main className="mx-auto flex w-full max-w-lg flex-1 flex-col px-4 py-8 sm:px-6 sm:py-12">
+      <Suspense fallback={<p className="font-serif text-lg text-muted">Reading today&apos;s calendar…</p>}>
         <DailyAgenda userId={user.id} />
       </Suspense>
 

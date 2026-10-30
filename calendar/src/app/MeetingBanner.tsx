@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { getUpcomingMeetingBannerAction } from "./actions";
 import { CloseIcon } from "./icons";
+import { useNow } from "./useNow";
 
 const POLL_MS = 30_000;
 
@@ -31,6 +32,7 @@ export default function MeetingBanner() {
   const hidden = HIDDEN_PREFIXES.some((p) => pathname.startsWith(p));
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
+  const now = useNow(30_000);
 
   useEffect(() => {
     if (hidden) return;
@@ -63,7 +65,7 @@ export default function MeetingBanner() {
     <div className="flex shrink-0 items-center gap-3 bg-ink px-4 py-2.5 text-sm text-paper print:hidden">
       <span className="font-mono text-[10px] tracking-wide text-accent uppercase">Live soon</span>
       <span className="min-w-0 truncate">
-        <span className="font-medium">{next.title}</span> — {describeTiming(next.startIso, Date.now())}
+        <span className="font-medium">{next.title}</span> — {describeTiming(next.startIso, now)}
       </span>
       <div className="flex-grow" />
       <div className="flex shrink-0 items-center gap-2">

@@ -27,7 +27,6 @@ export default function TimezoneSync() {
     // account holder travels) is rare enough that "next full page load"
     // catching it is fine, and re-detecting every render would fight a
     // deliberate manual override from Settings on every navigation.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hidden]);
 
   return null;

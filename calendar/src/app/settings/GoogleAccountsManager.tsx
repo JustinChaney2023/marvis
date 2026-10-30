@@ -152,7 +152,7 @@ export default function GoogleAccountsManager({ accounts }: { accounts: ManagedG
 
       <p className="text-xs text-muted">
         Syncs the last 7 days through the next 90 for every connected account.
-        New events you create here export to the account marked "Default"
+        New events you create here export to the account marked &quot;Default&quot;
         unless you pick a different one on the event itself. Deletions sync
         both ways.
       </p>

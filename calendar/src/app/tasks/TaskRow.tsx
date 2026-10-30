@@ -19,6 +19,7 @@ import { PersonIcon, RobotIcon, RepeatIcon, AlertTriangleIcon, ChevronRightIcon,
 import { formatDueDateTime } from "@/lib/calendar-dates";
 import TaskModal, { type TaskModalTask } from "./TaskModal";
 import { STATUS_BADGE, STATUS_LABEL, type TaskStatus } from "./taskStatus";
+import { useNow } from "../useNow";
 
 type Project = { id: string; name: string };
 type Assignee = { id: string; name: string; type: "HUMAN" | "AI" };
@@ -132,7 +133,7 @@ export default function TaskRow({
   // (task.event set) already has a slot on the calendar, so it's not
   // "at risk" in the same way even if the due date is close.
   const dueSoonMs = 48 * 60 * 60 * 1000;
-  const now = Date.now();
+  const now = useNow();
   const isOverdue = Boolean(task.dueAt && task.dueAt.getTime() < now && !task.event);
   const isDueSoon =
     !isOverdue &&

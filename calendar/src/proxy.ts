@@ -19,7 +19,19 @@ import type { NextRequest } from "next/server";
 // /api/v1/ and /api/mcp authenticate with a Bearer personal access token
 // (requireApiUser), never a session cookie — redirecting them to /login
 // here meant no API client could ever reach them.
-const PUBLIC_PATH_PREFIXES = ["/book/", "/login", "/signup", "/api/test/", "/api/v1/", "/api/mcp"];
+// The manifest and app icons are fetched by the browser without cookies
+// (that's how manifest fetches work), so they must never redirect.
+const PUBLIC_PATH_PREFIXES = [
+  "/book/",
+  "/login",
+  "/signup",
+  "/api/test/",
+  "/api/v1/",
+  "/api/mcp",
+  "/manifest.webmanifest",
+  "/icon",
+  "/apple-icon",
+];
 const SESSION_COOKIE = "marvis_session";
 
 function isPublicPath(pathname: string): boolean {

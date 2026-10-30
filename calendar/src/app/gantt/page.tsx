@@ -33,6 +33,8 @@ const WEEK_MS = 7 * DAY_MS;
 export default async function GanttPage() {
   const user = await requireUser();
 
+  // A server component renders once per request, so "now" is stable here.
+  // eslint-disable-next-line react-hooks/purity
   const weekAgo = new Date(Date.now() - WEEK_MS);
   const recentLogs = await prisma.timeLogEntry.findMany({
     where: { userId: user.id, loggedAt: { gte: weekAgo } },
@@ -117,7 +119,7 @@ export default async function GanttPage() {
   const todayOffset = dayDiff(today, rangeStart);
 
   return (
-    <main className="mx-auto w-full max-w-6xl flex-1 px-6 py-12">
+    <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6 sm:py-12">
       <h1 className="font-serif text-4xl leading-none text-ink">Project timeline</h1>
       <p className="mt-2 text-sm text-ink-2">
         Open tasks by project, scheduled slot if placed, otherwise created

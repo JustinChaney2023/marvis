@@ -1,5 +1,4 @@
 import { unlink } from "node:fs/promises";
-import path from "node:path";
 import { resolveUploadPath } from "@/lib/uploads";
 import { z } from "zod";
 import type { RecordingStatus } from "@prisma/client";
