@@ -180,6 +180,15 @@ const NAIVE_DATETIME = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::\d{2}(?:\
  */
 export function parseUserTime(input: string, timeZone: string, defaultHour = 17): Date {
   const s = input.trim();
+  const parts = s.match(DATE_ONLY) ?? s.match(NAIVE_DATETIME);
+  if (parts) {
+    // Date.UTC silently rolls Feb 30 into March — refuse instead.
+    const [y, mo, d] = [+parts[1], +parts[2], +parts[3]];
+    const check = new Date(Date.UTC(y, mo - 1, d));
+    if (check.getUTCMonth() !== mo - 1 || check.getUTCDate() !== d || (parts[4] !== undefined && (+parts[4] > 23 || +parts[5] > 59))) {
+      throw new ToolError(`"${input}" isn't a real date/time.`);
+    }
+  }
   const dateOnly = s.match(DATE_ONLY);
   if (dateOnly) {
     return zonedWallTimeToUtc(+dateOnly[1], +dateOnly[2], +dateOnly[3], defaultHour, 0, timeZone);

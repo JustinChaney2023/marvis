@@ -7,7 +7,13 @@ import { methodNotAllowed, respondToMcpPost } from "../handler";
 // the credential — revoke the token in Settings → API to kill it.
 export async function POST(request: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
-  const auth = await authenticateApiToken(decodeURIComponent(token));
+  let raw: string;
+  try {
+    raw = decodeURIComponent(token);
+  } catch {
+    return new Response("Invalid token.", { status: 401 });
+  }
+  const auth = await authenticateApiToken(raw);
   if ("error" in auth) return auth.error;
   return respondToMcpPost(request, auth.user.id);
 }

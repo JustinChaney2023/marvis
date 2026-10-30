@@ -6,8 +6,9 @@ export async function POST(request: Request) {
   const contentType = request.headers.get("content-type") ?? "";
   let params: URLSearchParams;
   if (contentType.includes("application/json")) {
-    const json = (await request.json().catch(() => ({}))) as Record<string, unknown>;
-    params = new URLSearchParams(Object.entries(json).map(([k, v]) => [k, String(v)]));
+    const json: unknown = await request.json().catch(() => null);
+    const obj = json && typeof json === "object" ? (json as Record<string, unknown>) : {};
+    params = new URLSearchParams(Object.entries(obj).map(([k, v]) => [k, String(v)]));
   } else {
     params = new URLSearchParams(await request.text());
   }

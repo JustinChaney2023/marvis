@@ -45,12 +45,16 @@ const now = new Date(2026, 7, 19, 10, 0);
   assert.equal(r.priority, 0);
 }
 
-// time only, no date word -> defaults to today at that time
+// time only, no date word -> today if still ahead, else tomorrow
 {
-  const r = parseQuickCapture("Standup at 9:30am", now);
+  const r = parseQuickCapture("Standup at 11:30am", now);
+  assert.equal(r.dueAt?.getDate(), 19);
+}
+{
+  const r = parseQuickCapture("Standup at 9:30am", now); // now is 10:00
   assert.equal(r.title, "Standup");
   assert.ok(r.dueAt);
-  assert.equal(r.dueAt.getDate(), 19);
+  assert.equal(r.dueAt.getDate(), 20);
   assert.equal(r.dueAt.getHours(), 9);
   assert.equal(r.dueAt.getMinutes(), 30);
 }
@@ -196,6 +200,26 @@ const now = new Date(2026, 7, 19, 10, 0);
   // "thu" / "thurs" both work
   assert.equal(parseQuickCapture("Lab thurs", now).dueAt?.getDay(), 4);
   assert.equal(parseQuickCapture("Lab thu", now).dueAt?.getDay(), 4);
+}
+
+// impossible dates/times stay in the title instead of rolling over
+{
+  const r = parseQuickCapture("Pay 2/30", now);
+  assert.equal(r.dueAt, null);
+  assert.equal(r.title, "Pay 2/30");
+}
+{
+  assert.equal(parseQuickCapture("Trip 31 nov", now).dueAt, null);
+  assert.equal(parseQuickCapture("Party 25pm", now).dueAt, null);
+}
+// words that only look like dates
+{
+  const r = parseQuickCapture("Ask may 5 people", now);
+  assert.equal(r.dueAt, null);
+  assert.equal(r.title, "Ask may 5 people");
+  assert.equal(parseQuickCapture("Read 1/2 of book", now).dueAt, null);
+  assert.equal(parseQuickCapture("Recital on may 5", now).dueAt?.getMonth(), 4);
+  assert.equal(parseQuickCapture("Leap feb 29", now).dueAt?.getDate(), 29);
 }
 
 console.log("quickCapture.test.ts: all checks passed");

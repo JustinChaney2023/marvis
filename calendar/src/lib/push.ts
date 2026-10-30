@@ -100,55 +100,77 @@ export async function runPushTick(now = new Date()): Promise<{ sent: number }> {
   let sent = 0;
 
   for (const userId of userIds) {
-    const user = await prisma.user.findUnique({ where: { id: userId }, select: { timezone: true } });
-    const tz = user?.timezone ?? undefined;
-    // Event reminders: same rule as the in-tab NotificationWatcher — fire
-    // once an occurrence is within its own reminderMinutes.
-    const horizon = new Date(now.getTime() + 24 * 3_600_000);
-    const rows = await prisma.event.findMany({
-      where: {
-        userId,
-        reminderMinutes: { not: null },
-        OR: [{ start: { gte: now, lt: horizon } }, { recurrenceRule: { not: null } }],
-      },
-    });
-    const reminderById = new Map(rows.map((r) => [r.id, r.reminderMinutes ?? 0]));
-    for (const occ of expandEvents(rows, now, horizon)) {
-      const minutesAway = (occ.start.getTime() - now.getTime()) / 60_000;
-      if (occ.allDay || minutesAway < 0 || minutesAway > (reminderById.get(occ.masterId) ?? -1)) continue;
-      if (!(await claimDelivery(`event:${occ.id}`))) continue;
-      sent += await sendPushToUser(userId, {
-        title: occ.title,
-        body: minutesAway < 1 ? "Starting now" : `Starts at ${formatClock(occ.start, tz)} (in ${Math.round(minutesAway)} min)`,
-        url: "/",
-        tag: `event:${occ.id}`,
-      });
-    }
-
-    // Unscheduled tasks coming due — the ones most likely to slip.
-    const dueSoon = await prisma.task.findMany({
-      where: {
-        userId,
-        parentId: null,
-        status: { in: ["CREATED", "ONGOING"] },
-        events: { none: {} },
-        dueAt: { gte: now, lte: new Date(now.getTime() + TASK_DUE_LEAD_MIN * 60_000) },
-      },
-      select: { id: true, title: true, dueAt: true },
-    });
-    for (const task of dueSoon) {
-      if (!(await claimDelivery(`task-due:${task.id}:${task.dueAt!.toISOString()}`))) continue;
-      sent += await sendPushToUser(userId, {
-        title: `Due at ${formatClock(task.dueAt!, tz)}: ${task.title}`,
-        body: "Not on your calendar yet — tap to open it.",
-        url: `/tasks?edit=${task.id}`,
-        tag: `task:${task.id}`,
-      });
+    // One user's failure (bad data, a DB hiccup) mustn't stop everyone
+    // after them from getting reminders this tick.
+    try {
+      sent += await tickForUser(userId, now);
+    } catch (err) {
+      console.error("push tick failed for user", userId, err);
     }
   }
 
   await prisma.pushDelivery.deleteMany({ where: { createdAt: { lt: new Date(now.getTime() - DELIVERY_RETENTION_MS) } } });
   return { sent };
+}
+
+/** Sends once per key: claims it first, releases the claim if nothing got through. */
+async function sendOnce(key: string, userId: string, payload: PushPayload): Promise<number> {
+  if (!(await claimDelivery(key))) return 0;
+  const delivered = await sendPushToUser(userId, payload).catch(() => 0);
+  if (delivered === 0) await prisma.pushDelivery.deleteMany({ where: { key } });
+  return delivered;
+}
+
+async function tickForUser(userId: string, now: Date): Promise<number> {
+  let sent = 0;
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { timezone: true } });
+  const tz = user?.timezone ?? undefined;
+  // Event reminders: same rule as the in-tab NotificationWatcher — fire
+  // once an occurrence is within its own reminderMinutes.
+  const horizon = new Date(now.getTime() + 24 * 3_600_000);
+  const lookback = new Date(now.getTime() - 60_000);
+  const rows = await prisma.event.findMany({
+    where: {
+      userId,
+      reminderMinutes: { not: null },
+      OR: [{ start: { gte: lookback, lt: horizon } }, { recurrenceRule: { not: null } }],
+    },
+  });
+  const reminderById = new Map(rows.map((r) => [r.id, r.reminderMinutes ?? 0]));
+  for (const occ of expandEvents(rows, lookback, horizon)) {
+    const minutesAway = (occ.start.getTime() - now.getTime()) / 60_000;
+    // -1 min of grace so a "0 minutes before" reminder (and one a tick
+    // runs slightly late for) still fires.
+    if (occ.allDay || minutesAway < -1 || minutesAway > (reminderById.get(occ.masterId) ?? -1)) continue;
+    // Start time in the key: a moved event deserves a fresh reminder.
+    sent += await sendOnce(`event:${occ.id}:${occ.start.toISOString()}`, userId, {
+      title: occ.title,
+      body: minutesAway < 1 ? "Starting now" : `Starts at ${formatClock(occ.start, tz)} (in ${Math.round(minutesAway)} min)`,
+      url: "/",
+      tag: `event:${occ.id}`,
+    });
+  }
+
+  // Unscheduled tasks coming due — the ones most likely to slip.
+  const dueSoon = await prisma.task.findMany({
+    where: {
+      userId,
+      parentId: null,
+      status: { in: ["CREATED", "ONGOING"] },
+      events: { none: {} },
+      dueAt: { gte: now, lte: new Date(now.getTime() + TASK_DUE_LEAD_MIN * 60_000) },
+    },
+    select: { id: true, title: true, dueAt: true },
+  });
+  for (const task of dueSoon) {
+    sent += await sendOnce(`task-due:${task.id}:${task.dueAt!.toISOString()}`, userId, {
+      title: `Due at ${formatClock(task.dueAt!, tz)}: ${task.title}`,
+      body: "Not on your calendar yet — tap to open it.",
+      url: `/tasks?edit=${task.id}`,
+      tag: `task:${task.id}`,
+    });
+  }
+  return sent;
 }
 
 let loopStarted = false;
