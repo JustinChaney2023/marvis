@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { expandEvents } from "@/lib/recurrence";
+import { expandEvents, recurringOverlapping } from "@/lib/recurrence";
 import { callAiForJson, type LocalAiConfig } from "@/lib/aiClient";
 
 export type DailyAgendaFacts = {
@@ -24,7 +24,7 @@ export async function buildTodayFacts(userId: string): Promise<DailyAgendaFacts>
       userId,
       OR: [
         { start: { lt: dayEnd }, end: { gt: dayStart } },
-        { recurrenceRule: { not: null } },
+        recurringOverlapping(dayStart, dayEnd),
       ],
     },
     include: { task: true },

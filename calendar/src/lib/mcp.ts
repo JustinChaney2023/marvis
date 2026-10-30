@@ -1,10 +1,11 @@
 import { z } from "zod";
 import { unlink } from "node:fs/promises";
 import { prisma } from "@/lib/prisma";
-import { expandEvents } from "@/lib/recurrence";
+import { expandEvents, recurringOverlapping } from "@/lib/recurrence";
 import { parseQuickCapture } from "@/lib/quickCapture";
+import { runAutomationsForStatusChange } from "@/lib/automations";
 import { setTaskDone, findProjectByName as findProjectByNameLoose } from "@/lib/taskOps";
-import { rescheduleConflictsWith, scheduleAllPendingTasks, scheduleTask } from "@/lib/scheduler";
+import { rescheduleConflictsWith, scheduleAllPendingTasks, scheduleTask, unscheduleTask } from "@/lib/scheduler";
 import { rescheduleConflictedHabits } from "@/lib/habits";
 import { deleteFromGoogle } from "@/lib/google-sync";
 import { resolveUploadPath } from "@/lib/uploads";
@@ -274,7 +275,7 @@ async function listOccurrences(userId: string, from: Date, to: Date, timeZone: s
   const rows = await prisma.event.findMany({
     where: {
       userId,
-      OR: [{ start: { lt: to }, end: { gt: from } }, { recurrenceRule: { not: null } }],
+      OR: [{ start: { lt: to }, end: { gt: from } }, recurringOverlapping(from, to)],
     },
   });
   const byId = new Map(rows.map((r) => [r.id, r]));
@@ -330,6 +331,10 @@ async function getOwnedTask(userId: string, taskId: string) {
 
 // ---------------------------------------------------------------------------
 // Tools
+
+// Shown as a clickable link (meeting banner, public RSVP page) — only
+// real web links, same rule as the event form.
+const httpUrl = z.string().refine((u) => /^https?:\/\//i.test(u.trim()), "must start with http:// or https://");
 
 const priority = z.number().int().min(0).max(3).describe("0 low, 1 medium, 2 high, 3 urgent");
 const timeString = z.string().describe("ISO 8601 date or datetime; no offset = user's timezone");
@@ -467,6 +472,7 @@ const TOOLS: Tool<z.ZodType>[] = [
             : {}),
         },
       });
+      runAutomationsForStatusChange(userId, task.id, "CREATED").catch((err) => console.error("automation error:", err));
       if (args.schedule) await scheduleTask(userId, task.id);
       return serializeTask(await getOwnedTask(userId, task.id), timeZone);
     },
@@ -502,9 +508,14 @@ const TOOLS: Tool<z.ZodType>[] = [
       if (args.durationMin !== undefined) data.durationMin = args.durationMin;
       if (args.hardDeadline !== undefined) data.hardDeadline = args.hardDeadline;
       if (args.status !== undefined) data.status = args.status;
+      // Same side effect as Delay in the app: a parked task gives up its slot.
+      if (args.status === "DELAYED") await unscheduleTask(userId, args.taskId);
       if (projectId !== undefined) data.projectId = projectId;
       if (Object.keys(data).length === 0) throw new ToolError("Nothing to update.");
       await prisma.task.update({ where: { id: args.taskId }, data });
+      if (data.title) {
+        await prisma.event.updateMany({ where: { taskId: args.taskId }, data: { title: data.title as string, localDirty: true } });
+      }
       return serializeTask(await getOwnedTask(userId, args.taskId), timeZone);
     },
   }),
@@ -629,7 +640,7 @@ const TOOLS: Tool<z.ZodType>[] = [
       end: timeString.optional(),
       durationMin: z.number().int().min(5).optional().describe("Used when end is omitted (default 30)"),
       location: z.string().optional(),
-      meetingUrl: z.string().optional(),
+      meetingUrl: httpUrl.optional(),
       notes: z.string().optional(),
     }),
     run: async (args, { userId, timeZone }) => {
@@ -667,7 +678,7 @@ const TOOLS: Tool<z.ZodType>[] = [
       start: timeString.optional(),
       end: timeString.optional(),
       location: z.string().nullable().optional(),
-      meetingUrl: z.string().nullable().optional(),
+      meetingUrl: httpUrl.nullable().optional(),
       notes: z.string().nullable().optional(),
     }),
     run: async (args, { userId, timeZone }) => {

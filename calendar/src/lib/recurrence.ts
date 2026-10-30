@@ -198,3 +198,19 @@ export function parseCustomWeeklyDays(
   }
   return days as WeekdayCode[];
 }
+
+/**
+ * Prisma filter for recurring masters that can have an occurrence in
+ * [from, to): started before the window ends and not ended (by a "this
+ * and following" split) before it begins. Every range query used to load
+ * every recurring series the account ever had, ended ones included.
+ * (An RRULE's own UNTIL/COUNT lives inside the rule text, so those are
+ * still filtered by expandEvents after loading.)
+ */
+export function recurringOverlapping(from: Date, to: Date) {
+  return {
+    recurrenceRule: { not: null },
+    start: { lt: to },
+    OR: [{ recurrenceEndsBefore: null }, { recurrenceEndsBefore: { gt: from } }],
+  };
+}

@@ -1,6 +1,6 @@
 import webpush from "web-push";
 import { prisma } from "@/lib/prisma";
-import { expandEvents } from "@/lib/recurrence";
+import { expandEvents, recurringOverlapping } from "@/lib/recurrence";
 
 /**
  * Web Push: reminders delivered by the browser/OS even when Season isn't
@@ -133,7 +133,7 @@ async function tickForUser(userId: string, now: Date): Promise<number> {
     where: {
       userId,
       reminderMinutes: { not: null },
-      OR: [{ start: { gte: lookback, lt: horizon } }, { recurrenceRule: { not: null } }],
+      OR: [{ start: { gte: lookback, lt: horizon } }, recurringOverlapping(lookback, horizon)],
     },
   });
   const reminderById = new Map(rows.map((r) => [r.id, r.reminderMinutes ?? 0]));

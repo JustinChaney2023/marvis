@@ -17,7 +17,7 @@ import {
   startOfWeek,
   type CalendarView,
 } from "@/lib/calendar-dates";
-import { expandEvents } from "@/lib/recurrence";
+import { expandEvents, recurringOverlapping } from "@/lib/recurrence";
 import { getAppSettings } from "@/lib/settings";
 import CalendarClient, { type CalendarEvent, type SharedEvent } from "./calendar/CalendarClient";
 import { NowProvider } from "./calendar/NowContext";
@@ -96,7 +96,7 @@ export default async function Page(props: PageProps<"/">) {
         // missed entirely at the query level, before rendering even
         // gets a chance to draw it.
         { start: { lt: to }, end: { gt: from } },
-        { recurrenceRule: { not: null } },
+        recurringOverlapping(from, to),
       ],
     },
     include: { task: { include: { project: true } } },
@@ -163,16 +163,17 @@ export default async function Page(props: PageProps<"/">) {
                 userId: share.ownerId,
                 OR: [
                   { start: { lt: to }, end: { gt: from } },
-                  { recurrenceRule: { not: null } },
+                  recurringOverlapping(from, to),
                 ],
               },
             });
             const ownerLabel = share.owner.name ?? share.owner.email;
+            const allDayById = new Map(ownerRows.map((r) => [r.id, r.allDay]));
             return expandEvents(ownerRows, from, to).map((o) => ({
               id: `${share.ownerId}:${o.id}`,
               start: o.start,
               end: o.end,
-              allDay: ownerRows.find((r) => r.id === o.masterId)?.allDay ?? false,
+              allDay: allDayById.get(o.masterId) ?? false,
               title: share.permission === "FULL_DETAILS" ? o.title : "Busy",
               ownerLabel,
             }));
@@ -230,7 +231,7 @@ export default async function Page(props: PageProps<"/">) {
       userId: user.id,
       OR: [
         { start: { lt: agendaEnd }, end: { gt: agendaStart } },
-        { recurrenceRule: { not: null } },
+        recurringOverlapping(agendaStart, agendaEnd),
       ],
     },
     include: { task: { select: { id: true } } },
@@ -278,7 +279,7 @@ export default async function Page(props: PageProps<"/">) {
     const todayRows = await prisma.event.findMany({
       where: {
         userId: user.id,
-        OR: [{ start: { lt: dayEnd }, end: { gt: dayStart } }, { recurrenceRule: { not: null } }],
+        OR: [{ start: { lt: dayEnd }, end: { gt: dayStart } }, recurringOverlapping(dayStart, dayEnd)],
       },
     });
     todayPlannedMinutes = expandEvents(todayRows, dayStart, dayEnd).reduce(
