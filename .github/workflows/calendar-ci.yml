@@ -49,6 +49,8 @@ jobs:
           cache-dependency-path: calendar/package-lock.json
       - run: npm ci
       - run: npx prisma migrate deploy
+      - name: DB tests (Google sync against a fake API)
+        run: npm run test:db
       - run: npx playwright install --with-deps chromium
       - name: Start dev server
         run: |

@@ -2,8 +2,10 @@ import { google } from "googleapis";
 import { prisma } from "@/lib/prisma";
 import { decryptSecret, encryptSecret } from "@/lib/tokenCrypto";
 
+export const GOOGLE_STATE_COOKIE = "google_oauth_state";
+
 export function getRedirectUri(): string {
-  const base = process.env.APP_URL ?? "http://localhost:3000";
+  const base = (process.env.APP_URL || "http://localhost:3000").replace(/\/+$/, "");
   return `${base}/api/google/callback`;
 }
 
