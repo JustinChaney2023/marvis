@@ -17,6 +17,10 @@ npx prisma migrate dev
 npm run dev
 ```
 
+Tests: `npm test` (unit), and for end-to-end run `E2E_TEST_ROUTES=1 npm run dev`
+in one terminal and `npm run test:e2e` in another (it signs in as
+`e2e@example.com`, creating the account on first run). CI runs both.
+
 Note: `tsc --noEmit` depends on Next's generated route types (`.next/types/`),
 which only exist after `next dev` or `next build` has run at least once on a
 fresh clone — run `npm run dev` (or `npx next typegen`) before typechecking.

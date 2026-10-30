@@ -10,7 +10,8 @@ test.afterEach(async ({ request }) => {
 });
 
 test("create a one-off event via the modal", async ({ page }) => {
-  await page.goto("/?view=week&start=2026-08-17");
+  // New events default to today, so open the current week.
+  await page.goto("/?view=week", { waitUntil: "networkidle" });
   await page.getByRole("button", { name: "+ New event" }).click();
 
   const modal = page.getByRole("dialog");
@@ -20,13 +21,14 @@ test("create a one-off event via the modal", async ({ page }) => {
   await modal.getByRole("button", { name: "Save" }).click();
   await expect(modal).toBeHidden();
 
-  await expect(page.getByText(`${PREFIX} Playwright event`)).toBeVisible();
+  await expect(page.locator("button[data-event]", { hasText: `${PREFIX} Playwright event` }).filter({ visible: true }).first()).toBeVisible();
 });
 
 test("custom weekly repeat shows day toggles and persists on reopen", async ({
   page,
 }) => {
-  await page.goto("/?view=week&start=2026-08-17");
+  // New events default to today, so open the current week.
+  await page.goto("/?view=week", { waitUntil: "networkidle" });
   await page.getByRole("button", { name: "+ New event" }).click();
 
   const modal = page.getByRole("dialog");
@@ -40,7 +42,12 @@ test("custom weekly repeat shows day toggles and persists on reopen", async ({
   await modal.getByRole("button", { name: "Save" }).click();
   await expect(modal).toBeHidden();
 
-  await page.getByText(`${PREFIX} Custom repeat`).first().click();
+  // The series starts today but only repeats Mon/Wed, so its first
+  // occurrence may be next week — look a week ahead.
+  const nextWeek = new Date(Date.now() + 7 * 86_400_000);
+  const ymd = `${nextWeek.getFullYear()}-${String(nextWeek.getMonth() + 1).padStart(2, "0")}-${String(nextWeek.getDate()).padStart(2, "0")}`;
+  await page.goto(`/?view=week&start=${ymd}`, { waitUntil: "networkidle" });
+  await page.locator("button[data-event]", { hasText: `${PREFIX} Custom repeat` }).filter({ visible: true }).first().click();
   const reopened = page.getByRole("dialog");
   await expect(reopened).toBeVisible();
   await expect(
@@ -61,7 +68,8 @@ test("custom weekly repeat shows day toggles and persists on reopen", async ({
 });
 
 test("locked toggle persists on reopen", async ({ page }) => {
-  await page.goto("/?view=week&start=2026-08-17");
+  // New events default to today, so open the current week.
+  await page.goto("/?view=week", { waitUntil: "networkidle" });
   await page.getByRole("button", { name: "+ New event" }).click();
 
   const modal = page.getByRole("dialog");
@@ -75,7 +83,7 @@ test("locked toggle persists on reopen", async ({ page }) => {
   await modal.getByRole("button", { name: "Save" }).click();
   await expect(modal).toBeHidden();
 
-  await page.getByText(`${PREFIX} Locked event`).first().click();
+  await page.locator("button[data-event]", { hasText: `${PREFIX} Locked event` }).filter({ visible: true }).first().click();
   const reopened = page.getByRole("dialog");
   await expect(reopened.getByRole("checkbox", { name: /Locked/ })).toBeChecked();
   await reopened.getByRole("button", { name: "Cancel" }).click();
