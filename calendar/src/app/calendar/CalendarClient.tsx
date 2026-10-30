@@ -1445,9 +1445,16 @@ function MonthCell({
   const visible = events.slice(0, 3);
   const more = events.length - visible.length;
 
+  const router = useRouter();
   const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const t = e.target as HTMLElement;
     if (t.closest("[data-event]") || t.closest("[data-day-link]")) return;
+    // On a phone the cell is too small to tell an event from empty space,
+    // so a tap opens that day instead of starting a new 9am event.
+    if (!window.matchMedia("(min-width: 640px)").matches) {
+      router.push(`/?view=day&start=${dateYMD}`);
+      return;
+    }
     const start = new Date(day);
     start.setHours(9, 0, 0, 0);
     const end = new Date(day);
@@ -1464,7 +1471,7 @@ function MonthCell({
   return (
     <div
       onClick={handleClick}
-      className="flex min-h-[7rem] cursor-pointer flex-col gap-1 bg-surface p-1.5 transition-colors hover:bg-rule-soft"
+      className="flex min-h-[4.5rem] cursor-pointer flex-col gap-1 bg-surface p-1 transition-colors hover:bg-rule-soft sm:min-h-[7rem] sm:p-1.5"
     >
       <Link
         data-day-link
@@ -1473,7 +1480,17 @@ function MonthCell({
       >
         {day.getDate()}
       </Link>
-      <div className="flex flex-col gap-0.5">
+      {/* Phones: a dot per event (titles don't fit a 50px-wide cell). */}
+      {events.length + sharedCount > 0 && (
+        <div className="flex flex-wrap items-center gap-0.5 px-0.5 sm:hidden" aria-label={`${events.length} events`}>
+          {events.slice(0, 4).map((ev) => (
+            <span key={ev.id} className="h-1.5 w-1.5 rounded-full bg-accent" />
+          ))}
+          {sharedCount > 0 && <span className="h-1.5 w-1.5 rounded-full bg-muted" />}
+          {events.length > 4 && <span className="font-mono text-[9px] leading-none text-muted">+{events.length - 4}</span>}
+        </div>
+      )}
+      <div className="hidden flex-col gap-0.5 sm:flex">
         {visible.map((ev) => (
           <button
             data-event
