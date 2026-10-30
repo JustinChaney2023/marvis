@@ -25,6 +25,7 @@ const MONTHS = [
   "december",
 ];
 // "jan", "feb", ... "sept" — May has no short form distinct from its name.
+const MONTH_PATTERN_NO_MAY = "jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?";
 const MONTH_PATTERN = "jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?";
 
 export type ParsedQuickCapture = {
@@ -85,9 +86,13 @@ export function parseQuickCapture(
       ? zonedWallTimeToUtc(d.year, d.month, d.day, hour, minute, timeZone)
       : new Date(d.year, d.month - 1, d.day, hour, minute, 0, 0);
 
-  const take = (re: RegExp): RegExpMatchArray | null => {
+  // `accept` lets a pattern decline a match that isn't really a date/time
+  // (Feb 30, "25pm") so the text stays in the title instead of rolling
+  // over into some other date.
+  const take = (re: RegExp, accept?: (m: RegExpMatchArray) => boolean): RegExpMatchArray | null => {
     const m = text.match(re);
-    if (m) text = removeMatch(text, m);
+    if (!m || (accept && !accept(m))) return null;
+    text = removeMatch(text, m);
     return m;
   };
 
@@ -165,9 +170,22 @@ export function parseQuickCapture(
     date = addDays(today, delta);
   }
   if (!date) {
-    const monthFirst = take(new RegExp(`\\s(?:(?:on|by|due)\\s+)?(${MONTH_PATTERN})\\.? (\\d{1,2})(?:st|nd|rd|th)?(?=\\s)`, "i"));
-    const dayFirst = monthFirst ? null : take(new RegExp(`\\s(?:(?:on|by|due)\\s+)?(\\d{1,2})(?:st|nd|rd|th)? (${MONTH_PATTERN})(?=\\s)`, "i"));
-    const slash = monthFirst || dayFirst ? null : take(/\s(?:(?:on|by|due)\s+)?(\d{1,2})\/(\d{1,2})(?=\s)/);
+    const okMonthFirst = (m: RegExpMatchArray) => isRealDate(monthIndex(m[1]), Number(m[2]));
+    // "may" is also a verb ("ask may 5 people") — only a date after on/by/due.
+    const monthFirst =
+      take(new RegExp(`\\s(?:on|by|due)\\s+(${MONTH_PATTERN})\\.? (\\d{1,2})(?:st|nd|rd|th)?(?=\\s)`, "i"), okMonthFirst) ??
+      take(new RegExp(`\\s(${MONTH_PATTERN_NO_MAY})\\.? (\\d{1,2})(?:st|nd|rd|th)?(?=\\s)`, "i"), okMonthFirst);
+    const dayFirst = monthFirst
+      ? null
+      : take(
+          new RegExp(`\\s(?:(?:on|by|due)\\s+)?(\\d{1,2})(?:st|nd|rd|th)? (${MONTH_PATTERN})(?=\\s)`, "i"),
+          (m) => isRealDate(monthIndex(m[2]), Number(m[1])),
+        );
+    // Not "1/2 of the book".
+    const slash =
+      monthFirst || dayFirst
+        ? null
+        : take(/\s(?:(?:on|by|due)\s+)?(\d{1,2})\/(\d{1,2})(?=\s)(?!\s+of\b)/i, (m) => isRealDate(Number(m[1]), Number(m[2])));
     let month: number | null = null;
     let day: number | null = null;
     if (monthFirst) {
@@ -184,7 +202,10 @@ export function parseQuickCapture(
       // A date already past this year means next year's.
       const thisYear = { year: today.year, month, day };
       const isPast = month < today.month || (month === today.month && day < today.day);
-      date = isPast ? { ...thisYear, year: today.year + 1 } : thisYear;
+      let year = isPast ? today.year + 1 : today.year;
+      // Feb 29 only exists in leap years — take the next one that has it.
+      while (month === 2 && day === 29 && new Date(Date.UTC(year, 1, 29)).getUTCDate() !== 29) year++;
+      date = { ...thisYear, year };
     }
   }
   if (!date && take(/\s(?:tomorrow|tmrw|tmr)(?=\s)/i)) {
@@ -199,7 +220,10 @@ export function parseQuickCapture(
   }
 
   let time: { hour: number; minute: number } | null = null;
-  const meridiem = take(/\s(?:at\s+|@\s*)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)(?=\s)/i);
+  const meridiem = take(
+    /\s(?:at\s+|@\s*)?(\d{1,2})(?::([0-5]\d))?\s*(am|pm)(?=\s)/i,
+    (m) => Number(m[1]) >= 1 && Number(m[1]) <= 12,
+  );
   if (meridiem) {
     let hour = Number(meridiem[1]);
     const ampm = meridiem[3].toLowerCase();
@@ -219,6 +243,9 @@ export function parseQuickCapture(
   let dueAt: Date | null = null;
   if (time) {
     dueAt = toInstant(date ?? today, time.hour, time.minute);
+    // A bare time that's already passed today means tomorrow ("call mom
+    // 3pm" typed at 6pm) — not a task that's overdue the moment it exists.
+    if (!date && dueAt.getTime() < now.getTime()) dueAt = toInstant(addDays(today, 1), time.hour, time.minute);
   } else if (date) {
     dueAt = toInstant(date, dateOnlyHour, 0);
   }
@@ -234,6 +261,12 @@ function weekdayIndex(name: string): number {
 
 function toMinutes(amount: number, unit: string): number {
   return Math.round(unit.toLowerCase().startsWith("h") ? amount * 60 : amount);
+}
+
+/** Month 1–12 / day in range for that month (Feb 29 allowed — year unknown yet). */
+function isRealDate(month: number, day: number): boolean {
+  if (!(month >= 1 && month <= 12) || day < 1) return false;
+  return day <= [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1];
 }
 
 function monthIndex(name: string): number {

@@ -1,8 +1,7 @@
-import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { validateAuthorizeParams } from "@/lib/oauth";
 import { MarkIcon } from "../../icons";
-import Button from "../../ui/Button";
+import ConsentButtons from "./ConsentButtons";
 import { respondToAuthorizationAction } from "./actions";
 
 // The consent screen an MCP client (claude.ai, the Claude apps) sends you
@@ -16,7 +15,6 @@ export default async function AuthorizePage(props: PageProps<"/oauth/authorize">
     if (typeof v === "string") params[k] = v;
   }
   const validated = await validateAuthorizeParams(params);
-  if (!validated.ok && !validated.fatal) redirect(validated.redirectTo);
 
   return (
     <main className="mx-auto flex w-full max-w-sm flex-1 flex-col items-center justify-center px-6 py-12">
@@ -34,21 +32,23 @@ export default async function AuthorizePage(props: PageProps<"/oauth/authorize">
               <li>add, change, complete, and delete tasks and events</li>
               <li>run the auto-scheduler</li>
             </ul>
+            <p className="mt-3 text-sm text-ink-2">
+              Access will be sent to <span className="font-mono font-medium text-ink">{validated.redirectHost}</span>.
+            </p>
+            {!validated.trustedHost && (
+              <p className="mt-2 rounded-lg border border-amber-500/50 bg-amber-500/10 p-2.5 text-xs text-ink-2">
+                <span className="font-medium text-ink">Unverified app.</span> Any app can call itself
+                &ldquo;{validated.clientName}&rdquo;. Only allow this if you just started connecting Season from{" "}
+                <span className="font-mono">{validated.redirectHost}</span> yourself.
+              </p>
+            )}
             <p className="mt-3 text-xs text-muted">
               You can disconnect it any time in Settings → Claude.
             </p>
-            <div className="mt-5 flex gap-2">
-              <form action={respondToAuthorizationAction.bind(null, params, false)} className="flex-1">
-                <Button type="submit" variant="outline" className="w-full">
-                  Cancel
-                </Button>
-              </form>
-              <form action={respondToAuthorizationAction.bind(null, params, true)} className="flex-1">
-                <Button type="submit" className="w-full">
-                  Allow
-                </Button>
-              </form>
-            </div>
+            <ConsentButtons
+              onAllow={respondToAuthorizationAction.bind(null, params, true)}
+              onCancel={respondToAuthorizationAction.bind(null, params, false)}
+            />
           </>
         ) : (
           <>

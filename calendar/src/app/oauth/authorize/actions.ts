@@ -9,9 +9,6 @@ import { approveAuthorization, denialRedirect, validateAuthorizeParams } from "@
 export async function respondToAuthorizationAction(params: Record<string, string>, approved: boolean) {
   const user = await requireUser();
   const validated = await validateAuthorizeParams(params);
-  if (!validated.ok) {
-    if (validated.fatal) throw new Error(validated.message);
-    redirect(validated.redirectTo);
-  }
+  if (!validated.ok) throw new Error(validated.message);
   redirect(approved ? await approveAuthorization(user.id, validated.request) : denialRedirect(validated.request));
 }

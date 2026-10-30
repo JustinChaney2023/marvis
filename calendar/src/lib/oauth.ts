@@ -118,38 +118,49 @@ export type AuthorizeRequest = {
 };
 
 export type ValidatedAuthorize =
-  | { ok: true; request: AuthorizeRequest; clientName: string }
-  // Errors that must NOT redirect (unknown client / redirect URI — the
-  // spec forbids bouncing to an unverified URI).
-  | { ok: false; fatal: true; message: string }
-  // Errors reported back to the (verified) redirect URI.
-  | { ok: false; fatal: false; redirectTo: string };
+  | {
+      ok: true;
+      request: AuthorizeRequest;
+      clientName: string;
+      // Where the code goes — shown on the consent screen, since the
+      // client name is self-chosen at open registration and proves nothing.
+      redirectHost: string;
+      // claude.ai / claude.com, or a loopback app on this computer.
+      trustedHost: boolean;
+    }
+  // Every error renders on Season's own page. Bouncing errors back to the
+  // redirect URI (as the spec allows) would make /oauth/authorize an open
+  // redirect, since anyone can register any redirect URI.
+  | { ok: false; message: string };
+
+const KNOWN_CLIENT_HOSTS = ["claude.ai", "claude.com"];
+
+function isTrustedRedirectHost(url: URL): boolean {
+  const host = url.hostname;
+  if (host === "localhost" || host === "127.0.0.1" || host === "[::1]") return true;
+  return KNOWN_CLIENT_HOSTS.some((h) => host === h || host.endsWith(`.${h}`));
+}
 
 export async function validateAuthorizeParams(params: Record<string, string | undefined>): Promise<ValidatedAuthorize> {
   const clientId = params.client_id ?? "";
   const redirectUri = params.redirect_uri ?? "";
   const client = clientId ? await prisma.oAuthClient.findUnique({ where: { clientId } }) : null;
-  if (!client) return { ok: false, fatal: true, message: "Unknown application." };
+  if (!client) return { ok: false, message: "Unknown application." };
   const registered: string[] = JSON.parse(client.redirectUris);
   if (!registered.includes(redirectUri)) {
-    return { ok: false, fatal: true, message: "That redirect address isn't registered for this application." };
+    return { ok: false, message: "That redirect address isn't registered for this application." };
   }
-  const state = params.state ?? null;
-  const fail = (error: string, description: string) => {
-    const url = new URL(redirectUri);
-    url.searchParams.set("error", error);
-    url.searchParams.set("error_description", description);
-    if (state) url.searchParams.set("state", state);
-    return { ok: false as const, fatal: false as const, redirectTo: url.toString() };
-  };
-  if (params.response_type !== "code") return fail("unsupported_response_type", "Only response_type=code is supported.");
+  if (params.response_type !== "code") return { ok: false, message: "Unsupported request (response_type must be code)." };
   if (!params.code_challenge || params.code_challenge_method !== "S256") {
-    return fail("invalid_request", "PKCE with code_challenge_method=S256 is required.");
+    return { ok: false, message: "This application didn't use PKCE (S256), which Season requires." };
   }
+  const url = new URL(redirectUri);
   return {
     ok: true,
     clientName: client.name,
-    request: { clientId, redirectUri, state, codeChallenge: params.code_challenge },
+    redirectHost: url.host,
+    trustedHost: isTrustedRedirectHost(url),
+    request: { clientId, redirectUri, state: params.state ?? null, codeChallenge: params.code_challenge },
   };
 }
 

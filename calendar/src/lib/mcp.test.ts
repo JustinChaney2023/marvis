@@ -81,6 +81,8 @@ async function main() {
   assert.equal(parseUserTime("2026-07-01T09:30", tz).toISOString(), "2026-07-01T14:30:00.000Z");
   assert.equal(parseUserTime("2026-07-01T09:30:00Z", tz).toISOString(), "2026-07-01T09:30:00.000Z");
   assert.throws(() => parseUserTime("next tuesday-ish", tz));
+  assert.throws(() => parseUserTime("2026-02-30", tz));
+  assert.throws(() => parseUserTime("2026-02-10T25:00", tz));
 
   console.log("mcp.test.ts: all checks passed");
 }
