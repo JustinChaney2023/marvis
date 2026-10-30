@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { google } from "googleapis";
 import { prisma } from "@/lib/prisma";
-import { createOAuthClient } from "@/lib/google-auth";
+import { createOAuthClient, GOOGLE_STATE_COOKIE } from "@/lib/google-auth";
+import { appOrigin } from "@/lib/oauth";
 import { requireUser } from "@/lib/auth";
 import { encryptSecret } from "@/lib/tokenCrypto";
 
@@ -14,11 +15,21 @@ export async function GET(request: NextRequest) {
   const user = await requireUser();
   const code = request.nextUrl.searchParams.get("code");
   const error = request.nextUrl.searchParams.get("error");
-  const settingsUrl = new URL("/settings", request.nextUrl.origin);
+  const settingsUrl = new URL("/settings?tab=calendars", appOrigin(request));
+  const done = (res: NextResponse) => {
+    res.cookies.delete({ name: GOOGLE_STATE_COOKIE, path: "/api/google/callback" });
+    return res;
+  };
 
   if (error || !code) {
     settingsUrl.searchParams.set("google_error", error ?? "missing_code");
-    return NextResponse.redirect(settingsUrl);
+    return done(NextResponse.redirect(settingsUrl));
+  }
+  // Must match the state /api/google/connect set in this browser (see there).
+  const expectedState = request.cookies.get(GOOGLE_STATE_COOKIE)?.value;
+  if (!expectedState || request.nextUrl.searchParams.get("state") !== expectedState) {
+    settingsUrl.searchParams.set("google_error", "That sign-in link didn't start here — try Connect again.");
+    return done(NextResponse.redirect(settingsUrl));
   }
 
   try {
@@ -58,13 +69,13 @@ export async function GET(request: NextRequest) {
     });
 
     settingsUrl.searchParams.set("google_connected", "1");
-    return NextResponse.redirect(settingsUrl);
+    return done(NextResponse.redirect(settingsUrl));
   } catch (err) {
     console.error("Google OAuth callback failed:", err);
     settingsUrl.searchParams.set(
       "google_error",
       err instanceof Error ? err.message : "unknown_error",
     );
-    return NextResponse.redirect(settingsUrl);
+    return done(NextResponse.redirect(settingsUrl));
   }
 }

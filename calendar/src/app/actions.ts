@@ -1555,6 +1555,18 @@ export async function updateEvent(
     }
   }
 
+  // Once an event lives on a Google calendar it stays tied to that
+  // account — re-pointing it (or clearing it, which the modal does when it
+  // hides the picker for single-account users) made the next import
+  // create a second copy, or export to an account that 404s and deletes it.
+  const linked = await prisma.event.findFirst({
+    where: { id: eventId, userId: user.id },
+    select: { googleEventId: true },
+  });
+  const accountUpdate = linked?.googleEventId
+    ? {}
+    : { googleAccountId: await googleAccountIdFromFormData(formData, user.id) };
+
   const { count } = await prisma.event.updateMany({
     where: { id: eventId, userId: user.id },
     data: {
@@ -1570,7 +1582,7 @@ export async function updateEvent(
       eventType: eventTypeFromFormData(formData),
       allDay: allDayFromFormData(formData),
       reminderMinutes: reminderMinutesFromFormData(formData),
-      googleAccountId: await googleAccountIdFromFormData(formData, user.id),
+      ...accountUpdate,
       localDirty: true,
     },
   });
@@ -1655,7 +1667,7 @@ export async function updateEventOccurrence(
     }),
     prisma.event.update({
       where: { id: masterId },
-      data: { excludeDates: withExcludedStart(master.excludeDates, normalizedOriginalStart) },
+      data: { excludeDates: withExcludedStart(master.excludeDates, normalizedOriginalStart), localDirty: true },
     }),
   ]);
 
@@ -1753,14 +1765,14 @@ export async function updateEventFollowing(
     await Promise.all([
       tx.event.update({
         where: { id: masterId },
-        data: { recurrenceEndsBefore: splitPoint },
+        data: { recurrenceEndsBefore: splitPoint, localDirty: true },
       }),
       tx.event.updateMany({
         where: { id: { in: movingExceptions.map((e) => e.id) } },
         data: { recurrenceExceptionOfId: newMaster.id },
       }),
       newExcludeDates
-        ? tx.event.update({ where: { id: newMaster.id }, data: { excludeDates: newExcludeDates } })
+        ? tx.event.update({ where: { id: newMaster.id }, data: { excludeDates: newExcludeDates, localDirty: true } })
         : Promise.resolve(),
     ]);
   });
@@ -1780,7 +1792,7 @@ export async function deleteEventOccurrence(masterId: string, originalStartIso: 
 
   await prisma.event.update({
     where: { id: masterId },
-    data: { excludeDates: withExcludedStart(master.excludeDates, normalizedOriginalStart) },
+    data: { excludeDates: withExcludedStart(master.excludeDates, normalizedOriginalStart), localDirty: true },
   });
   revalidatePath("/");
 }
@@ -1809,7 +1821,7 @@ export async function deleteEventFollowing(masterId: string, originalStartIso: s
 
   await prisma.event.update({
     where: { id: masterId },
-    data: { recurrenceEndsBefore: splitPoint },
+    data: { recurrenceEndsBefore: splitPoint, localDirty: true },
   });
   revalidatePath("/");
 }
@@ -2016,7 +2028,7 @@ export async function syncGoogleCalendarAction() {
 // so it isn't hammering the Google API on every poll tick.
 const GOOGLE_AUTO_SYNC_INTERVAL_MS = 10 * 60 * 1000;
 
-export async function syncGoogleCalendarIfDueAction(): Promise<{ synced: boolean }> {
+export async function syncGoogleCalendarIfDueAction(): Promise<{ synced: boolean; errors?: string[] }> {
   const user = await requireUser();
   const accounts = await prisma.googleAccount.findMany({ where: { userId: user.id } });
   if (accounts.length === 0) return { synced: false };
@@ -2028,11 +2040,11 @@ export async function syncGoogleCalendarIfDueAction(): Promise<{ synced: boolean
   );
   if (!due) return { synced: false };
 
-  await syncGoogleCalendar(user.id);
+  const result = await syncGoogleCalendar(user.id);
   revalidatePath("/");
   revalidatePath("/tasks");
   revalidatePath("/settings");
-  return { synced: true };
+  return { synced: true, errors: result.errors };
 }
 
 /** Disconnects one specific Google account (not all of a user's accounts). */
@@ -2042,6 +2054,15 @@ export async function disconnectGoogleAction(googleAccountId: string) {
     where: { id: googleAccountId, userId: user.id },
   });
   if (!account) return;
+  // Events pulled from this Google account are Google's copies — they go
+  // with it (reconnecting re-imports them cleanly instead of duplicating).
+  // Season's own events keep living here, unlinked, and export fresh to
+  // whichever account is default next.
+  await prisma.event.deleteMany({ where: { googleAccountId: account.id, source: "GOOGLE" } });
+  await prisma.event.updateMany({
+    where: { googleAccountId: account.id },
+    data: { googleAccountId: null, googleEventId: null, googleUpdatedAt: null, localDirty: true },
+  });
   await prisma.googleAccount.delete({ where: { id: account.id } });
   if (account.isDefault) {
     // Keep the "exactly one default, if any account exists" invariant —
@@ -2093,10 +2114,17 @@ export async function listGoogleAccountCalendarsAction(googleAccountId: string) 
 export async function setGoogleAccountCalendarAction(googleAccountId: string, calendarId: string) {
   const user = await requireUser();
   if (!calendarId.trim()) return;
-  await prisma.googleAccount.updateMany({
-    where: { id: googleAccountId, userId: user.id },
-    data: { calendarId: calendarId.trim() },
+  const account = await prisma.googleAccount.findFirst({ where: { id: googleAccountId, userId: user.id } });
+  if (!account || account.calendarId === calendarId.trim()) return;
+  // Switching calendars: the old calendar's imported copies go, and
+  // Season's own events re-export into the new calendar (their old
+  // googleEventIds belong to the previous calendar and would 404).
+  await prisma.event.deleteMany({ where: { googleAccountId: account.id, source: "GOOGLE" } });
+  await prisma.event.updateMany({
+    where: { googleAccountId: account.id },
+    data: { googleEventId: null, googleUpdatedAt: null, localDirty: true },
   });
+  await prisma.googleAccount.update({ where: { id: account.id }, data: { calendarId: calendarId.trim(), lastSyncedAt: null } });
   revalidatePath("/settings");
 }
 

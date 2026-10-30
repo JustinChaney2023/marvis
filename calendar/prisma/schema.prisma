@@ -1017,3 +1017,17 @@ model ServerSecret {
   value     String
   createdAt DateTime @default(now())
 }
+
+// A Google-linked Event deleted locally, waiting for the next sync to
+// delete its Google copy (src/lib/google-sync.ts). Recorded automatically
+// for every event delete (src/lib/prisma.ts), so code paths that remove
+// task blocks wholesale — rescheduling, task/habit deletion, Claude —
+// can't leave orphans on Google that the next import would bring back.
+model GoogleDeletion {
+  id              String   @id @default(cuid())
+  googleAccountId String
+  googleEventId   String
+  createdAt       DateTime @default(now())
+
+  @@unique([googleAccountId, googleEventId])
+}

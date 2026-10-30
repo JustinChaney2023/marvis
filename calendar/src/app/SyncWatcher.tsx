@@ -3,6 +3,11 @@
 import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { syncGoogleCalendarIfDueAction, syncCalendarSubscriptionsIfDueAction } from "./actions";
+import { showToast } from "./toast";
+
+// Background sync failures (a revoked Google grant, say) used to retry
+// silently forever. Say so once per tab session, pointing at Settings.
+let warnedAboutSync = false;
 
 // Checks every 2 minutes; the action itself only actually syncs with
 // Google if it's been 10+ minutes since the last one (see
@@ -37,6 +42,13 @@ export default function SyncWatcher() {
           syncCalendarSubscriptionsIfDueAction(),
         ]);
         if (!cancelled && (google.synced || subscriptions.synced)) router.refresh();
+        if (!cancelled && !warnedAboutSync && google.errors && google.errors.length > 0) {
+          warnedAboutSync = true;
+          showToast({
+            message: `Google Calendar sync had a problem: ${google.errors[0]}`,
+            action: { label: "Settings", onClick: () => router.push("/settings?tab=calendars") },
+          });
+        }
       } catch (err) {
         console.error(err);
       }
