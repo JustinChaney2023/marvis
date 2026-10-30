@@ -367,8 +367,18 @@ export default async function Home(props: PageProps<"/tasks">) {
             />
           ))}
           {tasks.length === 0 && (
-            <li className="col-span-full rounded-xl border border-dashed border-rule py-8 text-center text-sm text-muted">
-              No open tasks.
+            <li className="col-span-full rounded-xl border border-dashed border-rule px-4 py-8 text-center text-sm text-muted">
+              {searchQuery ? (
+                <>No open tasks match “{searchQuery}”.</>
+              ) : (
+                <>
+                  <p className="font-medium text-ink-2">All clear.</p>
+                  <p className="mt-1">
+                    Type into the box above — like <code className="font-mono text-ink-2">read ch. 4 fri 1h</code> —
+                    or press <kbd>c</kbd> anywhere. Press <kbd>?</kbd> for all the shorthand.
+                  </p>
+                </>
+              )}
             </li>
           )}
         </ul>

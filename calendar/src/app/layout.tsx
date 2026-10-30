@@ -10,6 +10,7 @@ import TimezoneSync from "./TimezoneSync";
 import MeetingBanner from "./MeetingBanner";
 import SideRail from "./SideRail";
 import MobileNav from "./MobileNav";
+import Toaster from "./Toaster";
 
 // Runs before paint so there's no flash of the wrong theme. Kept as a
 // plain string (not a .ts file) since it needs to execute inline, before
@@ -87,6 +88,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           </div>
         </div>
         <MobileNav />
+        <Toaster />
         <QuickCapture />
         <ShortcutsHelp />
         <NotificationWatcher />
