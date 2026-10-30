@@ -56,6 +56,7 @@ model User {
   calendarSubscriptions   CalendarSubscription[]
   personalAccessTokens    PersonalAccessToken[]
   oauthCodes              OAuthAuthorizationCode[]
+  pushSubscriptions       PushSubscription[]
   recordings              Recording[]
 }
 
@@ -983,4 +984,35 @@ model OAuthAuthorizationCode {
   codeChallenge String
   expiresAt     DateTime
   createdAt     DateTime    @default(now())
+}
+
+// Web Push (src/lib/push.ts) — reminders that reach a phone even when
+// Season isn't open. One row per browser/device that opted in.
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  // Shown in Settings so you can tell your phone from your laptop.
+  label     String?
+  createdAt DateTime @default(now())
+}
+
+// Dedupe log for the push loop: one row per reminder already sent
+// (e.g. "event:<occurrence id>" or "task-due:<id>:<dueAt>"), so a restart
+// or overlapping tick never notifies twice. Old rows are swept.
+model PushDelivery {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  createdAt DateTime @default(now())
+}
+
+// Small server-generated secrets that must survive restarts — currently
+// the VAPID key pair Web Push needs (generated on first use).
+model ServerSecret {
+  key       String   @id
+  value     String
+  createdAt DateTime @default(now())
 }

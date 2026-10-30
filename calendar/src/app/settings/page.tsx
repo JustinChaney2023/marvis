@@ -18,6 +18,7 @@ import CalendarSharingManager from "./CalendarSharingManager";
 import IcsImportForm from "./IcsImportForm";
 import CalendarSubscriptionsManager from "./CalendarSubscriptionsManager";
 import ApiTokensManager from "./ApiTokensManager";
+import PushNotificationsManager from "./PushNotificationsManager";
 import AutomationRulesManager from "./AutomationRulesManager";
 import HabitsManager from "./HabitsManager";
 import TimeSlotsManager from "./TimeSlotsManager";
@@ -561,6 +562,22 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
         </div>
       </section>
               </>
+            ),
+          },
+          {
+            key: "notifications",
+            label: "Notifications",
+            content: (
+              <section className="mt-6 rounded-xl border border-rule bg-surface p-5">
+                <h2 className="font-serif text-xl text-ink">Notifications</h2>
+                <p className="mt-1 text-xs text-muted">
+                  Reminders before your events (each event&apos;s own reminder time) and a heads-up an hour
+                  before an unscheduled task is due — delivered even when Season isn&apos;t open.
+                </p>
+                <div className="mt-3">
+                  <PushNotificationsManager />
+                </div>
+              </section>
             ),
           },
           {

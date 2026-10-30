@@ -39,6 +39,14 @@ placement creates/updates the linked `Event` and flips the task to
 `SCHEDULED`. "Schedule all" runs this over every open task sequentially, so
 earlier (more urgent) tasks claim the better slots.
 
+## Phone app & notifications
+
+Season is an installable web app: open it on your phone and use "Add to Home
+Screen" (iPhone: Share → Add to Home Screen). Settings → Notifications turns on
+push reminders per device — event reminders and a heads-up an hour before an
+unscheduled task is due — sent by a once-a-minute loop in the server process
+(`src/lib/push.ts`, started from `src/instrumentation.ts`).
+
 ## Claude (MCP)
 
 Season runs an MCP server at `/api/mcp` so Claude can see your agenda, add and

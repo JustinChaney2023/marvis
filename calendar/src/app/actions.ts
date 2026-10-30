@@ -38,6 +38,7 @@ import {
 } from "@/lib/hardware";
 import { createBooking, getAvailableBookingSlots } from "@/lib/booking";
 import { maybeApplyTimezoneChange } from "@/lib/serverTimezone";
+import { getVapidKeys, sendPushToUser } from "@/lib/push";
 import { setTaskDone, stoppedTimerFields, logTrackedTime, findProjectByName } from "@/lib/taskOps";
 import { generateSubtasks, type GenerateSubtasksResult } from "@/lib/subtaskGenerate";
 import { generateEmailDraft, type DraftEmailResult } from "@/lib/emailDraft";
@@ -2737,4 +2738,54 @@ export async function revokeApiTokenAction(tokenId: string) {
   const user = await requireUser();
   await prisma.personalAccessToken.deleteMany({ where: { id: tokenId, userId: user.id } });
   revalidatePath("/settings");
+}
+
+// ---------------------------------------------------------------------------
+// Web Push opt-in (Settings → Notifications; see src/lib/push.ts)
+
+export async function getPushPublicKeyAction(): Promise<string> {
+  await requireUser();
+  return (await getVapidKeys()).publicKey;
+}
+
+export async function listPushDevicesAction() {
+  const user = await requireUser();
+  return prisma.pushSubscription.findMany({
+    where: { userId: user.id },
+    select: { id: true, label: true, createdAt: true, endpoint: true },
+    orderBy: { createdAt: "asc" },
+  });
+}
+
+export async function savePushSubscriptionAction(
+  sub: { endpoint: string; keys: { p256dh: string; auth: string } },
+  label: string,
+) {
+  const user = await requireUser();
+  if (!sub?.endpoint?.startsWith("https://") || !sub.keys?.p256dh || !sub.keys?.auth) {
+    throw new Error("Invalid push subscription.");
+  }
+  // Endpoint is unique per browser install — re-enabling on the same
+  // device (or a different account on it) just takes the row over.
+  const data = { userId: user.id, p256dh: sub.keys.p256dh, auth: sub.keys.auth, label: label.slice(0, 60) || null };
+  await prisma.pushSubscription.upsert({
+    where: { endpoint: sub.endpoint },
+    update: data,
+    create: { ...data, endpoint: sub.endpoint },
+  });
+}
+
+export async function removePushSubscriptionAction(id: string) {
+  const user = await requireUser();
+  await prisma.pushSubscription.deleteMany({ where: { id, userId: user.id } });
+}
+
+export async function sendTestPushAction(): Promise<number> {
+  const user = await requireUser();
+  return sendPushToUser(user.id, {
+    title: "Season notifications are on",
+    body: "You'll get event reminders and a heads-up before unscheduled tasks come due.",
+    url: "/",
+    tag: "test",
+  });
 }

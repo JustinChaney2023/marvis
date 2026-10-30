@@ -44,6 +44,16 @@ function getServerSnapshot(): NotificationPermission {
   return "denied";
 }
 
+async function hasPushSubscription(): Promise<boolean> {
+  try {
+    if (!("serviceWorker" in navigator)) return false;
+    const reg = await navigator.serviceWorker.getRegistration("/sw.js");
+    return Boolean(await reg?.pushManager.getSubscription());
+  } catch {
+    return false;
+  }
+}
+
 export default function NotificationWatcher() {
   const permission = useSyncExternalStore(
     subscribe,
@@ -64,7 +74,10 @@ export default function NotificationWatcher() {
         // The server only returns occurrences whose own per-event
         // reminderMinutes has already come due — nothing left to
         // threshold-check here, just dedup against what's already fired.
-        const upcoming = await getUpcomingEventReminders();
+        // With Web Push on for this browser (Settings → Notifications) the
+        // server already sends event reminders — don't double up.
+        const pushOn = await hasPushSubscription();
+        const upcoming = pushOn ? [] : await getUpcomingEventReminders();
         const now = Date.now();
         for (const occ of upcoming) {
           if (notifiedIds.current.has(occ.id)) continue;
@@ -100,7 +113,7 @@ export default function NotificationWatcher() {
         await Notification.requestPermission();
         forceRecheck();
       }}
-      className="fixed bottom-4 right-4 z-40 rounded-full border border-rule bg-surface px-3 py-1.5 text-xs font-medium text-ink-2 transition-colors hover:bg-rule-soft print:hidden"
+      className="fixed right-4 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-40 rounded-full md:bottom-4 border border-rule bg-surface px-3 py-1.5 text-xs font-medium text-ink-2 transition-colors hover:bg-rule-soft print:hidden"
     >
       Enable reminders
     </button>
