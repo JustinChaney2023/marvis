@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { createApiTokenAction, revokeApiTokenAction } from "../actions";
 import Button from "../ui/Button";
 
@@ -58,14 +58,7 @@ export default function ApiTokensManager({ tokens }: { tokens: ApiToken[] }) {
           </button>
         </div>
       )}
-      {!revealedToken && (
-        <p className="text-xs text-muted">
-          <span className="font-medium text-ink-2">Connect Claude:</span> create a token
-          (e.g. &ldquo;Claude&rdquo;) and Season will show the exact setup for Claude Code,
-          Claude Desktop, and claude.ai — Claude can then see your agenda, add and
-          complete tasks, and run the auto-scheduler.
-        </p>
-      )}
+      <ConnectClaudeOAuth />
 
       {tokens.length > 0 && (
         <ul className="flex flex-col gap-1.5">
@@ -120,8 +113,46 @@ export default function ApiTokensManager({ tokens }: { tokens: ApiToken[] }) {
   );
 }
 
-// Setup snippets for Season's MCP server (src/lib/mcp.ts), filled in with
-// the just-created token since that's the only moment it's visible.
+// The easy path: every current Claude client speaks MCP OAuth, so the
+// URL alone is enough — Claude opens Season's "Allow" screen and the
+// resulting token appears in the list above like any other.
+const noopSubscribe = () => () => {};
+
+function ConnectClaudeOAuth() {
+  // Server render has no window — "" there, the real origin once hydrated,
+  // without a hydration mismatch.
+  const origin = useSyncExternalStore(noopSubscribe, () => window.location.origin, () => "");
+  const url = `${origin}/api/mcp`;
+  return (
+    <div className="rounded-lg border border-rule bg-paper p-3 text-xs text-ink-2">
+      <p className="font-medium text-ink">Connect Claude</p>
+      <p className="mt-1 text-muted">
+        Add Season as a connector with this URL, then click <em>Allow</em> when Season asks. Claude can then see
+        your agenda, add and complete tasks, and run the auto-scheduler.
+      </p>
+      <div className="mt-2">
+        <CopyBlock value={url} />
+      </div>
+      <ul className="mt-2 flex flex-col gap-0.5 text-muted">
+        <li>
+          <span className="text-ink-2">claude.ai / Claude apps:</span> Settings → Connectors → Add custom connector
+        </li>
+        <li>
+          <span className="text-ink-2">Claude Code:</span>{" "}
+          <code className="font-mono">claude mcp add --transport http season {url}</code>, then run{" "}
+          <code className="font-mono">/mcp</code> to sign in
+        </li>
+      </ul>
+      <p className="mt-2 text-muted">
+        claude.ai connects from the internet, so Season must be publicly reachable for it — localhost only works
+        with Claude Code / Claude Desktop on this machine.
+      </p>
+    </div>
+  );
+}
+
+// Token-based alternatives for clients without OAuth support, filled in
+// with the just-created token since that's the only moment it's visible.
 function ConnectClaude({ token }: { token: string }) {
   const origin = typeof window === "undefined" ? "" : window.location.origin;
   const url = `${origin}/api/mcp`;
@@ -131,7 +162,7 @@ function ConnectClaude({ token }: { token: string }) {
       value: `claude mcp add --transport http season ${url} --header "Authorization: Bearer ${token}"`,
     },
     {
-      label: "claude.ai / Claude app (Settings → Connectors → Add custom connector)",
+      label: "URL-only clients (token in the URL — keep it private)",
       value: `${url}/${token}`,
     },
     {
@@ -145,7 +176,7 @@ function ConnectClaude({ token }: { token: string }) {
   ];
   return (
     <details className="mt-3 text-xs text-ink-2">
-      <summary className="cursor-pointer font-medium text-accent">Use this token to connect Claude</summary>
+      <summary className="cursor-pointer font-medium text-accent">Use this token with a client that can&apos;t do OAuth</summary>
       <div className="mt-2 flex flex-col gap-2">
         {snippets.map((s) => (
           <div key={s.label}>

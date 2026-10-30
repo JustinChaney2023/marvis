@@ -15,7 +15,7 @@ const LIVE_EVENT_POLL_MS = 30_000;
 
 // Public/pre-auth routes render their own minimal chrome, so the app nav
 // and settings/feedback icons (which assume a logged-in user) stay hidden.
-export const HIDDEN_CHROME_PREFIXES = ["/login", "/signup", "/forgot-password", "/reset-password", "/book/", "/rsvp/"];
+export const HIDDEN_CHROME_PREFIXES = ["/login", "/signup", "/forgot-password", "/reset-password", "/book/", "/rsvp/", "/oauth/"];
 
 // Keep in sync with package.json's "version" — duplicated rather than
 // imported so this client bundle doesn't pull in the whole package.json

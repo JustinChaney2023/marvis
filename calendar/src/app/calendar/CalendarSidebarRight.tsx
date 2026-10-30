@@ -110,7 +110,7 @@ export default function CalendarSidebarRight({
             {tasks.map((t) => (
               <li key={t.id}>
                 <Link
-                  href="/tasks"
+                  href={`/tasks?edit=${t.id}`}
                   className="flex items-start gap-1.5 rounded-lg px-1.5 py-1 text-xs transition-colors hover:bg-rule-soft"
                 >
                   <AlertTriangleIcon
@@ -192,5 +192,45 @@ export default function CalendarSidebarRight({
         </div>
       </Card>
     </div>
+  );
+}
+
+/**
+ * The sidebar's "Needs attention" list squeezed into one collapsible line
+ * for screens too narrow for the right rail (below xl) — otherwise phones
+ * never see overdue work from the calendar at all.
+ */
+export function AttentionStrip({ tasks }: { tasks: AttentionTask[] }) {
+  if (tasks.length === 0) return null;
+  const overdue = tasks.filter((t) => t.isOverdue).length;
+  return (
+    <details className="rounded-xl border border-rule bg-surface px-3 py-2 text-sm">
+      <summary className="flex cursor-pointer list-none items-center gap-2 text-ink-2">
+        <AlertTriangleIcon className={`h-3.5 w-3.5 ${overdue > 0 ? "text-accent" : "text-muted"}`} />
+        <span className="font-medium text-ink">Needs attention</span>
+        <span className="text-xs text-muted">
+          {overdue > 0 ? `${overdue} overdue` : ""}
+          {overdue > 0 && tasks.length > overdue ? " · " : ""}
+          {tasks.length > overdue ? `${tasks.length - overdue} due soon` : ""}
+        </span>
+        <span className="ml-auto text-xs text-muted">Show</span>
+      </summary>
+      <ul className="mt-2 flex flex-col gap-1 border-t border-rule pt-2">
+        {tasks.map((t) => (
+          <li key={t.id}>
+            <Link
+              href={`/tasks?edit=${t.id}`}
+              className="flex items-center justify-between gap-2 rounded-lg px-1.5 py-1.5 text-xs hover:bg-rule-soft"
+            >
+              <span className="min-w-0 truncate font-medium text-ink-2">{t.title}</span>
+              <span className={`flex-shrink-0 font-mono ${t.isOverdue ? "text-accent" : "text-muted"}`}>
+                {t.isOverdue ? "Overdue" : "Due"}{" "}
+                {t.dueAt.toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </details>
   );
 }

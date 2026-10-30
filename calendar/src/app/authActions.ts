@@ -88,10 +88,18 @@ export async function signupAction(formData: FormData) {
   redirect("/");
 }
 
+// Only same-site paths — "next" round-trips through the URL, so without
+// this "/login?next=https://evil.example" would bounce a fresh login
+// straight off-site. "//host" and "/\\host" are protocol-relative too.
+function safeNextPath(raw: string): string {
+  if (!raw.startsWith("/") || raw.startsWith("//") || raw.startsWith("/\\")) return "/";
+  return raw;
+}
+
 export async function loginAction(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const password = String(formData.get("password") ?? "");
-  const next = String(formData.get("next") ?? "/");
+  const next = safeNextPath(String(formData.get("next") ?? "/"));
 
   if (isLoginRateLimited(await requestIp())) {
     redirect(

@@ -29,6 +29,12 @@ const PUBLIC_PATH_PREFIXES = [
   "/api/v1/",
   "/api/mcp",
   "/manifest.webmanifest",
+  // OAuth for MCP clients: discovery metadata, client registration, and
+  // the code->token exchange are called server-to-server with no cookie.
+  // (/oauth/authorize is deliberately NOT here — it needs a login.)
+  "/.well-known/",
+  "/oauth/register",
+  "/oauth/token",
   "/icon",
   "/apple-icon",
 ];
@@ -46,7 +52,9 @@ export function proxy(request: NextRequest) {
   if (hasSessionCookie) return NextResponse.next();
 
   const loginUrl = new URL("/login", request.url);
-  loginUrl.searchParams.set("next", pathname);
+  // Keep the query string — /oauth/authorize?client_id=...&state=... has
+  // to come back intact after signing in.
+  loginUrl.searchParams.set("next", pathname + request.nextUrl.search);
   return NextResponse.redirect(loginUrl);
 }
 
