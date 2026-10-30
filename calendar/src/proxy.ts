@@ -16,7 +16,10 @@ import type { NextRequest } from "next/server";
 // page's cookies, so without this exemption every afterEach cleanup
 // call was silently redirecting to /login and never actually running —
 // a real, no-op-but-looks-successful gap this proxy check created.
-const PUBLIC_PATH_PREFIXES = ["/book/", "/login", "/signup", "/api/test/"];
+// /api/v1/ and /api/mcp authenticate with a Bearer personal access token
+// (requireApiUser), never a session cookie — redirecting them to /login
+// here meant no API client could ever reach them.
+const PUBLIC_PATH_PREFIXES = ["/book/", "/login", "/signup", "/api/test/", "/api/v1/", "/api/mcp"];
 const SESSION_COOKIE = "marvis_session";
 
 function isPublicPath(pathname: string): boolean {

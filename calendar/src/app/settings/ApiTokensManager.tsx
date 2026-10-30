@@ -48,6 +48,7 @@ export default function ApiTokensManager({ tokens }: { tokens: ApiToken[] }) {
           <code className="mt-1.5 block overflow-x-auto rounded bg-surface px-2 py-1.5 text-xs text-ink">
             {revealedToken}
           </code>
+          <ConnectClaude token={revealedToken} />
           <button
             type="button"
             onClick={() => setRevealedToken(null)}
@@ -56,6 +57,14 @@ export default function ApiTokensManager({ tokens }: { tokens: ApiToken[] }) {
             Done, dismiss
           </button>
         </div>
+      )}
+      {!revealedToken && (
+        <p className="text-xs text-muted">
+          <span className="font-medium text-ink-2">Connect Claude:</span> create a token
+          (e.g. &ldquo;Claude&rdquo;) and Season will show the exact setup for Claude Code,
+          Claude Desktop, and claude.ai — Claude can then see your agenda, add and
+          complete tasks, and run the auto-scheduler.
+        </p>
       )}
 
       {tokens.length > 0 && (
@@ -85,12 +94,12 @@ export default function ApiTokensManager({ tokens }: { tokens: ApiToken[] }) {
         </ul>
       )}
 
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="e.g. Obsidian - laptop"
-          className="flex-1 rounded-lg border border-rule bg-surface px-3 py-2 text-sm text-ink"
+          placeholder="e.g. Claude, or Obsidian - laptop"
+          className="min-w-[12rem] flex-1 rounded-lg border border-rule bg-surface px-3 py-2 text-sm text-ink"
         />
         <select
           value={expiryDays}
@@ -107,6 +116,72 @@ export default function ApiTokensManager({ tokens }: { tokens: ApiToken[] }) {
           Create token
         </Button>
       </div>
+    </div>
+  );
+}
+
+// Setup snippets for Season's MCP server (src/lib/mcp.ts), filled in with
+// the just-created token since that's the only moment it's visible.
+function ConnectClaude({ token }: { token: string }) {
+  const origin = typeof window === "undefined" ? "" : window.location.origin;
+  const url = `${origin}/api/mcp`;
+  const snippets = [
+    {
+      label: "Claude Code",
+      value: `claude mcp add --transport http season ${url} --header "Authorization: Bearer ${token}"`,
+    },
+    {
+      label: "claude.ai / Claude app (Settings → Connectors → Add custom connector)",
+      value: `${url}/${token}`,
+    },
+    {
+      label: "Claude Desktop (claude_desktop_config.json → mcpServers)",
+      value: JSON.stringify(
+        { season: { command: "npx", args: ["-y", "mcp-remote", url, "--header", `Authorization: Bearer ${token}`] } },
+        null,
+        2,
+      ),
+    },
+  ];
+  return (
+    <details className="mt-3 text-xs text-ink-2">
+      <summary className="cursor-pointer font-medium text-accent">Use this token to connect Claude</summary>
+      <div className="mt-2 flex flex-col gap-2">
+        {snippets.map((s) => (
+          <div key={s.label}>
+            <p className="mb-1 text-muted">{s.label}</p>
+            <CopyBlock value={s.value} />
+          </div>
+        ))}
+        <p className="text-muted">
+          The connector URL contains the token itself, so keep it private. claude.ai has to be
+          able to reach this server over the internet — a localhost URL only works with
+          Claude Code and Claude Desktop on this machine.
+        </p>
+      </div>
+    </details>
+  );
+}
+
+function CopyBlock({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="flex items-start gap-2">
+      <pre className="min-w-0 flex-1 overflow-x-auto whitespace-pre rounded bg-surface px-2 py-1.5 font-mono text-[11px] text-ink">
+        {value}
+      </pre>
+      <button
+        type="button"
+        onClick={() => {
+          navigator.clipboard?.writeText(value).then(() => {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1500);
+          });
+        }}
+        className="flex-shrink-0 rounded border border-rule px-2 py-1 text-[11px] text-ink-2 hover:bg-rule-soft"
+      >
+        {copied ? "Copied" : "Copy"}
+      </button>
     </div>
   );
 }

@@ -25,6 +25,7 @@ export default function NewTaskButton({
   otherTasks,
   defaultProjectId,
   defaultAssigneeId,
+  initialOpen = false,
 }: {
   projects: Project[];
   assignees: Assignee[];
@@ -33,8 +34,10 @@ export default function NewTaskButton({
   otherTasks: TaskOption[];
   defaultProjectId: string;
   defaultAssigneeId?: string;
+  // /tasks?new=1 (quick capture's "Full form" link) lands with it open.
+  initialOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(initialOpen);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
