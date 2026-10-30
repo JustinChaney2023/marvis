@@ -8,6 +8,8 @@ export type AttentionTask = {
   title: string;
   dueAt: Date;
   isOverdue: boolean;
+  // Scheduled, but its blocks end after the due date.
+  isLate?: boolean;
 };
 
 export type UpcomingItem = {
@@ -121,7 +123,7 @@ export default function CalendarSidebarRight({
                       {t.title}
                     </span>
                     <span className="font-mono text-muted">
-                      {t.isOverdue ? "Overdue · " : "Due "}
+                      {t.isLate ? "Finishes late · due " : t.isOverdue ? "Overdue · " : "Due "}
                       {t.dueAt.toLocaleDateString(undefined, { month: "short", day: "numeric" })}
                     </span>
                   </span>
@@ -202,14 +204,14 @@ export default function CalendarSidebarRight({
  */
 export function AttentionStrip({ tasks }: { tasks: AttentionTask[] }) {
   if (tasks.length === 0) return null;
-  const overdue = tasks.filter((t) => t.isOverdue).length;
+  const overdue = tasks.filter((t) => t.isOverdue || t.isLate).length;
   return (
     <details className="rounded-xl border border-rule bg-surface px-3 py-2 text-sm">
       <summary className="flex cursor-pointer list-none items-center gap-2 text-ink-2">
         <AlertTriangleIcon className={`h-3.5 w-3.5 ${overdue > 0 ? "text-accent" : "text-muted"}`} />
         <span className="font-medium text-ink">Needs attention</span>
         <span className="text-xs text-muted">
-          {overdue > 0 ? `${overdue} overdue` : ""}
+          {overdue > 0 ? `${overdue} at risk` : ""}
           {overdue > 0 && tasks.length > overdue ? " · " : ""}
           {tasks.length > overdue ? `${tasks.length - overdue} due soon` : ""}
         </span>
@@ -224,7 +226,7 @@ export function AttentionStrip({ tasks }: { tasks: AttentionTask[] }) {
             >
               <span className="min-w-0 truncate font-medium text-ink-2">{t.title}</span>
               <span className={`flex-shrink-0 font-mono ${t.isOverdue ? "text-accent" : "text-muted"}`}>
-                {t.isOverdue ? "Overdue" : "Due"}{" "}
+                {t.isLate ? "Late · due" : t.isOverdue ? "Overdue" : "Due"}{" "}
                 {t.dueAt.toLocaleDateString(undefined, { month: "short", day: "numeric" })}
               </span>
             </Link>

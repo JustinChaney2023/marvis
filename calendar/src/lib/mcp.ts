@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { expandEvents, recurringOverlapping } from "@/lib/recurrence";
 import { parseQuickCapture } from "@/lib/quickCapture";
 import { runAutomationsForStatusChange } from "@/lib/automations";
+import { autoPlaceIfEnabled } from "@/lib/autoPlan";
 import { setTaskDone, findProjectByName as findProjectByNameLoose } from "@/lib/taskOps";
 import { rescheduleConflictsWith, scheduleAllPendingTasks, scheduleTask, unscheduleTask } from "@/lib/scheduler";
 import { rescheduleConflictedHabits } from "@/lib/habits";
@@ -347,7 +348,7 @@ const TOOLS: Tool<z.ZodType>[] = [
   defineTool({
     name: "get_overview",
     description:
-      "Today at a glance: the user's timezone and current time, today's calendar, overdue tasks, tasks due in the next 7 days, and how many open tasks aren't scheduled yet. Call this first.",
+      "Today at a glance: the user's timezone and current time, today's calendar, overdue tasks, tasks due in the next 7 days, tasks whose scheduled time ends after their deadline, and how many open tasks aren't scheduled yet. Call this first.",
     input: z.object({}),
     readOnly: true,
     run: async (_args, { userId, timeZone }) => {
@@ -374,6 +375,12 @@ const TOOLS: Tool<z.ZodType>[] = [
         }),
         prisma.task.count({ where: { ...open, status: { in: ["CREATED", "ONGOING"] }, events: { none: {} } } }),
       ]);
+      // Scheduled, but the plan ends after the deadline (next 2 weeks).
+      const scheduledWithDue = await prisma.task.findMany({
+        where: { ...open, events: { some: {} }, dueAt: { gte: now, lt: new Date(now.getTime() + 14 * 86_400_000) } },
+        include: TASK_INCLUDE,
+      });
+      const atRisk = scheduledWithDue.filter((t) => t.events.some((e) => e.end > t.dueAt!));
       return {
         timeZone,
         now: formatLocal(now, timeZone),
@@ -381,6 +388,7 @@ const TOOLS: Tool<z.ZodType>[] = [
         overdueTasks: overdue.map((t) => serializeTask(t, timeZone)),
         dueThisWeek: dueSoon.map((t) => serializeTask(t, timeZone)),
         unscheduledOpenTaskCount: unscheduled,
+        finishesAfterDeadline: atRisk.map((t) => serializeTask(t, timeZone)),
       };
     },
   }),
@@ -474,6 +482,7 @@ const TOOLS: Tool<z.ZodType>[] = [
       });
       runAutomationsForStatusChange(userId, task.id, "CREATED").catch((err) => console.error("automation error:", err));
       if (args.schedule) await scheduleTask(userId, task.id);
+      else await autoPlaceIfEnabled(userId, task.id);
       return serializeTask(await getOwnedTask(userId, task.id), timeZone);
     },
   }),

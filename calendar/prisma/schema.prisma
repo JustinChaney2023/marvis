@@ -578,6 +578,10 @@ model AppSettings {
   // that day and moves on to the next, leaving slack for unplanned work
   // instead of packing every open slot. Null = no cap (previous behavior).
   dailyCapMin        Int?
+  // Motion-style hands-off planning: a background loop (src/lib/autoPlan.ts)
+  // re-plans missed/conflicting blocks and places new tasks every few
+  // minutes, and new tasks are placed the moment they're created.
+  autoSchedule       Boolean  @default(false)
   // The user-facing "these are my working hours" declaration (#35) —
   // promotes the scheduler's old hardcoded 9-6 weekday default into a
   // real per-user setting. Same "SU,MO,..." format as TimeSlot.daysOfWeek

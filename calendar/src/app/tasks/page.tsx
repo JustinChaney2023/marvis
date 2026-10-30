@@ -93,6 +93,7 @@ export default async function Home(props: PageProps<"/tasks">) {
     ...t,
     event: t.events.length > 0 ? t.events.reduce((min, e) => (e.start < min.start ? e : min)) : null,
     eventCount: t.events.length,
+    lastEventEnd: t.events.length > 0 ? t.events.reduce((max, e) => (e.end > max ? e.end : max), t.events[0].end) : null,
   });
 
   const allOpenTasksRaw = await prisma.task.findMany({

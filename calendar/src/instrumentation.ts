@@ -5,5 +5,7 @@ export async function register() {
     await applyOwnerTimezone();
     const { startPushLoop } = await import("@/lib/push");
     startPushLoop();
+    const { startAutoPlanLoop } = await import("@/lib/autoPlan");
+    startAutoPlanLoop();
   }
 }
