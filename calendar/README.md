@@ -5,8 +5,12 @@ Personal calendar/task planner — a Motion-style auto-scheduling tool, being bu
 ## Stack
 
 - Next.js (App Router) + TypeScript + Tailwind
-- SQLite via Prisma (`prisma/schema.prisma`) — single-user, no DB server to run
+- SQLite via Prisma 7 (`prisma/schema.prisma`, `prisma.config.ts`, better-sqlite3 adapter) — single-user, no DB server to run
 - Server Actions for writes, no separate API layer
+
+## Deploying
+
+See `docs/deploy.md` — updating a server is `bash calendar/scripts/deploy.sh`.
 
 ## Dev setup
 

@@ -2,9 +2,10 @@ generator client {
   provider = "prisma-client-js"
 }
 
+// The connection URL lives in prisma.config.ts (Prisma 7); the app
+// connects through the better-sqlite3 driver adapter (src/lib/prisma.ts).
 datasource db {
   provider = "sqlite"
-  url      = env("DATABASE_URL")
 }
 
 // Real per-person accounts (added when this moved from a single-user app
