@@ -21,9 +21,18 @@ async function DailyAgenda({ userId }: { userId: string }) {
 export default async function FocusPage() {
   const user = await requireUser();
 
+  // Open tasks with a block from today on — done tasks (and every
+  // task that ever had a block) used to land in the queue.
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
   const scheduled = await prisma.task.findMany({
-    where: { userId: user.id, events: { some: {} }, parentId: null },
-    include: { events: true },
+    where: {
+      userId: user.id,
+      status: { in: ["CREATED", "ONGOING"] },
+      events: { some: { end: { gte: startOfToday } } },
+      parentId: null,
+    },
+    include: { events: { where: { end: { gte: startOfToday } } } },
   });
   // A chunked task's own chunks are ordered by the earliest one — that's
   // the next slot actually coming up for it.

@@ -16,7 +16,7 @@ import {
   unscheduleTask,
 } from "@/lib/scheduler";
 import { parseQuickCapture } from "@/lib/quickCapture";
-import { expandEvents } from "@/lib/recurrence";
+import { expandEvents, recurringOverlapping } from "@/lib/recurrence";
 import { syncGoogleCalendar, deleteFromGoogle } from "@/lib/google-sync";
 import { listGoogleCalendars } from "@/lib/google-auth";
 import { importFromApple } from "@/lib/apple-sync";
@@ -87,7 +87,7 @@ export async function getUpcomingEventReminders() {
     where: {
       userId: user.id,
       reminderMinutes: { not: null },
-      OR: [{ start: { gte: now, lt: soon } }, { recurrenceRule: { not: null } }],
+      OR: [{ start: { gte: now, lt: soon } }, recurringOverlapping(now, soon)],
     },
   });
   const reminderMinutesByMasterId = new Map(rows.map((r) => [r.id, r.reminderMinutes]));
@@ -122,7 +122,7 @@ export async function getUpcomingMeetingBannerAction() {
     where: {
       userId: user.id,
       meetingUrl: { not: null },
-      OR: [{ start: { gte: windowStart, lt: windowEnd } }, { recurrenceRule: { not: null } }],
+      OR: [{ start: { gte: windowStart, lt: windowEnd } }, recurringOverlapping(windowStart, windowEnd)],
     },
   });
   const meetingUrlByMasterId = new Map(rows.map((r) => [r.id, r.meetingUrl]));
@@ -151,7 +151,7 @@ export async function getCurrentEventIdAction(): Promise<string | null> {
     where: {
       userId: user.id,
       allDay: false,
-      OR: [{ recurrenceRule: { not: null } }, { start: { lt: windowEnd }, end: { gt: windowStart } }],
+      OR: [recurringOverlapping(windowStart, windowEnd), { start: { lt: windowEnd }, end: { gt: windowStart } }],
     },
   });
   const current = expandEvents(rows, windowStart, windowEnd).find((o) => o.start <= now && now < o.end);
@@ -291,6 +291,9 @@ export async function createTask(formData: FormData) {
   });
   await setTaskLabels(user.id, task.id, labelIdsFromFormData(formData));
   await setTaskBlockedBy(user.id, task.id, blockedByIdsFromFormData(formData));
+  // Rules triggered on "Created" — they only ever ran on later status
+  // changes back to CREATED, never when a task was actually created.
+  runAutomationsForStatusChange(user.id, task.id, "CREATED").catch((err) => console.error("automation error:", err));
 
   // Remembered so the add-task form defaults to your last-used project
   // instead of "No project" every time — re-picking the same course/
@@ -1008,6 +1011,8 @@ export async function quickCaptureTask(
     },
   });
 
+  runAutomationsForStatusChange(user.id, task.id, "CREATED").catch((err) => console.error("automation error:", err));
+
   let scheduledFor: string | null = null;
   if (options?.schedule) {
     const events = await scheduleTask(user.id, task.id).catch(() => null);
@@ -1455,6 +1460,10 @@ function meetingUrlFromFormData(formData: FormData): string | null {
   return /^https?:\/\//i.test(raw) ? raw : null;
 }
 
+// Apple and subscribed-feed events are read-only overlays: the next sync
+// rewrites them from the source, so an edit here would silently vanish.
+const EDITABLE_SOURCES = { in: ["LOCAL" as const, "GOOGLE" as const] };
+
 const EVENT_TYPES = ["DEFAULT", "OUT_OF_OFFICE", "FOCUS_TIME"] as const;
 
 function eventTypeFromFormData(formData: FormData): (typeof EVENT_TYPES)[number] {
@@ -1568,7 +1577,7 @@ export async function updateEvent(
     : { googleAccountId: await googleAccountIdFromFormData(formData, user.id) };
 
   const { count } = await prisma.event.updateMany({
-    where: { id: eventId, userId: user.id },
+    where: { id: eventId, userId: user.id, source: EDITABLE_SOURCES },
     data: {
       title,
       start,
@@ -1629,7 +1638,7 @@ export async function updateEventOccurrence(
   const normalizedOriginalStart = normalizeExcludedStart(originalStartIso);
   if (!normalizedOriginalStart) return;
   const master = await prisma.event.findFirst({
-    where: { id: masterId, userId: user.id, recurrenceRule: { not: null } },
+    where: { id: masterId, userId: user.id, recurrenceRule: { not: null }, source: EDITABLE_SOURCES },
   });
   if (!master) return;
 
@@ -1702,7 +1711,7 @@ export async function updateEventFollowing(
   const normalizedOriginalStart = normalizeExcludedStart(originalStartIso);
   if (!normalizedOriginalStart) return;
   const master = await prisma.event.findFirst({
-    where: { id: masterId, userId: user.id, recurrenceRule: { not: null } },
+    where: { id: masterId, userId: user.id, recurrenceRule: { not: null }, source: EDITABLE_SOURCES },
   });
   if (!master) return;
 
@@ -1786,7 +1795,7 @@ export async function deleteEventOccurrence(masterId: string, originalStartIso: 
   const normalizedOriginalStart = normalizeExcludedStart(originalStartIso);
   if (!normalizedOriginalStart) return;
   const master = await prisma.event.findFirst({
-    where: { id: masterId, userId: user.id, recurrenceRule: { not: null } },
+    where: { id: masterId, userId: user.id, recurrenceRule: { not: null }, source: EDITABLE_SOURCES },
   });
   if (!master) return;
 
@@ -1809,7 +1818,7 @@ export async function deleteEventFollowing(masterId: string, originalStartIso: s
   const normalizedOriginalStart = normalizeExcludedStart(originalStartIso);
   if (!normalizedOriginalStart) return;
   const master = await prisma.event.findFirst({
-    where: { id: masterId, userId: user.id, recurrenceRule: { not: null } },
+    where: { id: masterId, userId: user.id, recurrenceRule: { not: null }, source: EDITABLE_SOURCES },
   });
   if (!master) return;
 
@@ -1925,7 +1934,7 @@ export async function moveEvent(eventId: string, startIso: string, endIso: strin
   // blocks the *scheduler*, not further manual drags (see EventBlock),
   // and the Locked toggle in the edit modal can always turn it back off.
   const { count } = await prisma.event.updateMany({
-    where: { id: eventId, userId: user.id },
+    where: { id: eventId, userId: user.id, source: EDITABLE_SOURCES },
     data: { start, end, locked: true, localDirty: true },
   });
   if (count > 0) {
@@ -1937,7 +1946,7 @@ export async function moveEvent(eventId: string, startIso: string, endIso: strin
 
 export async function deleteEvent(eventId: string) {
   const user = await requireUser();
-  const event = await prisma.event.findFirst({ where: { id: eventId, userId: user.id } });
+  const event = await prisma.event.findFirst({ where: { id: eventId, userId: user.id, source: EDITABLE_SOURCES } });
   if (!event) return;
   if (event.googleEventId) {
     // Untagged (pre-multi-account) rows fall back to whichever account is

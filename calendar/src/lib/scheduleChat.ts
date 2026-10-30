@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { expandEvents } from "@/lib/recurrence";
+import { expandEvents, recurringOverlapping } from "@/lib/recurrence";
 import { callAiForJson, type LocalAiConfig } from "@/lib/aiClient";
 import { ChatActionSchema, type ChatAction } from "@/lib/chatActions";
 
@@ -22,7 +22,7 @@ async function buildScheduleContext(userId: string): Promise<string> {
   const eventRows = await prisma.event.findMany({
     where: {
       userId,
-      OR: [{ start: { lt: horizonEnd }, end: { gt: now } }, { recurrenceRule: { not: null } }],
+      OR: [{ start: { lt: horizonEnd }, end: { gt: now } }, recurringOverlapping(now, horizonEnd)],
     },
     orderBy: { start: "asc" },
   });
