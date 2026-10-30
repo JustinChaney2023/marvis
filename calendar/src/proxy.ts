@@ -29,6 +29,7 @@ const PUBLIC_PATH_PREFIXES = [
   "/api/v1/",
   "/api/mcp",
   "/manifest.webmanifest",
+  "/sw.js",
   // OAuth for MCP clients: discovery metadata, client registration, and
   // the code->token exchange are called server-to-server with no cookie.
   // (/oauth/authorize is deliberately NOT here — it needs a login.)
