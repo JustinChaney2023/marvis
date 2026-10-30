@@ -23,6 +23,7 @@ import CalendarClient, { type CalendarEvent, type SharedEvent } from "./calendar
 import { NowProvider } from "./calendar/NowContext";
 import CalendarSidebarLeft from "./calendar/CalendarSidebarLeft";
 import CalendarSidebarRight, {
+  AttentionStrip,
   type AttentionTask,
   type UpcomingDay,
   type UpcomingItem,
@@ -346,6 +347,10 @@ export default async function Page(props: PageProps<"/">) {
           shortcuts
         </p>
       </header>
+
+      <div className="mt-3 xl:hidden print:hidden">
+        <AttentionStrip tasks={attentionTasks} />
+      </div>
 
       <NowProvider>
         <div className="mt-3 grid min-h-0 flex-1 grid-cols-1 gap-5 print:block xl:grid-cols-[1fr_13rem] 2xl:grid-cols-[11rem_1fr_13rem]">

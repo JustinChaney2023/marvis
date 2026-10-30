@@ -6,19 +6,41 @@ read and change your tasks, projects, and calendar. Code: `src/lib/mcp.ts`
 
 ## Connect
 
-1. Settings → Account → **API tokens & Claude** → create a token (e.g. "Claude").
-2. Expand **Use this token to connect Claude** and copy the snippet for your client:
+Every current Claude client supports MCP's OAuth flow, so you only need the URL
+`https://YOUR-HOST/api/mcp` (also shown, ready to copy, in Settings → Account →
+API tokens & Claude):
 
 | Client | How |
 | --- | --- |
-| Claude Code | `claude mcp add --transport http season https://YOUR-HOST/api/mcp --header "Authorization: Bearer <token>"` |
-| claude.ai / Claude mobile & desktop apps | Settings → Connectors → Add custom connector → URL `https://YOUR-HOST/api/mcp/<token>` |
-| Claude Desktop (local config) | `npx -y mcp-remote https://YOUR-HOST/api/mcp --header "Authorization: Bearer <token>"` in `claude_desktop_config.json` |
+| claude.ai / Claude mobile & desktop apps | Settings → Connectors → Add custom connector → paste the URL → **Allow** on Season's screen |
+| Claude Code | `claude mcp add --transport http season https://YOUR-HOST/api/mcp`, then `/mcp` to sign in |
 
 claude.ai connectors call your server from Anthropic's cloud, so the app must be
 reachable over the internet (a localhost URL only works for Claude Code / Claude
-Desktop on the same machine). The `/api/mcp/<token>` form puts the credential in
-the URL — keep it private, and revoke the token in Settings to cut access.
+Desktop on the same machine). Set `APP_URL` when Season sits behind a reverse
+proxy so the OAuth metadata advertises the public address.
+
+Each approval creates a token named "<client> (connected app)" in Settings;
+revoke it there to disconnect.
+
+### Without OAuth
+
+For clients that can't do OAuth, create a token in Settings and use either the
+`Authorization: Bearer <token>` header on `/api/mcp`, or the URL form
+`/api/mcp/<token>` (the URL is then the credential — keep it private). Claude
+Desktop via config file: `npx -y mcp-remote https://YOUR-HOST/api/mcp --header "Authorization: Bearer <token>"`.
+
+### How the OAuth flow works
+
+`src/lib/oauth.ts` + `src/app/oauth/*` + `src/app/.well-known/*`:
+
+1. An unauthenticated `POST /api/mcp` returns `401` with
+   `WWW-Authenticate: Bearer resource_metadata=".../.well-known/oauth-protected-resource/api/mcp"`.
+2. The client reads that (RFC 9728) and `/.well-known/oauth-authorization-server` (RFC 8414).
+3. It registers itself at `POST /oauth/register` (RFC 7591; https or loopback redirect URIs only).
+4. It sends you to `/oauth/authorize` (PKCE S256 required). You sign in if needed and click Allow.
+5. It exchanges the one-time, 5-minute code at `POST /oauth/token` for an access
+   token — an ordinary personal access token.
 
 ## Tools
 
