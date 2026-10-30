@@ -38,6 +38,7 @@ import {
 } from "@/lib/hardware";
 import { createBooking, getAvailableBookingSlots } from "@/lib/booking";
 import { maybeApplyTimezoneChange } from "@/lib/serverTimezone";
+import { autoPlaceIfEnabled } from "@/lib/autoPlan";
 import { getVapidKeys, sendPushToUser } from "@/lib/push";
 import { setTaskDone, stoppedTimerFields, logTrackedTime, findProjectByName } from "@/lib/taskOps";
 import { generateSubtasks, type GenerateSubtasksResult } from "@/lib/subtaskGenerate";
@@ -294,6 +295,7 @@ export async function createTask(formData: FormData) {
   // Rules triggered on "Created" — they only ever ran on later status
   // changes back to CREATED, never when a task was actually created.
   runAutomationsForStatusChange(user.id, task.id, "CREATED").catch((err) => console.error("automation error:", err));
+  await autoPlaceIfEnabled(user.id, task.id);
 
   // Remembered so the add-task form defaults to your last-used project
   // instead of "No project" every time — re-picking the same course/
@@ -1014,7 +1016,7 @@ export async function quickCaptureTask(
   runAutomationsForStatusChange(user.id, task.id, "CREATED").catch((err) => console.error("automation error:", err));
 
   let scheduledFor: string | null = null;
-  if (options?.schedule) {
+  if (options?.schedule || (await getAppSettings(user.id)).autoSchedule) {
     const events = await scheduleTask(user.id, task.id).catch(() => null);
     if (events && events.length > 0) scheduledFor = events[0].start.toISOString();
   }
@@ -2284,15 +2286,20 @@ export async function updateSchedulingSettingsAction(formData: FormData) {
     }
   }
 
+  const autoSchedule = formData.get("autoSchedule") === "on";
   await updateAppSettings(user.id, {
     bufferMin,
     dailyCapMin,
+    autoSchedule,
     workDays,
     workStartMin,
     workEndMin,
     secondaryTimezone,
   });
+  // Turning it on plans everything now rather than at the next tick.
+  if (autoSchedule) await scheduleAllPendingTasks(user.id).catch(() => null);
   revalidatePath("/settings");
+  revalidatePath("/tasks");
   revalidatePath("/");
 }
 

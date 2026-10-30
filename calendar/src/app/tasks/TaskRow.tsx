@@ -54,6 +54,9 @@ export type TaskRowData = {
   // tasks/page.tsx. eventCount > 1 means it's split into that many.
   event: { start: Date; locked: boolean } | null;
   eventCount: number;
+  // When the task's last scheduled block ends — later than dueAt means
+  // the plan won't make the deadline.
+  lastEventEnd?: Date | null;
   subtasks: Subtask[];
   labels: Label[];
   blockedBy: { id: string; title: string; status: TaskStatus }[];
@@ -353,6 +356,17 @@ export default function TaskRow({
               <span>
                 · due {formatDueDateTime(task.dueAt)}
                 {!task.hardDeadline && <span className="text-muted"> (soft)</span>}
+              </span>
+            )}
+            {/* Motion-style deadline risk: it's on the calendar, but the
+                plan finishes after the due date. */}
+            {task.dueAt && task.lastEventEnd && task.lastEventEnd > task.dueAt && task.status !== "DONE" && (
+              <span
+                className="inline-flex items-center gap-1 rounded-full bg-accent-wash px-2 py-0.5 text-xs font-medium text-accent"
+                title="Its scheduled time ends after the due date — move something, shorten it, or change the deadline"
+              >
+                <AlertTriangleIcon />
+                Finishes late
               </span>
             )}
             {(isOverdue || isDueSoon) && (

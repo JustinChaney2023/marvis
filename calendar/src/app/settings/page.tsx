@@ -249,6 +249,21 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
               <span className="text-ink-2">minutes</span>
             </div>
           </label>
+          <label className="flex cursor-pointer items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              name="autoSchedule"
+              defaultChecked={settings.autoSchedule}
+              className="mt-0.5 accent-[var(--accent)]"
+            />
+            <span>
+              <span className="text-ink">Auto-schedule</span>
+              <span className="block text-xs text-muted">
+                New tasks go straight onto your calendar, and missed or bumped blocks get re-planned
+                automatically every few minutes — no need to press Schedule all.
+              </span>
+            </span>
+          </label>
           <Button type="submit">Save</Button>
         </form>
         <p className="mt-2 text-xs text-muted">

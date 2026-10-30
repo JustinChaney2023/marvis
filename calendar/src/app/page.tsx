@@ -204,12 +204,27 @@ export default async function Page(props: PageProps<"/">) {
     take: 6,
     select: { id: true, title: true, dueAt: true },
   });
-  const attentionTasks: AttentionTask[] = attentionRows.map((t) => ({
-    id: t.id,
-    title: t.title,
-    dueAt: t.dueAt!,
-    isOverdue: t.dueAt! < today,
-  }));
+  // Scheduled tasks whose plan finishes after their deadline (next 2 weeks).
+  const scheduledWithDeadline = await prisma.task.findMany({
+    where: {
+      userId: user.id,
+      parentId: null,
+      status: { in: ["CREATED", "ONGOING"] },
+      events: { some: {} },
+      dueAt: { gte: today, lt: new Date(today.getTime() + 14 * 86_400_000) },
+    },
+    select: { id: true, title: true, dueAt: true, events: { select: { end: true } } },
+  });
+  const lateRows = scheduledWithDeadline.filter((t) => t.events.some((e) => e.end > t.dueAt!));
+  const attentionTasks: AttentionTask[] = [
+    ...lateRows.map((t) => ({ id: t.id, title: t.title, dueAt: t.dueAt!, isOverdue: false, isLate: true })),
+    ...attentionRows.map((t) => ({
+      id: t.id,
+      title: t.title,
+      dueAt: t.dueAt!,
+      isOverdue: t.dueAt! < today,
+    })),
+  ].sort((a, b) => a.dueAt.getTime() - b.dueAt.getTime());
 
   // Overcommitment warning — a visible nudge (Sunsama-style) distinct
   // from dailyCapMin's existing job of silently gating the auto-
