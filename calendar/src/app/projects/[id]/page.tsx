@@ -65,7 +65,7 @@ export default async function ProjectDetailPage({
   const vocabulary = project.fields.find((f) => f.key === "transcriptionVocabulary")?.value ?? "";
 
   return (
-    <main className="mx-auto w-full max-w-3xl flex-1 px-6 py-12">
+    <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-8 sm:px-6 sm:py-12">
       <Link href="/tasks" className="text-xs text-muted hover:text-ink">
         ← All tasks
       </Link>

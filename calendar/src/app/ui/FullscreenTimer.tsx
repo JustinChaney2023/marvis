@@ -25,7 +25,9 @@ export function useAnchoredCountdown(
   const [secondsLeft, setSecondsLeft] = useState(initialSecondsLeft);
   const [running, setRunning] = useState(autoStart);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const endAtRef = useRef(Date.now() + initialSecondsLeft * 1000);
+  // Lazy state, not a bare Date.now() in render — read exactly once.
+  const [initialEndAt] = useState(() => Date.now() + initialSecondsLeft * 1000);
+  const endAtRef = useRef(initialEndAt);
 
   useEffect(() => {
     if (!running) {

@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Instrument_Serif, IBM_Plex_Sans, IBM_Plex_Mono } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
 import QuickCapture from "./QuickCapture";
 import ShortcutsHelp from "./ShortcutsHelp";
@@ -46,6 +47,7 @@ const plexMono = IBM_Plex_Mono({
 export const metadata: Metadata = {
   title: "Season",
   description: "A calm personal OS for your calendar, tasks, and focus time",
+  appleWebApp: { capable: true, title: "Season", statusBarStyle: "default" },
 };
 
 // viewport-fit=cover so the mobile tab bar can sit under the home
@@ -68,11 +70,16 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       suppressHydrationWarning
     >
       <head>
-        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+        {/* next/script's beforeInteractive inlines this into the server
+            HTML (so it still runs before paint) without React warning about
+            a raw <script> element it can't execute on the client. */}
+        <Script id="theme-init" strategy="beforeInteractive">
+          {THEME_INIT_SCRIPT}
+        </Script>
       </head>
       <body className="flex h-full flex-row overflow-hidden bg-paper text-ink transition-colors duration-200">
         <SideRail />
-        <div className="flex min-h-0 flex-1 flex-col">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <MeetingBanner />
           {/* Bottom padding clears MobileNav's fixed tab bar below md. */}
           <div className="min-h-0 flex-1 overflow-y-auto pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0">

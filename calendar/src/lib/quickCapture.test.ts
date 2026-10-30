@@ -170,4 +170,32 @@ const now = new Date(2026, 7, 19, 10, 0);
   assert.equal(r2.dueAt?.toISOString(), "2026-08-19T13:00:00.000Z");
 }
 
+// short weekday names; sat/sun only with a lead-in word
+{
+  const r = parseQuickCapture("Essay draft fri 3pm", now);
+  assert.equal(r.title, "Essay draft");
+  assert.equal(r.dueAt?.getDate(), 21);
+  assert.equal(r.dueAt?.getHours(), 15);
+}
+{
+  const r = parseQuickCapture("Quiz next tues", now);
+  assert.equal(r.title, "Quiz");
+  assert.equal(r.dueAt?.getDate(), 25);
+}
+{
+  const r = parseQuickCapture("SAT prep", now);
+  assert.equal(r.title, "SAT prep");
+  assert.equal(r.dueAt, null);
+}
+{
+  const r = parseQuickCapture("Laundry on sat", now);
+  assert.equal(r.title, "Laundry");
+  assert.equal(r.dueAt?.getDay(), 6);
+}
+{
+  // "thu" / "thurs" both work
+  assert.equal(parseQuickCapture("Lab thurs", now).dueAt?.getDay(), 4);
+  assert.equal(parseQuickCapture("Lab thu", now).dueAt?.getDay(), 4);
+}
+
 console.log("quickCapture.test.ts: all checks passed");

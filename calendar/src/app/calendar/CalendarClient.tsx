@@ -319,9 +319,14 @@ export default function CalendarClient({
   // A stale selection pointing at events no longer on screen (after
   // navigating to a different date/view) would leave the "N selected"
   // bar showing with nothing visibly selected — clear it on navigation.
-  useEffect(() => {
+  // Reset during render on change (React's recommended alternative to a
+  // setState-in-effect, which costs an extra committed render).
+  const navKey = `${view}:${startYMD}`;
+  const [selectionNavKey, setSelectionNavKey] = useState(navKey);
+  if (selectionNavKey !== navKey) {
+    setSelectionNavKey(navKey);
     setSelectedEventIds(new Set());
-  }, [view, startYMD]);
+  }
 
   const openCreate = (
     s: Date,

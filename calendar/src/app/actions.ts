@@ -64,7 +64,6 @@ import {
 import { randomBytes } from "node:crypto";
 import { isEmailConfigured, sendEmail } from "@/lib/email";
 import { unlink } from "node:fs/promises";
-import path from "node:path";
 import { resolveUploadPath } from "@/lib/uploads";
 
 // Widest of REMINDER_MINUTES_PRESETS (EventModal.tsx) plus a little
@@ -190,10 +189,14 @@ async function taskFieldsFromFormData(formData: FormData, userId: string) {
   const priority = Number(formData.get("priority") ?? 0);
   const durationMin = Number(formData.get("durationMin") ?? 30);
   const startAtRaw = String(formData.get("startAt") ?? "");
-  const startAt = startAtRaw ? new Date(startAtRaw) : null;
+  // *Iso fields are exact instants computed in the browser's zone
+  // (TaskModal); the naive fields are the fallback for other callers.
+  const startAtIso = String(formData.get("startAtIso") ?? "");
+  const startAt = startAtIso ? new Date(startAtIso) : startAtRaw ? new Date(startAtRaw) : null;
   const dueAtDateRaw = String(formData.get("dueAtDate") ?? "");
   const dueAtTimeRaw = String(formData.get("dueAtTime") ?? "") || "17:00";
-  const dueAt = dueAtDateRaw ? new Date(`${dueAtDateRaw}T${dueAtTimeRaw}`) : null;
+  const dueAtIso = String(formData.get("dueAtIso") ?? "");
+  const dueAt = dueAtIso ? new Date(dueAtIso) : dueAtDateRaw ? new Date(`${dueAtDateRaw}T${dueAtTimeRaw}`) : null;
   const [projectId, assigneeId, timeSlotId] = await Promise.all([
     verifyOwnedId("project", String(formData.get("projectId") ?? "").trim() || null, userId),
     verifyOwnedId("assignee", String(formData.get("assigneeId") ?? "").trim() || null, userId),

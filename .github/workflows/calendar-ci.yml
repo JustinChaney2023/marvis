@@ -1,0 +1,33 @@
+name: Season CI
+
+on:
+  pull_request:
+    paths: ["calendar/**", ".github/workflows/calendar-ci.yml"]
+  push:
+    branches: [main]
+    paths: ["calendar/**", ".github/workflows/calendar-ci.yml"]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: calendar
+    env:
+      DATABASE_URL: "file:./ci.db"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: calendar/package-lock.json
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npx next typegen
+      - name: Typecheck
+        run: npx tsc --noEmit
+      - name: Lint
+        run: npm run lint
+      - name: Unit tests
+        run: npm test

@@ -12,7 +12,6 @@ import { convertToMarkdown } from "@/lib/markitdown";
 import { MAX_CONVERT_BYTES, isWithinSizeLimit, pickConverter } from "@/lib/documentConvert";
 import {
   extractSyllabusDates,
-  SCHOOL_COURSE_TEMPLATE,
   type ExtractSyllabusResult,
 } from "@/lib/syllabusExtract";
 import { createEvent, updateEventOccurrence } from "../actions";

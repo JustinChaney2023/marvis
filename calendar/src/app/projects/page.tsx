@@ -37,9 +37,9 @@ export default async function ProjectsPage() {
   const now = new Date();
 
   return (
-    <main className="mx-auto w-full max-w-4xl flex-1 px-6 py-10">
-      <div className="flex items-center justify-between gap-3">
-        <div>
+    <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-8 sm:px-6 sm:py-10">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="min-w-[16rem] flex-1">
           <h1 className="font-serif text-3xl text-ink">Projects</h1>
           <p className="mt-1 text-sm text-ink-2">
             Each project holds its own notes, files, and tasks — a course
@@ -100,7 +100,7 @@ export default async function ProjectsPage() {
             // about.
             const overdue = p.tasks.filter((t) => t.dueAt && t.dueAt < now).length;
             return (
-              <li className="flex items-center gap-3 rounded-xl border border-rule bg-surface p-4 transition-colors hover:bg-rule-soft">
+              <li key={p.id} className="flex items-center gap-3 rounded-xl border border-rule bg-surface p-4 transition-colors hover:bg-rule-soft">
                 <Link href={`/projects/${p.id}`} className="flex min-w-0 flex-1 items-center gap-3">
                   <span
                     className={`h-3 w-3 flex-shrink-0 rounded-full ${PROJECT_COLOR_DOT[p.color] ?? PROJECT_COLOR_DOT.zinc}`}
