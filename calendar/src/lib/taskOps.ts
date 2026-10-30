@@ -60,9 +60,19 @@ export async function setTaskDone(userId: string, taskId: string, done: boolean)
   // materializes the next occurrence as a new row, since a task carries
   // per-instance state (status, its own scheduled event) that doesn't fit
   // the "compute on the fly" model.
-  if (done && task.recurrenceRule && task.dueAt) {
+  // Only on a real not-done -> done transition, and only if that next
+  // occurrence doesn't already exist — done, undo, done again used to
+  // spawn a second copy.
+  if (done && existing.status !== "DONE" && task.recurrenceRule && task.dueAt) {
     const nextDueAt = nextTaskOccurrence(task.recurrenceRule, task.dueAt);
-    if (nextDueAt) {
+    const alreadySpawned =
+      nextDueAt &&
+      (await prisma.task.findFirst({
+        where: { userId, title: task.title, recurrenceRule: task.recurrenceRule, dueAt: nextDueAt, parentId: null },
+        select: { id: true },
+      }));
+    if (nextDueAt && !alreadySpawned) {
+      const labels = await prisma.label.findMany({ where: { tasks: { some: { id: task.id } } }, select: { id: true } });
       await prisma.task.create({
         data: {
           userId,
@@ -77,6 +87,9 @@ export async function setTaskDone(userId: string, taskId: string, done: boolean)
           recurrenceRule: task.recurrenceRule,
           hardDeadline: task.hardDeadline,
           color: task.color,
+          chunkMin: task.chunkMin,
+          timeSlotId: task.timeSlotId,
+          labels: { connect: labels },
         },
       });
     }

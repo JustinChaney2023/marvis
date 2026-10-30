@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { getAppSettings } from "@/lib/settings";
-import { defaultWindowFn, fetchBusyIntervals, findEarliestSlot, padForBuffer } from "@/lib/scheduler";
+import { defaultWindowFn, fetchBusyIntervals, findEarliestSlot, padForBuffer, windowFnForWorkingHours, dateKey } from "@/lib/scheduler";
+import { getZonedDateParts, zonedWallTimeToUtc } from "@/lib/timezone";
 import { startOfWeek, addDays } from "@/lib/calendar-dates";
 
 /**
@@ -23,14 +24,21 @@ export async function scheduleHabitsForWeek(userId: string): Promise<{ placed: n
   const settings = await getAppSettings(userId);
   const owner = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { timezone: true } });
   const timeZone = owner.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const getWindow = defaultWindowFn(timeZone);
+  // The user's own working hours (and work days), like tasks get.
+  const getWindow = windowFnForWorkingHours(settings, timeZone);
+  const startOfNextDay = (d: Date) => {
+    const { year, month, day } = getZonedDateParts(d, timeZone);
+    return zonedWallTimeToUtc(year, month, day + 1, 0, 0, timeZone);
+  };
 
   let placed = 0;
   for (const habit of habits) {
-    const existingCount = await prisma.event.count({
+    const existing = await prisma.event.findMany({
       where: { habitId: habit.id, start: { gte: weekStart, lt: weekEnd } },
+      select: { start: true },
     });
-    let needed = habit.timesPerWeek - existingCount;
+    const usedDays = new Set(existing.map((e) => dateKey(e.start, timeZone)));
+    let needed = habit.timesPerWeek - existing.length;
     if (needed <= 0) continue;
 
     // Re-fetched per habit rather than once up front — placing one
@@ -41,9 +49,16 @@ export async function scheduleHabitsForWeek(userId: string): Promise<{ placed: n
     );
     let cursor = now > weekStart ? now : weekStart;
 
+    // One occurrence per day — "gym 3x a week" means three different
+    // days, not three back-to-back blocks on Monday (which is what
+    // continuing from the previous slot's end used to produce).
     while (needed > 0) {
       const slot = findEarliestSlot(cursor, habit.durationMin, busy, weekEnd, getWindow, timeZone);
       if (!slot) break;
+      if (usedDays.has(dateKey(slot.start, timeZone))) {
+        cursor = startOfNextDay(slot.start);
+        continue;
+      }
       await prisma.event.create({
         data: {
           userId,
@@ -53,8 +68,12 @@ export async function scheduleHabitsForWeek(userId: string): Promise<{ placed: n
           end: slot.end,
         },
       });
-      busy.push(slot);
-      cursor = slot.end;
+      // findEarliestSlot expects `busy` sorted, and the new block gets the
+      // same buffer as everything else.
+      busy.push(...padForBuffer([slot], settings.bufferMin));
+      busy.sort((a, b) => a.start.getTime() - b.start.getTime());
+      usedDays.add(dateKey(slot.start, timeZone));
+      cursor = startOfNextDay(slot.start);
       needed--;
       placed++;
     }

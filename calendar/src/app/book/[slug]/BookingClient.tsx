@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createBookingAction } from "../../actions";
 import { CloseIcon } from "../../icons";
 import Button from "../../ui/Button";
@@ -32,11 +32,11 @@ function formatTime(iso: string): string {
   });
 }
 
+// "YYYY-MM-DD" in the visitor's own zone. Parsed as a local date — `new
+// Date("2026-11-05")` would be UTC midnight, i.e. the 4th west of UTC.
 function formatDayHeading(dayLabel: string): string {
-  // The lib passes `slot.toDateString()` (e.g. "Tue Aug 18 2026"); round-
-  // tripping through `new Date` so we can `toLocaleDateString` it back to
-  // a friendly long-form label.
-  const parsed = new Date(dayLabel);
+  const [y, m, d] = dayLabel.split("-").map(Number);
+  const parsed = new Date(y, (m ?? 1) - 1, d ?? 1);
   if (Number.isNaN(parsed.getTime())) return dayLabel;
   return parsed.toLocaleDateString(undefined, {
     weekday: "long",
@@ -45,12 +45,29 @@ function formatDayHeading(dayLabel: string): string {
   });
 }
 
+function localDayKey(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 export default function BookingClient({
   slug,
   title,
   durationMinutes,
-  availability,
+  availability: ownerDays,
 }: Props) {
+  // The server groups slots by the owner's day; a visitor elsewhere sees
+  // times in their own zone, so regroup by *their* day to match.
+  const availability = useMemo(() => {
+    const byDay = new Map<string, string[]>();
+    for (const iso of ownerDays.flatMap((d) => d.slots)) {
+      const key = localDayKey(iso);
+      byDay.set(key, [...(byDay.get(key) ?? []), iso]);
+    }
+    return [...byDay.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([dayLabel, slots]) => ({ dayLabel, slots: slots.sort() }));
+  }, [ownerDays]);
   const [selectedSlot, setSelectedSlot] = useState<{
     dayLabel: string;
     slotIso: string;
