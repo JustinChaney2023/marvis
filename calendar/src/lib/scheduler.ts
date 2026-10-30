@@ -223,7 +223,9 @@ function scoreSlot(
   let score = 0;
   if (isEnergyMatch(energy, slot.start, timeZone)) score += 10;
   if (projectScheduledDays.has(dateKey(slot.start, timeZone))) score += PROJECT_CLUSTER_BONUS;
-  if (dueAt && slot.start > dueAt) score -= 100; // overshooting the due date is bad, but not disqualifying if it's the only option
+  // Finishing after the due date is bad, but not disqualifying if it's
+  // the only option. The slot's *end* is what has to make the deadline.
+  if (dueAt && slot.end > dueAt) score -= 100;
   score -= slot.start.getTime() / 1e14; // tie-break toward the earlier candidate
   return score;
 }
@@ -267,7 +269,7 @@ export function findBestSlot(
 
     const goodEnough =
       isEnergyMatch(task.energy, slot.start, timeZone) &&
-      (!task.dueAt || slot.start <= task.dueAt) &&
+      (!task.dueAt || slot.end <= task.dueAt) &&
       (!wantsClustering || projectScheduledDays.has(dateKey(slot.start, timeZone)));
     if (goodEnough) break;
 
@@ -321,15 +323,21 @@ function applyDailyCap(
   now: Date,
   horizonEnd: Date,
   capMin: number | null,
-  timeZone: string,
+  getWindow: WindowFn,
+  // What actually counts toward the cap — the real (unpadded) busy time;
+  // buffer padding would otherwise inflate every day's total.
+  countable: { start: Date; end: Date }[] = busy,
 ): { start: Date; end: Date }[] {
   if (!capMin) return busy;
 
   const blocks: { start: Date; end: Date }[] = [];
   for (let day = new Date(now); day < horizonEnd; day = new Date(day.getTime() + 86_400_000)) {
-    if (!isWorkDay(day, timeZone)) continue;
-    const { start: dayStart, end: dayEnd } = workWindowFor(day, timeZone);
-    const busyMinutes = busy.reduce((sum, b) => {
+    // The user's own working hours (or the task's time slot), not the old
+    // hardcoded 9-6 weekdays — a 6am-2pm or Saturday workday caps correctly.
+    const window = getWindow(day);
+    if (!window) continue;
+    const { start: dayStart, end: dayEnd } = window;
+    const busyMinutes = countable.reduce((sum, b) => {
       const overlapStart = b.start > dayStart ? b.start : dayStart;
       const overlapEnd = b.end < dayEnd ? b.end : dayEnd;
       const overlapMs = overlapEnd.getTime() - overlapStart.getTime();
@@ -355,13 +363,23 @@ export async function fetchBusyIntervals(userId: string, now: Date, horizonEnd: 
   const existing = await prisma.event.findMany({
     where: {
       userId,
+      // Subscribed feeds (holidays, a friend's public calendar) are an
+      // overlay to look at, not commitments — they shouldn't block your
+      // own scheduling or your booking page.
+      source: { not: "SUBSCRIBED" },
       OR: [
         { start: { lt: horizonEnd }, end: { gt: now } },
-        { recurrenceRule: { not: null } },
+        // Ended series ("this and following" splits) can't recur into the horizon.
+        { recurrenceRule: { not: null }, OR: [{ recurrenceEndsBefore: null }, { recurrenceEndsBefore: { gt: now } }] },
       ],
     },
   });
+  // An all-day event is a label on the day (a birthday, "Mom visiting"),
+  // free time by Google Calendar's own default — except Out of office,
+  // which exists precisely to block the day.
+  const blocksAllDay = new Map(existing.map((e) => [e.id, e.eventType === "OUT_OF_OFFICE"]));
   return expandEvents(existing, now, horizonEnd)
+    .filter((o) => !o.allDay || blocksAllDay.get(o.masterId))
     .map((o) => ({ start: o.start, end: o.end }))
     .sort((a, b) => a.start.getTime() - b.start.getTime());
 }
@@ -456,6 +474,10 @@ export async function scheduleTask(userId: string, taskId: string) {
   // "Schedule" button, reschedule sweeps) routes through here, so this
   // is the one place the guard needs to live.
   if (task.blockedBy.some((b) => b.status !== "DONE")) return null;
+  // Only open work gets placed. Without this, the reschedule sweeps moved
+  // a DONE task's past block into the future (erasing when it was done),
+  // and a DELAYED task got re-placed despite being deliberately parked.
+  if (task.status !== "CREATED" && task.status !== "ONGOING") return null;
 
   const now = new Date();
   // startAt is a lower bound on when the scheduler may place this task,
@@ -471,12 +493,14 @@ export async function scheduleTask(userId: string, taskId: string) {
   const getWindow = task.timeSlot
     ? windowFnForTimeSlot(task.timeSlot, timeZone)
     : windowFnForWorkingHours(settings, timeZone);
+  const rawBusy = await fetchBusyIntervals(userId, now, horizonEnd);
   let busy = applyDailyCap(
-    padForBuffer(await fetchBusyIntervals(userId, now, horizonEnd), settings.bufferMin),
+    padForBuffer(rawBusy, settings.bufferMin),
     now,
     horizonEnd,
     settings.dailyCapMin,
-    timeZone,
+    getWindow,
+    rawBusy,
   );
   const projectScheduledDays = await getProjectScheduledDays(
     userId,
@@ -553,8 +577,14 @@ export async function rescheduleConflictsWith(
   end: Date,
   excludeEventId?: string,
 ): Promise<number> {
+  // Only open tasks with a block actually overlapping the new event —
+  // not every scheduled task the account has ever had.
   const scheduledTasks = await prisma.task.findMany({
-    where: { userId, events: { some: {} } },
+    where: {
+      userId,
+      status: { in: ["CREATED", "ONGOING"] },
+      events: { some: { start: { lt: end }, end: { gt: start } } },
+    },
     include: { events: true },
   });
 
@@ -589,11 +619,30 @@ export async function rescheduleConflictsWith(
  */
 export async function rescheduleStaleTasks(userId: string) {
   const now = new Date();
+  // Finished/delayed tasks keep their blocks where they were — a DONE
+  // task's past block is the record of when it got done.
   const scheduledTasks = await prisma.task.findMany({
-    where: { userId, events: { some: {} } },
+    where: { userId, status: { in: ["CREATED", "ONGOING"] }, events: { some: {} } },
     include: { events: true },
   });
-  const allEvents = await prisma.event.findMany({ where: { userId } });
+  const taskEvents = scheduledTasks.flatMap((t) => t.events);
+  if (taskEvents.length === 0) return 0;
+
+  // Expand everything once over the span the task blocks cover, instead
+  // of re-expanding every event the account has ever had per block.
+  const spanStart = new Date(Math.min(...taskEvents.map((e) => e.start.getTime())) - 86_400_000);
+  const spanEnd = new Date(Math.max(...taskEvents.map((e) => e.end.getTime())) + 86_400_000);
+  const nearby = await prisma.event.findMany({
+    where: {
+      userId,
+      source: { not: "SUBSCRIBED" },
+      OR: [{ start: { lt: spanEnd }, end: { gt: spanStart } }, { recurrenceRule: { not: null } }],
+    },
+  });
+  const blocksAllDay = new Map(nearby.map((e) => [e.id, e.eventType === "OUT_OF_OFFICE"]));
+  const occurrences = expandEvents(nearby, spanStart, spanEnd).filter(
+    (o) => !o.allDay || blocksAllDay.get(o.masterId),
+  );
 
   let count = 0;
   for (const task of scheduledTasks) {
@@ -602,12 +651,8 @@ export async function rescheduleStaleTasks(userId: string) {
 
     const isStale = task.events.some((event) => {
       const isPast = event.end <= now;
-      const windowStart = new Date(event.start.getTime() - 86_400_000);
-      const windowEnd = new Date(event.end.getTime() + 86_400_000);
-      const others = allEvents.filter((e) => e.id !== event.id);
-      const nearbyOccurrences = expandEvents(others, windowStart, windowEnd);
-      const conflict = nearbyOccurrences.some(
-        (o) => o.start < event.end && o.end > event.start,
+      const conflict = occurrences.some(
+        (o) => o.masterId !== event.id && o.start < event.end && o.end > event.start,
       );
       return isPast || conflict;
     });
@@ -674,7 +719,8 @@ export async function scheduleAllPendingTasks(userId: string) {
  */
 export async function rescheduleAll(userId: string) {
   const scheduledTasks = await prisma.task.findMany({
-    where: { userId, events: { some: {} } },
+    // Open tasks only — re-planning shouldn't strip a done task's record.
+    where: { userId, status: { in: ["CREATED", "ONGOING"] }, events: { some: {} } },
     include: { events: true },
   });
   for (const task of scheduledTasks) {

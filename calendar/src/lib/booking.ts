@@ -83,8 +83,11 @@ export async function getAvailableBookingSlots(
     const { year, month, day } = getZonedDateParts(slot.start, timeZone);
     const key = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
     const list = byDay.get(key) ?? [];
-    const dayTotal = (alreadyBookedByDay.get(key) ?? 0) + list.length;
-    if (list.length < MAX_SLOTS_PER_DAY && (maxPerDay == null || dayTotal < maxPerDay)) {
+    // maxPerDay caps *bookings*: a day that's already full offers nothing,
+    // any other day offers all its open slots (it used to also count the
+    // offered slots, so maxPerDay=2 showed only two times per day).
+    const dayFull = maxPerDay != null && (alreadyBookedByDay.get(key) ?? 0) >= maxPerDay;
+    if (list.length < MAX_SLOTS_PER_DAY && !dayFull) {
       list.push(slot.start);
       byDay.set(key, list);
     }

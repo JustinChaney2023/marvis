@@ -354,6 +354,12 @@ export async function updateTask(taskId: string, formData: FormData) {
   });
   if (count === 0) return;
   await logTaskFieldChanges(taskId, existing, fields);
+  // Keep the task's calendar blocks titled like the task (and re-pushed to
+  // Google) — a rename used to leave the old title on the calendar.
+  await prisma.event.updateMany({
+    where: { taskId, userId: user.id, NOT: { title: fields.title } },
+    data: { title: fields.title, localDirty: true },
+  });
   await setTaskLabels(user.id, taskId, labelIdsFromFormData(formData));
   await setTaskBlockedBy(user.id, taskId, blockedByIdsFromFormData(formData));
 
@@ -754,16 +760,35 @@ export async function getShutdownSummaryAction(): Promise<ShutdownSummary> {
  * any calendar slot it had (same semantics as the single-task delay
  * button — a deliberate push-off, not a scheduler decision).
  */
+/**
+ * Shutdown ritual's "push to tomorrow": due tomorrow (keeping the old due
+ * time of day, else 5pm) and re-placed on tomorrow's calendar. Not
+ * DELAYED — that status parks a task out of auto-scheduling for good,
+ * the opposite of "do it tomorrow". (It used to also only add 24h to the
+ * old due date, so a task due last week stayed overdue.)
+ */
 export async function pushLeftoversToTomorrowAction(taskIds: string[]) {
   const user = await requireUser();
+  const now = new Date();
   for (const taskId of taskIds) {
     const existing = await prisma.task.findFirst({ where: { id: taskId, userId: user.id } });
     if (!existing) continue;
-    const base = existing.dueAt ?? new Date();
-    const tomorrow = new Date(base.getTime() + 24 * 60 * 60 * 1000);
-    await delayTaskAction(taskId, tomorrow.toISOString());
+    const due = new Date(now);
+    due.setDate(due.getDate() + 1);
+    if (existing.dueAt) due.setHours(existing.dueAt.getHours(), existing.dueAt.getMinutes(), 0, 0);
+    else due.setHours(17, 0, 0, 0);
+    const startAt = new Date(due);
+    startAt.setHours(0, 0, 0, 0);
+    await prisma.task.update({
+      where: { id: taskId },
+      data: { dueAt: due, startAt, status: existing.status === "DELAYED" ? "CREATED" : existing.status },
+    });
+    await unscheduleTask(user.id, taskId);
+    await scheduleTask(user.id, taskId).catch(() => null);
   }
   revalidatePath("/focus");
+  revalidatePath("/tasks");
+  revalidatePath("/");
 }
 
 export async function askScheduleChatAction(messages: ChatMessage[]): Promise<ChatResult> {
