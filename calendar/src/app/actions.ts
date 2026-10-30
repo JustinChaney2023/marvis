@@ -37,6 +37,7 @@ import {
   type HardwareScan,
 } from "@/lib/hardware";
 import { createBooking, getAvailableBookingSlots } from "@/lib/booking";
+import { maybeApplyTimezoneChange } from "@/lib/serverTimezone";
 import { setTaskDone, stoppedTimerFields, logTrackedTime, findProjectByName } from "@/lib/taskOps";
 import { generateSubtasks, type GenerateSubtasksResult } from "@/lib/subtaskGenerate";
 import { generateEmailDraft, type DraftEmailResult } from "@/lib/emailDraft";
@@ -2251,6 +2252,7 @@ export async function syncUserTimezoneAction(timezone: string): Promise<void> {
   const user = await requireUser();
   if (user.timezone || !isValidTimeZone(timezone)) return;
   await prisma.user.update({ where: { id: user.id }, data: { timezone } });
+  maybeApplyTimezoneChange(user, timezone);
 }
 
 /** Manual override from Settings — always wins, even over a later auto-detect. */
@@ -2259,6 +2261,7 @@ export async function setUserTimezoneAction(formData: FormData): Promise<void> {
   const timezone = String(formData.get("timezone") ?? "").trim();
   if (!timezone || !isValidTimeZone(timezone)) return;
   await prisma.user.update({ where: { id: user.id }, data: { timezone } });
+  maybeApplyTimezoneChange(user, timezone);
   revalidatePath("/settings");
 }
 
