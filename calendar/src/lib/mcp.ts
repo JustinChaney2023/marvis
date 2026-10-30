@@ -100,7 +100,7 @@ async function dispatch(req: JsonRpcRequest, userId: string): Promise<unknown> {
       const requested = String(req.params?.protocolVersion ?? "");
       return {
         protocolVersion: SUPPORTED_PROTOCOL_VERSIONS.includes(requested) ? requested : SUPPORTED_PROTOCOL_VERSIONS[0],
-        capabilities: { tools: { listChanged: false } },
+        capabilities: { tools: { listChanged: false }, prompts: { listChanged: false } },
         serverInfo: { name: MCP_SERVER_NAME, title: "Season", version: SERVER_VERSION },
         instructions: INSTRUCTIONS,
       };
@@ -111,6 +111,17 @@ async function dispatch(req: JsonRpcRequest, userId: string): Promise<unknown> {
       return { tools: TOOLS.map(describeTool) };
     case "tools/call":
       return callTool(String(req.params?.name ?? ""), req.params?.arguments, userId);
+    case "prompts/list":
+      return { prompts: PROMPTS.map(({ name, title, description, arguments: args }) => ({ name, title, description, arguments: args })) };
+    case "prompts/get": {
+      const prompt = PROMPTS.find((p) => p.name === req.params?.name);
+      if (!prompt) throw new RpcError(-32602, `Unknown prompt: ${String(req.params?.name)}`);
+      const args = (req.params?.arguments ?? {}) as Record<string, string>;
+      return {
+        description: prompt.description,
+        messages: [{ role: "user", content: { type: "text", text: prompt.text(args) } }],
+      };
+    }
     default:
       if (req.method.startsWith("notifications/")) return {};
       throw new RpcError(-32601, `Method not found: ${req.method}`);
@@ -713,3 +724,54 @@ const TOOLS: Tool<z.ZodType>[] = [
 ];
 
 export const MCP_TOOL_NAMES = TOOLS.map((t) => t.name);
+
+// ---------------------------------------------------------------------------
+// Prompts — canned starting points that show up in the client's prompt
+// menu (e.g. Claude's "+" → Season). Each is just instructions; the work
+// happens through the tools above.
+
+type Prompt = {
+  name: string;
+  title: string;
+  description: string;
+  arguments?: { name: string; description: string; required?: boolean }[];
+  text: (args: Record<string, string>) => string;
+};
+
+const PROMPTS: Prompt[] = [
+  {
+    name: "plan_my_day",
+    title: "Plan my day",
+    description: "Look at today's calendar and open tasks, then propose a realistic plan.",
+    text: () =>
+      `Use Season to plan my day. Call get_overview first. Then:
+1. Summarize today's fixed commitments in one short list.
+2. Point out anything overdue or due in the next two days that isn't scheduled.
+3. Propose an order for the rest of today that fits around my events, with rough times. Be realistic — leave breathing room.
+4. Ask before changing anything. Once I agree, use update_task / schedule_tasks / create_event to make it real.`,
+  },
+  {
+    name: "weekly_review",
+    title: "Weekly review",
+    description: "Review the week ahead: deadlines, overload, and what to drop or move.",
+    text: () =>
+      `Run a weekly review with Season. Call get_overview, then list_events for the next 7 days and list_tasks (open).
+- Group deadlines this week by project.
+- Flag days that look overloaded and anything overdue.
+- Suggest what to reschedule, delegate, or drop, and why.
+Don't change anything until I confirm; then apply the changes with the tools.`,
+  },
+  {
+    name: "brain_dump",
+    title: "Brain dump to tasks",
+    description: "Turn a messy list of thoughts into well-formed Season tasks.",
+    arguments: [{ name: "notes", description: "Everything on your mind, in any format", required: true }],
+    text: ({ notes }) =>
+      `Turn this brain dump into Season tasks. For each real action item, pick a short title, a due date if one is implied, a priority, a duration estimate, and a project if one fits (call list_projects first to see what exists). Show me the list before creating anything; after I confirm, create them with create_task. Skip anything that isn't actionable and tell me what you skipped.
+
+Brain dump:
+${notes ?? ""}`,
+  },
+];
+
+export const MCP_PROMPT_NAMES = PROMPTS.map((p) => p.name);

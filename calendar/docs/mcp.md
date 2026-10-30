@@ -7,8 +7,7 @@ read and change your tasks, projects, and calendar. Code: `src/lib/mcp.ts`
 ## Connect
 
 Every current Claude client supports MCP's OAuth flow, so you only need the URL
-`https://YOUR-HOST/api/mcp` (also shown, ready to copy, in Settings → Account →
-API tokens & Claude):
+`https://YOUR-HOST/api/mcp` (also shown, ready to copy, in Settings → Claude):
 
 | Client | How |
 | --- | --- |
@@ -20,12 +19,12 @@ reachable over the internet (a localhost URL only works for Claude Code / Claude
 Desktop on the same machine). Set `APP_URL` when Season sits behind a reverse
 proxy so the OAuth metadata advertises the public address.
 
-Each approval creates a token named "<client> (connected app)" in Settings;
+Each approval creates a token named "<client> (connected app)" in Settings → Claude;
 revoke it there to disconnect.
 
 ### Without OAuth
 
-For clients that can't do OAuth, create a token in Settings and use either the
+For clients that can't do OAuth, create a token in Settings → Claude and use either the
 `Authorization: Bearer <token>` header on `/api/mcp`, or the URL form
 `/api/mcp/<token>` (the URL is then the credential — keep it private). Claude
 Desktop via config file: `npx -y mcp-remote https://YOUR-HOST/api/mcp --header "Authorization: Bearer <token>"`.
@@ -54,6 +53,9 @@ Desktop via config file: `npx -y mcp-remote https://YOUR-HOST/api/mcp --header "
 | `schedule_tasks` | Run the auto-scheduler for one task or everything |
 | `list_projects` / `create_project` | Projects |
 | `list_events` / `create_event` / `update_event` / `delete_event` | Calendar (recurring events expanded) |
+
+Prompts (in the client's prompt menu): **Plan my day**, **Weekly review**, and
+**Brain dump to tasks**.
 
 Times are ISO 8601; a time without an offset is read in the user's own timezone
 (Settings → Scheduling), and a bare due date means 5pm that day.
