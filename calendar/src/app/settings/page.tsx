@@ -126,6 +126,7 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
       )}
 
       <SettingsTabs
+        initialTab={typeof sp?.tab === "string" ? sp.tab : undefined}
         tabs={[
           {
             key: "scheduling",
@@ -433,18 +434,6 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
       </section>
 
       <section className="mt-6 rounded-xl border border-rule bg-surface p-5">
-        <h2 className="font-serif text-xl text-ink">API tokens &amp; Claude</h2>
-        <p className="mt-1 text-xs text-muted">
-          For external clients that can&apos;t sign in through the browser —
-          Claude (via Season&apos;s MCP server) or the Obsidian plugin. Each
-          token acts as you — treat it like a password.
-        </p>
-        <div className="mt-3">
-          <ApiTokensManager tokens={apiTokens} />
-        </div>
-      </section>
-
-      <section className="mt-6 rounded-xl border border-rule bg-surface p-5">
         <h2 className="font-serif text-xl text-ink">Subscribed calendars</h2>
         <p className="mt-1 text-xs text-muted">
           Subscribe to an external calendar by its ICS URL — holidays, a
@@ -569,6 +558,25 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
               hidden: s.hiddenByRecipient,
             }))}
           />
+        </div>
+      </section>
+              </>
+            ),
+          },
+          {
+            key: "claude",
+            label: "Claude",
+            content: (
+              <>
+      <section className="mt-6 rounded-xl border border-rule bg-surface p-5">
+        <h2 className="font-serif text-xl text-ink">API tokens &amp; Claude</h2>
+        <p className="mt-1 text-xs text-muted">
+          For external clients that can&apos;t sign in through the browser —
+          Claude (via Season&apos;s MCP server) or the Obsidian plugin. Each
+          token acts as you — treat it like a password.
+        </p>
+        <div className="mt-3">
+          <ApiTokensManager tokens={apiTokens} />
         </div>
       </section>
               </>

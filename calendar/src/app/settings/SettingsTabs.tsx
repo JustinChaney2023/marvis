@@ -4,10 +4,15 @@ import { useState, type ReactNode } from "react";
 
 export default function SettingsTabs({
   tabs,
+  initialTab,
 }: {
   tabs: { key: string; label: string; content: ReactNode }[];
+  // From /settings?tab=… — lets other pages link straight to a tab.
+  initialTab?: string;
 }) {
-  const [active, setActive] = useState(tabs[0].key);
+  const [active, setActive] = useState(
+    tabs.some((t) => t.key === initialTab) ? initialTab! : tabs[0].key,
+  );
 
   return (
     <div>

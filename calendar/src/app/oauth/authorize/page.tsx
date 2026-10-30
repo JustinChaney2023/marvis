@@ -35,7 +35,7 @@ export default async function AuthorizePage(props: PageProps<"/oauth/authorize">
               <li>run the auto-scheduler</li>
             </ul>
             <p className="mt-3 text-xs text-muted">
-              You can disconnect it any time in Settings → Account → API tokens.
+              You can disconnect it any time in Settings → Claude.
             </p>
             <div className="mt-5 flex gap-2">
               <form action={respondToAuthorizationAction.bind(null, params, false)} className="flex-1">

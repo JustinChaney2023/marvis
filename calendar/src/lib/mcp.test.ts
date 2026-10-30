@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { handleMcpMessage, parseUserTime, MCP_TOOL_NAMES } from "./mcp";
+import { handleMcpMessage, parseUserTime, MCP_TOOL_NAMES, MCP_PROMPT_NAMES } from "./mcp";
 
 // Protocol-level checks only — none of these touch the database.
 async function main() {
@@ -55,6 +55,22 @@ async function main() {
     );
     assert.ok(res && "result" in res);
     assert.equal((res.result as { isError?: boolean }).isError, true);
+  }
+
+  {
+    const res = await handleMcpMessage({ jsonrpc: "2.0", id: 6, method: "prompts/list" }, "user");
+    assert.ok(res && "result" in res);
+    const prompts = (res.result as { prompts: { name: string }[] }).prompts;
+    assert.deepEqual(prompts.map((p) => p.name), MCP_PROMPT_NAMES);
+  }
+  {
+    const res = await handleMcpMessage(
+      { jsonrpc: "2.0", id: 7, method: "prompts/get", params: { name: "brain_dump", arguments: { notes: "call mom; fix bike" } } },
+      "user",
+    );
+    assert.ok(res && "result" in res);
+    const msg = (res.result as { messages: { content: { text: string } }[] }).messages[0];
+    assert.match(msg.content.text, /call mom; fix bike/);
   }
 
   // Time parsing: naive times are the user's wall clock, bare dates get
