@@ -98,6 +98,12 @@ export function zonedWallTimeToUtc(
  * (e.g. a prod host set to UTC serving a user elsewhere).
  */
 export function parseZonedWallTime(raw: string, timeZone: string): Date | null {
+  // Forms that compute the exact instant in the browser (localWallTimeToIso)
+  // send it with a Z/offset — it already names its zone, so use it as-is.
+  if (/^\d{4}-\d{2}-\d{2}T[\d:.]+(Z|[+-]\d{2}:?\d{2})$/.test(raw)) {
+    const d = new Date(raw);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
   const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::\d{2})?$/);
   if (!m) return null;
   const [, y, mo, d, h, mi] = m;
