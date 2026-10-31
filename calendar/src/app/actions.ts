@@ -295,10 +295,38 @@ async function setTaskBlockedBy(userId: string, taskId: string, blockedByIds: st
     return;
   }
   const blockers = await prisma.task.findMany({ where: { id: { in: ids }, userId } });
+  // A blocker that (directly or further down) waits on this task would
+  // make a cycle neither task could ever escape — drop it.
+  const allowed: string[] = [];
+  for (const blocker of blockers) {
+    if (!(await dependsOn(blocker.id, taskId))) allowed.push(blocker.id);
+  }
   await prisma.task.update({
     where: { id: taskId },
-    data: { blockedBy: { set: blockers.map((t) => ({ id: t.id })) } },
+    data: { blockedBy: { set: allowed.map((id) => ({ id })) } },
   });
+}
+
+/** Whether `taskId` is (transitively) blocked by `targetId`. */
+async function dependsOn(taskId: string, targetId: string): Promise<boolean> {
+  const seen = new Set<string>([taskId]);
+  let frontier = [taskId];
+  while (frontier.length > 0) {
+    const rows = await prisma.task.findMany({
+      where: { id: { in: frontier } },
+      select: { blockedBy: { select: { id: true } } },
+    });
+    const next: string[] = [];
+    for (const id of rows.flatMap((r) => r.blockedBy.map((b) => b.id))) {
+      if (id === targetId) return true;
+      if (!seen.has(id)) {
+        seen.add(id);
+        next.push(id);
+      }
+    }
+    frontier = next;
+  }
+  return false;
 }
 
 export async function createTask(formData: FormData) {
@@ -1680,7 +1708,7 @@ function eventTypeFromFormData(formData: FormData): (typeof EVENT_TYPES)[number]
 
 // A brand-new/moved recurring event could conflict with a scheduled task
 // on any future occurrence, not just the one instant we'd check here —
-// that's a sweep problem the periodic rescheduleStaleTasks (run by
+// that's a sweep problem the periodic unscheduleStaleTasks (run by
 // Schedule all / Reschedule all) already handles by expanding recurrence
 // over a real window. The instant, single-interval check below only
 // makes sense for one-off events.
@@ -2204,7 +2232,7 @@ export async function moveEvent(eventId: string, startIso: string, endIso: strin
   });
   if (!event) return;
   // The scheduler only ever moves task-linked events (rescheduleConflictsWith/
-  // rescheduleStaleTasks both iterate `task.events`, never plain events) —
+  // unscheduleStaleTasks both iterate `task.events`, never plain events) —
   // `locked` is meaningless on a plain manual event, it's never a
   // scheduling candidate in the first place. Setting it anyway just shows
   // a misleading "locked" badge on every dragged/resized event. Only task

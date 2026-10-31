@@ -27,9 +27,11 @@ Status as of 2026-10-30, after the audit-driven fixes in PRs #76–#81.
 | Full task form (title shorthand fills fields) | `tasks/TaskModal.tsx` | OK |
 | List / board / table views, subtasks, labels, attachments, activity, undo complete | `app/tasks/*` | OK |
 | Auto-scheduler: working hours, buffers, energy windows, project clustering | `lib/scheduler.ts` | OK |
-| Chunking (split a 3h task into 1h blocks) | `Task.chunkMin` | Partial — a partly-done chunked task is re-planned at full length |
+| Most-urgent-first placement (least slack: due date minus work left) | `compareUrgency` | OK |
+| Bumping: a task that would miss its due date moves less urgent blocks (later due date or none; soft never bumps hard; locked/in-progress blocks never move) | `scheduleTask`, `canBump` | OK |
+| Chunking (split a 3h task into 1h blocks) | `Task.chunkMin` | OK — re-planning only covers the time not yet tracked on the task |
 | Hard vs soft deadlines | `Task.hardDeadline` | OK (ordering + finish-by-deadline scoring) |
-| Dependencies ("blocked by") | `Task.blockedBy` | Partial — a task isn't placed until its blockers are done, but finishing a blocker doesn't auto-place it (run Schedule all); no cycle check |
+| Dependencies ("blocked by") | `Task.blockedBy` | OK — finishing a blocker places the freed tasks right away (with Auto-schedule on); cycles are refused |
 | Daily cap ("breathing room") | `AppSettings.dailyCapMin` | OK |
 | Time slots (e.g. "School" hours for some tasks) | Settings → Scheduling | OK |
 | Stale/conflict re-planning | `rescheduleStaleTasks`, `rescheduleConflictsWith` | OK (on Schedule all, on event create/move, and every 10 min with Auto-schedule on) |
@@ -112,7 +114,7 @@ links with notice/limits). The biggest gaps, in priority order:
 4. **Auto-add a video link to bookings** (Google Meet via the connected
    Google account's `conferenceData`, or a fixed Zoom link per booking link).
 5. **Unblock-on-finish.** When a blocker is completed, place the tasks it
-   was blocking right away.
+   was blocking right away. *(Implemented with the scheduler rework.)*
 
 ## Next tier
 

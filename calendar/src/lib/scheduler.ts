@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { expandEvents } from "@/lib/recurrence";
 import { getAppSettings } from "@/lib/settings";
 import { getZonedDateParts, getZonedWeekday, zonedWallTimeToUtc } from "@/lib/timezone";
-import type { TaskEnergy } from "@prisma/client";
+import type { Prisma, TaskEnergy } from "@prisma/client";
 
 const SERVER_TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
@@ -380,7 +380,13 @@ export function expandReservedBlocks(
   return busy;
 }
 
-export async function fetchBusyIntervals(userId: string, now: Date, horizonEnd: Date, timeZone: string) {
+export async function fetchBusyIntervals(
+  userId: string,
+  now: Date,
+  horizonEnd: Date,
+  timeZone: string,
+  ignoreEventIds: string[] = [],
+) {
   // Recurring masters may have started long before `now` and still recur
   // into the horizon, so they can't be filtered by `start` — fetch them
   // unconditionally and expand into occurrences alongside one-off events.
@@ -397,6 +403,7 @@ export async function fetchBusyIntervals(userId: string, now: Date, horizonEnd: 
       // overlay to look at, not commitments — they shouldn't block your
       // own scheduling or your booking page.
       source: { not: "SUBSCRIBED" },
+      ...(ignoreEventIds.length > 0 ? { id: { notIn: ignoreEventIds } } : {}),
       OR: [
         { start: { lt: horizonEnd }, end: { gt: now } },
         // Ended series ("this and following" splits) can't recur into the horizon.
@@ -495,22 +502,83 @@ export function splitIntoChunks(durationMin: number, chunkMin: number | null): n
   return chunks;
 }
 
-export async function scheduleTask(userId: string, taskId: string) {
-  const task = await prisma.task.findFirstOrThrow({
-    where: { id: taskId, userId },
-    include: { timeSlot: true, blockedBy: { select: { status: true } }, labels: { select: { id: true } } },
-  });
-  // A task blocked by an unfinished dependency doesn't get a slot at
-  // all — same "couldn't place it" signal (null) as no slot fitting in
-  // the horizon. Every caller (scheduleAllPendingTasks, the per-task
-  // "Schedule" button, reschedule sweeps) routes through here, so this
-  // is the one place the guard needs to live.
-  if (task.blockedBy.some((b) => b.status !== "DONE")) return null;
-  // Only open work gets placed. Without this, the reschedule sweeps moved
-  // a DONE task's past block into the future (erasing when it was done),
-  // and a DELAYED task got re-placed despite being deliberately parked.
-  if (task.status !== "CREATED" && task.status !== "ONGOING") return null;
+type Slot = { start: Date; end: Date };
 
+/**
+ * Minutes of work a task still needs: its estimate minus the time already
+ * tracked on it (focus timer), never less than one slot. A 3h chunked task
+ * with 2h tracked is re-planned as 1h, not as a fresh 3h.
+ */
+export function remainingMinutes(task: { durationMin: number; trackedMinutes: number }): number {
+  const floor = Math.min(task.durationMin, SLOT_GRANULARITY_MIN);
+  return Math.max(floor, task.durationMin - task.trackedMinutes);
+}
+
+export type Urgency = {
+  dueAt: Date | null;
+  hardDeadline: boolean;
+  priority: number;
+  durationMin: number;
+  trackedMinutes: number;
+  createdAt?: Date;
+};
+
+/** The latest moment a task can start and still finish by its due date. */
+export function latestStart(task: Urgency): number | null {
+  return task.dueAt ? task.dueAt.getTime() - remainingMinutes(task) * 60_000 : null;
+}
+
+/**
+ * Least-slack-first ordering for placement. Dated tasks go by latest
+ * possible start (due date minus work left), with hard deadline, then
+ * priority, breaking ties; undated tasks come after, by priority. This
+ * replaced "every hard deadline before any soft one", which let a
+ * hard-deadline task due next week take the slot a soft task due tomorrow
+ * needed — bumping (canBump) is what gives hard deadlines their teeth now.
+ */
+export function compareUrgency(a: Urgency, b: Urgency): number {
+  const la = latestStart(a);
+  const lb = latestStart(b);
+  if (la !== null && lb === null) return -1;
+  if (la === null && lb !== null) return 1;
+  if (la !== null && lb !== null) {
+    if (la !== lb) return la - lb;
+    if (a.hardDeadline !== b.hardDeadline) return a.hardDeadline ? -1 : 1;
+  }
+  if (a.priority !== b.priority) return b.priority - a.priority;
+  return (a.createdAt?.getTime() ?? 0) - (b.createdAt?.getTime() ?? 0);
+}
+
+/**
+ * Whether `urgent`, which can't otherwise make its due date, may push
+ * `other` out of the way. Only tasks due later (or never) can be bumped,
+ * and a soft deadline never displaces a hard one.
+ */
+export function canBump(urgent: Urgency, other: Urgency): boolean {
+  if (!urgent.dueAt) return false;
+  if (!other.dueAt) return true;
+  if (other.hardDeadline && !urgent.hardDeadline) return false;
+  return other.dueAt > urgent.dueAt;
+}
+
+const schedulableTaskInclude = {
+  timeSlot: true,
+  blockedBy: { select: { status: true } },
+  labels: { select: { id: true } },
+} as const;
+
+type SchedulableTask = Prisma.TaskGetPayload<{ include: typeof schedulableTaskInclude }>;
+
+/**
+ * Finds slots for a task's remaining work without writing anything.
+ * `ignoreEventIds` treats those events as free time — how bumping asks
+ * "would this fit if those blocks moved?".
+ */
+async function planSlots(
+  userId: string,
+  task: SchedulableTask,
+  ignoreEventIds: string[] = [],
+): Promise<{ slots: Slot[]; bufferMin: number } | null> {
   const now = new Date();
   // startAt is a lower bound on when the scheduler may place this task,
   // not a hard commitment — never search before "now" even if startAt is
@@ -525,7 +593,7 @@ export async function scheduleTask(userId: string, taskId: string) {
   const getWindow = task.timeSlot
     ? windowFnForTimeSlot(task.timeSlot, timeZone)
     : windowFnForWorkingHours(settings, timeZone);
-  const rawBusy = await fetchBusyIntervals(userId, now, horizonEnd, timeZone);
+  const rawBusy = await fetchBusyIntervals(userId, now, horizonEnd, timeZone, ignoreEventIds);
   let busy = applyDailyCap(
     padForBuffer(rawBusy, settings.bufferMin),
     now,
@@ -569,9 +637,9 @@ export async function scheduleTask(userId: string, taskId: string) {
   // if any chunk can't find a slot, the task stays unscheduled rather
   // than placing only some of its chunks — same as the unchunked case
   // returning null when nothing fits.
-  const slots: { start: Date; end: Date }[] = [];
+  const slots: Slot[] = [];
   let cursor = searchFrom;
-  for (const chunkDuration of splitIntoChunks(task.durationMin, task.chunkMin)) {
+  for (const chunkDuration of splitIntoChunks(remainingMinutes(task), task.chunkMin)) {
     const slot = findBestSlot(
       { ...task, durationMin: chunkDuration },
       busy,
@@ -588,7 +656,80 @@ export async function scheduleTask(userId: string, taskId: string) {
     );
     cursor = slot.end;
   }
+  return { slots, bufferMin: settings.bufferMin };
+}
 
+/**
+ * When a task can't make its due date, try again treating the blocks of
+ * less urgent tasks (canBump) as free. If that gets it in on time, return
+ * the slots plus the tasks whose blocks they actually land on — those
+ * get moved. Locked blocks and blocks already under way are never bumped.
+ */
+async function planWithBumping(
+  userId: string,
+  task: SchedulableTask,
+): Promise<{ slots: Slot[]; bumpedTaskIds: string[] } | null> {
+  if (!task.dueAt) return null;
+  const now = new Date();
+  const candidates = await prisma.task.findMany({
+    where: {
+      userId,
+      id: { not: task.id },
+      status: { in: ["CREATED", "ONGOING"] },
+      events: { some: { start: { lt: task.dueAt }, end: { gt: now } } },
+    },
+    include: { events: true },
+  });
+  const victims = candidates.filter(
+    (other) =>
+      !other.events.some((e) => e.locked || e.start <= now) && canBump(task, other),
+  );
+  if (victims.length === 0) return null;
+
+  const plan = await planSlots(
+    userId,
+    task,
+    victims.flatMap((v) => v.events.map((e) => e.id)),
+  );
+  if (!plan || plan.slots[plan.slots.length - 1].end > task.dueAt) return null;
+
+  const claimed = padForBuffer(plan.slots, plan.bufferMin);
+  const bumped = victims
+    .filter((v) => v.events.some((e) => claimed.some((s) => e.start < s.end && e.end > s.start)))
+    .sort(compareUrgency);
+  return { slots: plan.slots, bumpedTaskIds: bumped.map((v) => v.id) };
+}
+
+export async function scheduleTask(
+  userId: string,
+  taskId: string,
+  options: { allowBump?: boolean } = {},
+) {
+  const task = await prisma.task.findFirstOrThrow({
+    where: { id: taskId, userId },
+    include: schedulableTaskInclude,
+  });
+  // A task blocked by an unfinished dependency doesn't get a slot at
+  // all — same "couldn't place it" signal (null) as no slot fitting in
+  // the horizon. Every caller (scheduleAllPendingTasks, the per-task
+  // "Schedule" button, reschedule sweeps) routes through here, so this
+  // is the one place the guard needs to live.
+  if (task.blockedBy.some((b) => b.status !== "DONE")) return null;
+  // Only open work gets placed. Without this, the reschedule sweeps moved
+  // a DONE task's past block into the future (erasing when it was done),
+  // and a DELAYED task got re-placed despite being deliberately parked.
+  if (task.status !== "CREATED" && task.status !== "ONGOING") return null;
+
+  let slots = (await planSlots(userId, task))?.slots ?? null;
+  let bumpedTaskIds: string[] = [];
+  const late = !slots || (task.dueAt && slots[slots.length - 1].end > task.dueAt);
+  if (late && options.allowBump !== false) {
+    const bumped = await planWithBumping(userId, task);
+    if (bumped) ({ slots, bumpedTaskIds } = bumped);
+  }
+  if (!slots) return null;
+
+  for (const id of bumpedTaskIds) await unscheduleTask(userId, id);
   // Not an upsert — a chunked reschedule can produce a different number
   // of rows than last time (a shorter chunkMin now, say), so the old set
   // is cleared and replaced wholesale rather than trying to reconcile.
@@ -608,6 +749,10 @@ export async function scheduleTask(userId: string, taskId: string) {
   // of CREATED/ONGOING/DELAYED/DONE. A task can be "ongoing" whether or
   // not it has a slot, and a scheduled task is still just "created"
   // until marked otherwise.
+
+  // Bumped tasks go back in, most urgent first, without bumping anyone
+  // themselves — one level only, so a re-plan can't cascade.
+  for (const id of bumpedTaskIds) await scheduleTask(userId, id, { allowBump: false });
 
   return prisma.event.findMany({ where: { taskId }, orderBy: { start: "asc" } });
 }
@@ -638,7 +783,7 @@ export async function rescheduleConflictsWith(
     include: { events: true },
   });
 
-  let count = 0;
+  const moved: typeof scheduledTasks = [];
   for (const task of scheduledTasks) {
     // A chunked task's chunks (task.events, plural) are still always
     // one-off, never recurring, so a plain interval check per chunk is
@@ -652,11 +797,14 @@ export async function rescheduleConflictsWith(
     );
     if (conflict) {
       await unscheduleTask(userId, task.id);
-      await scheduleTask(userId, task.id);
-      count++;
+      moved.push(task);
     }
   }
-  return count;
+  // Re-place only after all of them are off the calendar, most urgent
+  // first, so the order they happened to be fetched in doesn't decide
+  // who gets the next free slot.
+  for (const task of moved.sort(compareUrgency)) await scheduleTask(userId, task.id);
+  return moved.length;
 }
 
 /**
@@ -667,7 +815,7 @@ export async function rescheduleConflictsWith(
  * never touched, even if stale, since locking is the user's explicit
  * "don't move this" signal.
  */
-export async function rescheduleStaleTasks(userId: string) {
+async function unscheduleStaleTasks(userId: string) {
   const now = new Date();
   // Finished/delayed tasks keep their blocks where they were — a DONE
   // task's past block is the record of when it got done.
@@ -736,9 +884,11 @@ export async function rescheduleStaleTasks(userId: string) {
 
     const isStale = task.events.some((event) => event.end <= now || eventConflicts(event));
 
+    // Only taken off the calendar here — scheduleAllPendingTasks, the one
+    // caller, re-places it together with the never-scheduled tasks in a
+    // single most-urgent-first pass.
     if (isStale) {
       await unscheduleTask(userId, task.id);
-      await scheduleTask(userId, task.id);
       count++;
     }
   }
@@ -757,10 +907,10 @@ export async function rescheduleStaleTasks(userId: string) {
  * rescheduled elsewhere or, for an ONGOING one, expanded in place) plus
  * `results` for the brand-new placements, so a caller that only cares
  * "did anything at all change" (the periodic auto-schedule poll) doesn't
- * have to duplicate rescheduleStaleTasks's own bookkeeping.
+ * have to duplicate unscheduleStaleTasks's own bookkeeping.
  */
 export async function scheduleAllPendingTasks(userId: string) {
-  const staleCount = await rescheduleStaleTasks(userId);
+  const staleCount = await unscheduleStaleTasks(userId);
 
   const tasks = await prisma.task.findMany({
     // Subtasks are checklist items under a parent task, not independently
@@ -771,18 +921,10 @@ export async function scheduleAllPendingTasks(userId: string) {
       events: { none: {} },
       parentId: null,
     },
-    // Hard deadlines get first claim on open slots as a whole tier,
-    // ahead of every soft-deadline task regardless of due date — Motion's
-    // documented precedence order (ASAP > hard deadline > soft deadline >
-    // priority), simplified since this app has no ASAP concept. Within
-    // the same tier, soonest due date first, then priority as the final
-    // tiebreaker.
-    orderBy: [
-      { hardDeadline: "desc" },
-      { dueAt: { sort: "asc", nulls: "last" } },
-      { priority: "desc" },
-    ],
   });
+  // Least slack first (compareUrgency) — the order decides who gets the
+  // good slots, since each placed task is busy time for the next.
+  tasks.sort(compareUrgency);
 
   const results: { taskId: string; scheduled: boolean }[] = [];
   for (const task of tasks) {
