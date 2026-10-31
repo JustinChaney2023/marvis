@@ -839,6 +839,11 @@ model Feedback {
   message   String
   // Path the reporter was on when they opened the form, for context.
   page      String?
+  // The GitHub issue it was filed as (when SEASON_GITHUB_TOKEN is set) and
+  // when an admin sent it to Claude to build — see docs/feedback-to-pr.md.
+  githubIssueNumber Int?
+  githubIssueUrl    String?
+  sentToClaudeAt    DateTime?
   createdAt DateTime         @default(now())
 }
 

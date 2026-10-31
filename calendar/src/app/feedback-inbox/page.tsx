@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth";
+import { isGithubFeedbackConfigured } from "@/lib/githubIssues";
+import SendToClaudeButton from "./SendToClaudeButton";
 
 const CATEGORY_BADGE: Record<string, string> = {
   BUG: "bg-accent-wash text-accent",
@@ -18,6 +20,7 @@ export default async function FeedbackInboxPage() {
     include: { user: { select: { email: true, name: true } } },
     take: 200,
   });
+  const githubOn = isGithubFeedbackConfigured();
 
   return (
     <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-8 sm:px-6 sm:py-12">
@@ -46,6 +49,20 @@ export default async function FeedbackInboxPage() {
               <span>· {f.createdAt.toLocaleString()}</span>
             </div>
             <p className="mt-2 whitespace-pre-wrap text-sm text-ink">{f.message}</p>
+            {(f.githubIssueUrl || githubOn) && (
+              <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-muted">
+                {f.githubIssueUrl && (
+                  <a href={f.githubIssueUrl} target="_blank" rel="noreferrer" className="underline hover:text-ink">
+                    Issue #{f.githubIssueNumber}
+                  </a>
+                )}
+                {f.sentToClaudeAt ? (
+                  <span>Sent to Claude {f.sentToClaudeAt.toLocaleDateString()} — a PR will appear on the issue</span>
+                ) : (
+                  githubOn && <SendToClaudeButton feedbackId={f.id} />
+                )}
+              </div>
+            )}
           </li>
         ))}
         {feedback.length === 0 && (

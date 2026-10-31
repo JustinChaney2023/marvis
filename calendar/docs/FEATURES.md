@@ -87,7 +87,7 @@ Status as of 2026-10-30, after the audit-driven fixes in PRs #76–#81.
 ## Account
 
 Working hours, timezone (server follows the owner's), sessions, tokens,
-admin feedback inbox, password reset (needs SMTP), invite-code signup — OK.
+admin feedback inbox (with feedback → GitHub issue → Claude PR, see `docs/feedback-to-pr.md`), password reset (needs SMTP), invite-code signup — OK.
 
 ---
 

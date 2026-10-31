@@ -38,6 +38,7 @@ import {
   type HardwareScan,
 } from "@/lib/hardware";
 import { createBooking, getAvailableBookingSlots } from "@/lib/booking";
+import { createFeedbackIssue, isGithubFeedbackConfigured, sendIssueToClaude } from "@/lib/githubIssues";
 import { maybeApplyTimezoneChange } from "@/lib/serverTimezone";
 import { autoPlaceIfEnabled } from "@/lib/autoPlan";
 import { getVapidKeys, sendPushToUser } from "@/lib/push";
@@ -3202,9 +3203,56 @@ export async function submitFeedbackAction(formData: FormData) {
     rawCategory === "BUG" || rawCategory === "OTHER" ? rawCategory : "SUGGESTION";
   const page = String(formData.get("page") ?? "").slice(0, 200) || null;
 
-  await prisma.feedback.create({
+  const feedback = await prisma.feedback.create({
     data: { userId: user.id, message, category, page },
   });
+  // Also filed as a GitHub issue when configured (docs/feedback-to-pr.md).
+  // Capped per user so the button can't flood the repo; over the cap it
+  // still lands in the in-app inbox.
+  if (isGithubFeedbackConfigured() && !isFeedbackIssueLimited(user.id)) {
+    try {
+      const issue = await createFeedbackIssue(feedback);
+      await prisma.feedback.update({
+        where: { id: feedback.id },
+        data: { githubIssueNumber: issue.number, githubIssueUrl: issue.url },
+      });
+    } catch (err) {
+      console.error("feedback issue failed:", err);
+    }
+  }
+}
+
+const isFeedbackIssueLimited = createRateLimiter(10, 24 * 60 * 60 * 1000);
+
+/**
+ * Feedback inbox → "Build with Claude": labels the feedback's GitHub issue
+ * (filing it first if it wasn't), which starts the season-claude-build
+ * workflow. Admin only — the label is the approval step.
+ */
+export async function sendFeedbackToClaudeAction(feedbackId: string): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireUser();
+  if (!user.isAdmin) return { ok: false, error: "Admins only." };
+  if (!isGithubFeedbackConfigured()) return { ok: false, error: "GitHub isn't set up (SEASON_GITHUB_TOKEN / SEASON_GITHUB_REPO)." };
+  const feedback = await prisma.feedback.findUnique({ where: { id: feedbackId } });
+  if (!feedback) return { ok: false, error: "Not found." };
+  try {
+    let issueNumber = feedback.githubIssueNumber;
+    if (!issueNumber) {
+      const issue = await createFeedbackIssue(feedback);
+      issueNumber = issue.number;
+      await prisma.feedback.update({
+        where: { id: feedback.id },
+        data: { githubIssueNumber: issue.number, githubIssueUrl: issue.url },
+      });
+    }
+    await sendIssueToClaude(issueNumber);
+    await prisma.feedback.update({ where: { id: feedback.id }, data: { sentToClaudeAt: new Date() } });
+  } catch (err) {
+    console.error("send to Claude failed:", err);
+    return { ok: false, error: "GitHub request failed — check the server log." };
+  }
+  revalidatePath("/feedback-inbox");
+  return { ok: true };
 }
 
 const SEARCH_RESULT_LIMIT = 10;
