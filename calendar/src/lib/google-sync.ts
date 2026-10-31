@@ -1,8 +1,8 @@
-import { google } from "googleapis";
-import type { Prisma } from "@prisma/client";
+import { google, type calendar_v3 } from "googleapis";
 import { prisma } from "@/lib/prisma";
 import { getAuthorizedClientForCalendar, listGoogleCalendarSubscriptions } from "@/lib/google-auth";
 import { parseYMD, formatYMD } from "@/lib/calendar-dates";
+import { zonedWallTimeToUtc } from "@/lib/timezone";
 
 const SYNC_PAST_DAYS = 7;
 const SYNC_FUTURE_DAYS = 90;
@@ -53,6 +53,68 @@ const GOOGLE_TO_LOCAL_COLOR: Record<string, string> = {
   "10": "green", // Basil
   "11": "red", // Tomato
 };
+function statusOf(err: unknown): number | undefined {
+  return (err as { response?: { status?: number } })?.response?.status ?? (err as { code?: number })?.code;
+}
+
+/**
+ * Google EXDATE lines -> our excludeDates (comma-joined ISO starts).
+ * Handles "EXDATE:20261105T150000Z", "EXDATE;TZID=Zone:20261105T100000"
+ * and all-day "EXDATE;VALUE=DATE:20261105" (local midnight, like parseYMD).
+ */
+export function exdatesFromRecurrence(recurrence: string[] | null | undefined, fallbackZone: string): string[] {
+  const out: string[] = [];
+  for (const line of recurrence ?? []) {
+    if (!line.startsWith("EXDATE")) continue;
+    const [head, values] = line.split(":", 2);
+    const tzid = head.match(/TZID=([^;]+)/)?.[1] ?? fallbackZone;
+    for (const v of (values ?? "").split(",")) {
+      const m = v.trim().match(/^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})(Z)?)?$/);
+      if (!m) continue;
+      const [, y, mo, d, h, mi, , z] = m;
+      const date =
+        h === undefined
+          ? parseYMD(`${y}-${mo}-${d}`)
+          : z
+            ? new Date(Date.UTC(+y, +mo - 1, +d, +h, +mi))
+            : zonedWallTimeToUtc(+y, +mo, +d, +h, +mi, tzid);
+      out.push(date.toISOString());
+    }
+  }
+  return out;
+}
+
+function toIcsUtc(d: Date): string {
+  return d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+}
+
+/** Our recurrence fields -> Google's recurrence lines (RRULE + UNTIL + EXDATE). */
+export function recurrenceForGoogle(event: {
+  recurrenceRule: string | null;
+  recurrenceEndsBefore: Date | null;
+  excludeDates: string | null;
+  allDay: boolean;
+}): string[] | undefined {
+  if (!event.recurrenceRule) return undefined;
+  let rule = event.recurrenceRule;
+  // A "this and following" split ends the series locally with
+  // recurrenceEndsBefore — Google needs it as UNTIL, or the old series
+  // keeps running there next to the new one.
+  if (event.recurrenceEndsBefore && !/UNTIL=|COUNT=/.test(rule)) {
+    const until = new Date(event.recurrenceEndsBefore.getTime() - 1000);
+    rule += `;UNTIL=${event.allDay ? toIcsUtc(until).slice(0, 8) : toIcsUtc(until)}`;
+  }
+  const lines = [`RRULE:${rule}`];
+  const excluded = (event.excludeDates ?? "").split(",").filter(Boolean);
+  if (excluded.length > 0) {
+    lines.push(
+      event.allDay
+        ? `EXDATE;VALUE=DATE:${excluded.map((iso) => formatYMD(new Date(iso)).replace(/-/g, "")).join(",")}`
+        : `EXDATE:${excluded.map((iso) => toIcsUtc(new Date(iso))).join(",")}`,
+    );
+  }
+  return lines;
+}
 
 // Per-item sync failures used to only ever reach console.error — a real
 // failure (an expired/revoked token that still passes the coarse
@@ -104,25 +166,73 @@ export async function importFromGoogle(googleCalendarId: string) {
     Date.now() + SYNC_FUTURE_DAYS * 86_400_000,
   ).toISOString();
 
-  const res = await calendar.events.list({
-    calendarId: auth.calendar.calendarId,
-    timeMin,
-    timeMax,
-    singleEvents: false,
-    maxResults: 250,
-    // Without this, Google silently omits cancelled items from the
-    // window instead of returning them with status: "cancelled" — the
-    // only way to see a Google-side deletion at all.
-    showDeleted: true,
-  });
+  // Paginated — a single page caps at 250 items (and showDeleted makes
+  // cancelled items count toward that), so busy calendars used to be
+  // silently truncated.
+  const items: calendar_v3.Schema$Event[] = [];
+  try {
+    let pageToken: string | undefined;
+    do {
+      const res = await calendar.events.list({
+        calendarId: auth.calendar.calendarId,
+        timeMin,
+        timeMax,
+        singleEvents: false,
+        maxResults: 250,
+        // Without this, Google silently omits cancelled items from the
+        // window instead of returning them with status: "cancelled" — the
+        // only way to see a Google-side deletion at all.
+        showDeleted: true,
+        pageToken,
+      });
+      items.push(...(res.data.items ?? []));
+      pageToken = res.data.nextPageToken ?? undefined;
+    } while (pageToken);
+  } catch (err) {
+    return { imported: 0, deleted: 0, errors: [`Couldn't read ${auth.account.email}: ${describeGoogleError(err)}`] };
+  }
 
-  const items = res.data.items ?? [];
+  // Deleted here but not yet on Google (the next export removes them) —
+  // don't import them right back.
+  const pendingDeletes = new Set(
+    (await prisma.googleDeletion.findMany({ where: { googleCalendarId: auth.calendar.id }, select: { googleEventId: true } })).map(
+      (d) => d.googleEventId,
+    ),
+  );
+  const owner = auth.account.userId
+    ? await prisma.user.findUnique({ where: { id: auth.account.userId }, select: { timezone: true } })
+    : null;
+  const zone = owner?.timezone ?? LOCAL_TIMEZONE;
+
+  // Series before their individual instances, so a cancelled instance
+  // finds its master on the very first sync.
+  items.sort((a, b) => Number(Boolean(a.recurringEventId)) - Number(Boolean(b.recurringEventId)));
+
   let imported = 0;
   let deleted = 0;
   const errors: string[] = [];
   for (const item of items) {
     try {
-      if (!item.id) continue;
+      if (!item.id || pendingDeletes.has(item.id)) continue;
+      // A cancelled single occurrence of a recurring series: exclude that
+      // occurrence from the series here instead of showing it.
+      if (item.status === "cancelled" && item.recurringEventId) {
+        const original = item.originalStartTime?.dateTime ?? item.originalStartTime?.date;
+        const master = original
+          ? await prisma.event.findFirst({
+              where: { googleCalendarId: auth.calendar.id, googleEventId: item.recurringEventId },
+              select: { id: true, excludeDates: true },
+            })
+          : null;
+        if (master && original) {
+          const iso = (item.originalStartTime?.dateTime ? new Date(original) : parseYMD(original)).toISOString();
+          const current = (master.excludeDates ?? "").split(",").filter(Boolean);
+          if (!current.includes(iso)) {
+            await prisma.event.update({ where: { id: master.id }, data: { excludeDates: [...current, iso].join(",") } });
+          }
+        }
+        continue;
+      }
       if (item.status === "cancelled") {
         // Deleted directly on Google (not through this app) — remove the
         // local copy so it doesn't linger here after being gone on
@@ -133,6 +243,8 @@ export async function importFromGoogle(googleCalendarId: string) {
         const { count } = await prisma.event.deleteMany({
           where: { googleCalendarId: auth.calendar.id, googleEventId: item.id },
         });
+        // Already gone on Google — no need for the delete tracker's job.
+        await prisma.googleDeletion.deleteMany({ where: { googleCalendarId: auth.calendar.id, googleEventId: item.id } });
         deleted += count;
         continue;
       }
@@ -155,6 +267,16 @@ export async function importFromGoogle(googleCalendarId: string) {
       // renders a day early west of UTC. parseYMD parses as local midnight.
       const start = allDay ? parseYMD(startRaw) : new Date(startRaw);
       const end = allDay ? parseYMD(endRaw) : new Date(endRaw);
+      const exdates = exdatesFromRecurrence(item.recurrence, item.start.timeZone ?? zone);
+      // Don't clobber a local edit that hasn't been pushed yet — export
+      // runs first each sync, so this only skips rows whose push failed.
+      const existingRow = await prisma.event.findUnique({
+        where: { googleCalendarId_googleEventId: { googleCalendarId: auth.calendar.id, googleEventId: item.id } },
+        select: { localDirty: true, excludeDates: true },
+      });
+      if (existingRow?.localDirty) continue;
+      // Keep exclusions Season already knew (cancelled instances above) and add Google's EXDATEs.
+      const mergedExcludes = [...new Set([...(existingRow?.excludeDates ?? "").split(","), ...exdates].filter(Boolean))];
 
       await prisma.event.upsert({
         where: { googleCalendarId_googleEventId: { googleCalendarId: auth.calendar.id, googleEventId: item.id } },
@@ -168,6 +290,7 @@ export async function importFromGoogle(googleCalendarId: string) {
           allDay,
           recurrenceRule: extractRRule(item.recurrence),
           color: item.colorId ? GOOGLE_TO_LOCAL_COLOR[item.colorId] ?? null : null,
+          excludeDates: mergedExcludes.join(",") || null,
           source: "GOOGLE",
           googleCalendarId: auth.calendar.id,
           googleEventId: item.id,
@@ -182,6 +305,7 @@ export async function importFromGoogle(googleCalendarId: string) {
           allDay,
           recurrenceRule: extractRRule(item.recurrence),
           color: item.colorId ? GOOGLE_TO_LOCAL_COLOR[item.colorId] ?? null : null,
+          excludeDates: mergedExcludes.join(",") || null,
           googleUpdatedAt: item.updated ? new Date(item.updated) : new Date(),
         },
       });
@@ -224,6 +348,23 @@ export async function exportToGoogle(googleCalendarId: string) {
     select: { timezone: true },
   });
   const timeZone = owner.timezone ?? LOCAL_TIMEZONE;
+  // Pending deletions first (task blocks rescheduled away, deleted tasks…):
+  // events removed locally whose copy still lives on this calendar.
+  const errors: string[] = [];
+  const deletions = await prisma.googleDeletion.findMany({ where: { googleCalendarId: auth.calendar.id } });
+  for (const d of deletions) {
+    try {
+      await calendar.events.delete({ calendarId: auth.calendar.calendarId, eventId: d.googleEventId });
+    } catch (err) {
+      const status = statusOf(err);
+      if (status !== 404 && status !== 410) {
+        errors.push(`Couldn't delete an event on Google: ${describeGoogleError(err)}`);
+        continue;
+      }
+    }
+    await prisma.googleDeletion.delete({ where: { id: d.id } });
+  }
+
   // This calendar's own events (explicitly tagged), plus any of this
   // user's untagged events *if* this is their default calendar (default
   // account's default calendar) — an event only ever gets picked up by
@@ -232,6 +373,9 @@ export async function exportToGoogle(googleCalendarId: string) {
   const all = await prisma.event.findMany({
     where: {
       userId: auth.account.userId,
+      // Only Season's own events and Google's own copies — never Apple or
+      // subscribed-feed rows (those used to get pushed into Google).
+      source: { in: ["LOCAL", "GOOGLE"] },
       OR: [
         { googleCalendarId: auth.calendar.id },
         ...(isGlobalDefault ? [{ googleCalendarId: null }] : []),
@@ -241,7 +385,6 @@ export async function exportToGoogle(googleCalendarId: string) {
   const toPush = all.filter((e) => !e.googleEventId || e.localDirty);
 
   let exported = 0;
-  const errors: string[] = [];
   for (const event of toPush) {
     try {
       const body = {
@@ -254,12 +397,15 @@ export async function exportToGoogle(googleCalendarId: string) {
         end: event.allDay
           ? { date: formatYMD(event.end) }
           : { dateTime: event.end.toISOString(), timeZone },
-        recurrence: event.recurrenceRule ? [`RRULE:${event.recurrenceRule}`] : undefined,
+        recurrence: recurrenceForGoogle(event),
         colorId: event.color ? LOCAL_TO_GOOGLE_COLOR[event.color] : undefined,
       };
 
       if (event.googleEventId) {
-        const updated = await calendar.events.update({
+        // patch, not update: update replaces the whole Google event,
+        // wiping attendees, the Meet link, reminders, and colors Season
+        // doesn't model.
+        const updated = await calendar.events.patch({
           calendarId: auth.calendar.calendarId,
           eventId: event.googleEventId,
           requestBody: body,
@@ -275,6 +421,7 @@ export async function exportToGoogle(googleCalendarId: string) {
           where: { id: event.id },
           data: {
             localDirty: false,
+            googleCalendarId: auth.calendar.id,
             googleUpdatedAt: updated.data.updated
               ? new Date(updated.data.updated)
               : new Date(),
@@ -315,14 +462,25 @@ export async function exportToGoogle(googleCalendarId: string) {
       }
       exported++;
     } catch (err) {
-      const status = (err as { code?: number; response?: { status?: number } })
-        ?.response?.status ?? (err as { code?: number })?.code;
-      if (status === 404 || status === 410) {
-        // Deleted on Google's side — without this the same event fails
-        // the same way on every future sync, permanently blocking every
-        // event after it in the batch.
-        await prisma.event.delete({ where: { id: event.id } });
+      const status = statusOf(err);
+      if ((status === 404 || status === 410) && event.googleCalendarId === auth.calendar.id) {
+        // Deleted on Google's side (in the calendar it was pushed to) —
+        // without this the same event fails on every future sync.
+        await prisma.event.deleteMany({ where: { id: event.id } });
+        await prisma.googleDeletion.deleteMany({ where: { googleCalendarId: auth.calendar.id, googleEventId: event.googleEventId ?? "" } });
         console.error(`exportToGoogle: ${event.id} gone on Google, deleted locally`);
+      } else if (status === 404 || status === 410) {
+        // Linked to some other account/calendar that doesn't know it —
+        // unlink and let it export fresh rather than deleting your event.
+        await prisma.event.update({
+          where: { id: event.id },
+          data: { googleEventId: null, googleCalendarId: null, googleUpdatedAt: null, localDirty: true },
+        });
+      } else if (status === 403 && event.source === "GOOGLE") {
+        // Someone else's invite you can't edit on Google — keep the local
+        // edit local instead of retrying (and failing) every sync.
+        await prisma.event.update({ where: { id: event.id }, data: { localDirty: false } });
+        errors.push(`"${event.title}" can't be changed on Google (you're not the organizer).`);
       } else {
         console.error(`exportToGoogle: skipping ${event.id}:`, err);
         errors.push(`"${event.title}": ${describeGoogleError(err)}`);
@@ -355,73 +513,34 @@ export async function deleteFromGoogle(googleCalendarId: string, googleEventId: 
   }
 }
 
-/**
- * Deletes every Event matching `where` — pushing a Google-side deletion
- * first for any that are synced, exactly like the single-event
- * deleteEvent action already did. Without this, a raw
- * `prisma.event.deleteMany` (the scheduler rescheduling/unscheduling a
- * task, or deleting a task outright) orphans that event on Google's
- * side; it lingers there forever and the next importFromGoogle pulls it
- * back in as a duplicate local row, since its old local row (and thus
- * the (googleCalendarId, googleEventId) pairing it used to own) is gone.
- * Every scheduler call site that bulk-deletes Events now routes through
- * this instead of a bare deleteMany.
- */
-export async function deleteEventsWithGoogleCleanup(where: Prisma.EventWhereInput) {
-  const events = await prisma.event.findMany({
-    where,
-    select: { id: true, userId: true, googleEventId: true, googleCalendarId: true },
-  });
-  // Only ever delete the local row once the Google side is either cleaned
-  // up or was never synced — an event whose Google cleanup couldn't be
-  // attempted (no resolvable calendar) or failed stays put rather than
-  // being silently orphaned on Google (where it would reappear as a
-  // duplicate on the next import).
-  const deletableIds: string[] = [];
-  // Memoized per userId — a bulk delete/reschedule sweep can hit dozens of
-  // events sharing the same owner, and this lookup resolves to the same
-  // row every time for a given user.
-  const defaultCalendarIdByUser = new Map<string | null, string | undefined>();
-  for (const event of events) {
-    if (!event.googleEventId) {
-      deletableIds.push(event.id);
-      continue;
-    }
-    let targetCalendarId = event.googleCalendarId ?? undefined;
-    if (!targetCalendarId) {
-      if (!defaultCalendarIdByUser.has(event.userId)) {
-        const defaultCalendar = await prisma.googleCalendar.findFirst({
-          where: { isDefault: true, googleAccount: { userId: event.userId, isDefault: true } },
-        });
-        defaultCalendarIdByUser.set(event.userId, defaultCalendar?.id);
-      }
-      targetCalendarId = defaultCalendarIdByUser.get(event.userId);
-    }
-    if (!targetCalendarId) {
-      console.error(`deleteEventsWithGoogleCleanup: no target calendar for event ${event.id}, leaving it in place`);
-      continue;
-    }
-    // deleteFromGoogle deliberately never throws (see its own comment) —
-    // an unreachable API or an already-gone event still lets the local
-    // delete proceed, same as the single-event delete path already does.
-    await deleteFromGoogle(targetCalendarId, event.googleEventId);
-    deletableIds.push(event.id);
-  }
-  if (deletableIds.length > 0) {
-    await prisma.event.deleteMany({ where: { id: { in: deletableIds } } });
-  }
-}
+// One sync per user at a time: two overlapping runs (two tabs, or the Sync
+// button plus auto-sync) both inserted the same new events, duplicating
+// them on Google and then back here. Single server process, so a map works.
+const inFlight = new Map<string, ReturnType<typeof runSync>>();
 
 /** Runs export+import against every Google calendar this user subscribes to. */
-export async function syncGoogleCalendar(userId: string) {
+export function syncGoogleCalendar(userId: string) {
+  const running = inFlight.get(userId);
+  if (running) return running;
+  const run = runSync(userId).finally(() => inFlight.delete(userId));
+  inFlight.set(userId, run);
+  return run;
+}
+
+async function runSync(userId: string) {
   const calendars = await listGoogleCalendarSubscriptions(userId);
   let exported = 0;
   let imported = 0;
   let deleted = 0;
   const errors: string[] = [];
   for (const cal of calendars) {
-    const exportResult = await exportToGoogle(cal.id);
-    const importResult = await importFromGoogle(cal.id);
+    // One calendar failing (network, revoked access) mustn't stop the rest.
+    const exportResult = await exportToGoogle(cal.id).catch((err) => ({ exported: 0, errors: [describeGoogleError(err)] }));
+    const importResult = await importFromGoogle(cal.id).catch((err) => ({
+      imported: 0,
+      deleted: 0,
+      errors: [describeGoogleError(err)],
+    }));
     exported += exportResult.exported;
     imported += importResult.imported;
     deleted += importResult.deleted;

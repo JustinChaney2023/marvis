@@ -16,9 +16,9 @@ import {
   unscheduleTask,
 } from "@/lib/scheduler";
 import { parseQuickCapture } from "@/lib/quickCapture";
-import { expandEvents, withRecurrenceEndCondition, type RecurrenceEndCondition } from "@/lib/recurrence";
+import { expandEvents, recurringOverlapping, withRecurrenceEndCondition, type RecurrenceEndCondition } from "@/lib/recurrence";
 import { parseZonedWallTime, userTimeZone } from "@/lib/timezone";
-import { syncGoogleCalendar, deleteFromGoogle, deleteEventsWithGoogleCleanup } from "@/lib/google-sync";
+import { syncGoogleCalendar, deleteFromGoogle } from "@/lib/google-sync";
 import { listGoogleCalendars } from "@/lib/google-auth";
 import { importFromApple } from "@/lib/apple-sync";
 import { encryptSecret } from "@/lib/tokenCrypto";
@@ -38,7 +38,10 @@ import {
   type HardwareScan,
 } from "@/lib/hardware";
 import { createBooking, getAvailableBookingSlots } from "@/lib/booking";
-import { nextTaskOccurrence } from "@/lib/taskRecurrence";
+import { maybeApplyTimezoneChange } from "@/lib/serverTimezone";
+import { autoPlaceIfEnabled } from "@/lib/autoPlan";
+import { getVapidKeys, sendPushToUser } from "@/lib/push";
+import { setTaskDone, stoppedTimerFields, logTrackedTime, findProjectByName } from "@/lib/taskOps";
 import { generateSubtasks, type GenerateSubtasksResult } from "@/lib/subtaskGenerate";
 import { generateEmailDraft, type DraftEmailResult } from "@/lib/emailDraft";
 import { generateTaskDoc, type DraftDocResult } from "@/lib/docDraft";
@@ -87,7 +90,7 @@ export async function getUpcomingEventReminders() {
     where: {
       userId: user.id,
       reminderMinutes: { not: null },
-      OR: [{ start: { gte: now, lt: soon } }, { recurrenceRule: { not: null } }],
+      OR: [{ start: { gte: now, lt: soon } }, recurringOverlapping(now, soon)],
     },
   });
   const reminderMinutesByMasterId = new Map(rows.map((r) => [r.id, r.reminderMinutes]));
@@ -122,7 +125,7 @@ export async function getUpcomingMeetingBannerAction() {
     where: {
       userId: user.id,
       meetingUrl: { not: null },
-      OR: [{ start: { gte: windowStart, lt: windowEnd } }, { recurrenceRule: { not: null } }],
+      OR: [{ start: { gte: windowStart, lt: windowEnd } }, recurringOverlapping(windowStart, windowEnd)],
     },
   });
   const meetingUrlByMasterId = new Map(rows.map((r) => [r.id, r.meetingUrl]));
@@ -151,7 +154,7 @@ export async function getCurrentEventIdAction(): Promise<string | null> {
     where: {
       userId: user.id,
       allDay: false,
-      OR: [{ recurrenceRule: { not: null } }, { start: { lt: windowEnd }, end: { gt: windowStart } }],
+      OR: [recurringOverlapping(windowStart, windowEnd), { start: { lt: windowEnd }, end: { gt: windowStart } }],
     },
   });
   const current = expandEvents(rows, windowStart, windowEnd, userTimeZone(user)).find((o) => o.start <= now && now < o.end);
@@ -195,15 +198,26 @@ async function taskFieldsFromFormData(formData: FormData, userId: string, timeZo
   // when the key is absent entirely, so a save through the modal doesn't
   // silently wipe an existing startAt. Only a form that actually carries
   // the key (present but empty) clears it.
-  const startAt = formData.has("startAt")
-    ? (() => {
-        const raw = String(formData.get("startAt") ?? "");
-        return raw ? new Date(raw) : null;
-      })()
-    : undefined;
+  // *Iso fields are exact instants computed in the browser's zone
+  // (TaskModal); the naive fields are the fallback for other callers.
+  const startAtIso = String(formData.get("startAtIso") ?? "");
+  const startAtRaw = String(formData.get("startAt") ?? "");
+  const startAt =
+    !formData.has("startAtIso") && !formData.has("startAt")
+      ? undefined
+      : startAtIso
+        ? new Date(startAtIso)
+        : startAtRaw
+          ? new Date(startAtRaw)
+          : null;
   const dueAtDateRaw = String(formData.get("dueAtDate") ?? "");
   const dueAtTimeRaw = String(formData.get("dueAtTime") ?? "") || "17:00";
-  const dueAt = dueAtDateRaw ? parseZonedWallTime(`${dueAtDateRaw}T${dueAtTimeRaw}`, timeZone) : null;
+  const dueAtIso = String(formData.get("dueAtIso") ?? "");
+  const dueAt = dueAtIso
+    ? new Date(dueAtIso)
+    : dueAtDateRaw
+      ? parseZonedWallTime(`${dueAtDateRaw}T${dueAtTimeRaw}`, timeZone)
+      : null;
   const [projectId, assigneeId, timeSlotId] = await Promise.all([
     verifyOwnedId("project", String(formData.get("projectId") ?? "").trim() || null, userId),
     verifyOwnedId("assignee", String(formData.get("assigneeId") ?? "").trim() || null, userId),
@@ -296,6 +310,10 @@ export async function createTask(formData: FormData) {
   });
   await setTaskLabels(user.id, task.id, labelIdsFromFormData(formData));
   await setTaskBlockedBy(user.id, task.id, blockedByIdsFromFormData(formData));
+  // Rules triggered on "Created" — they only ever ran on later status
+  // changes back to CREATED, never when a task was actually created.
+  runAutomationsForStatusChange(user.id, task.id, "CREATED").catch((err) => console.error("automation error:", err));
+  await autoPlaceIfEnabled(user.id, task.id);
 
   // Auto-schedule the new task (and sweep any stale ones) immediately
   // instead of waiting for a manual "Schedule all" click.
@@ -363,6 +381,12 @@ export async function updateTask(taskId: string, formData: FormData) {
   });
   if (count === 0) return;
   await logTaskFieldChanges(taskId, existing, fields);
+  // Keep the task's calendar blocks titled like the task (and re-pushed to
+  // Google) — a rename used to leave the old title on the calendar.
+  await prisma.event.updateMany({
+    where: { taskId, userId: user.id, NOT: { title: fields.title } },
+    data: { title: fields.title, localDirty: true },
+  });
   await setTaskLabels(user.id, taskId, labelIdsFromFormData(formData));
   await setTaskBlockedBy(user.id, taskId, blockedByIdsFromFormData(formData));
 
@@ -802,16 +826,35 @@ export async function getShutdownSummaryAction(): Promise<ShutdownSummary> {
  * any calendar slot it had (same semantics as the single-task delay
  * button — a deliberate push-off, not a scheduler decision).
  */
+/**
+ * Shutdown ritual's "push to tomorrow": due tomorrow (keeping the old due
+ * time of day, else 5pm) and re-placed on tomorrow's calendar. Not
+ * DELAYED — that status parks a task out of auto-scheduling for good,
+ * the opposite of "do it tomorrow". (It used to also only add 24h to the
+ * old due date, so a task due last week stayed overdue.)
+ */
 export async function pushLeftoversToTomorrowAction(taskIds: string[]) {
   const user = await requireUser();
+  const now = new Date();
   for (const taskId of taskIds) {
     const existing = await prisma.task.findFirst({ where: { id: taskId, userId: user.id } });
     if (!existing) continue;
-    const base = existing.dueAt ?? new Date();
-    const tomorrow = new Date(base.getTime() + 24 * 60 * 60 * 1000);
-    await delayTaskAction(taskId, tomorrow.toISOString());
+    const due = new Date(now);
+    due.setDate(due.getDate() + 1);
+    if (existing.dueAt) due.setHours(existing.dueAt.getHours(), existing.dueAt.getMinutes(), 0, 0);
+    else due.setHours(17, 0, 0, 0);
+    const startAt = new Date(due);
+    startAt.setHours(0, 0, 0, 0);
+    await prisma.task.update({
+      where: { id: taskId },
+      data: { dueAt: due, startAt, status: existing.status === "DELAYED" ? "CREATED" : existing.status },
+    });
+    await unscheduleTask(user.id, taskId);
+    await scheduleTask(user.id, taskId).catch(() => null);
   }
   revalidatePath("/focus");
+  revalidatePath("/tasks");
+  revalidatePath("/");
 }
 
 export async function askScheduleChatAction(messages: ChatMessage[]): Promise<ChatResult> {
@@ -984,26 +1027,69 @@ export async function deleteTaskAction(taskId: string) {
   // linked scheduled Event has to go before the Task row itself, or the
   // delete below hits a foreign-key violation. Task.parentId does
   // cascade (schema.prisma), so subtasks clean themselves up.
-  await deleteEventsWithGoogleCleanup({ taskId });
+  await prisma.event.deleteMany({ where: { taskId } });
   await prisma.task.delete({ where: { id: taskId } });
   revalidatePath("/tasks");
   revalidatePath("/");
 }
 
-export async function quickCaptureTask(text: string) {
-  const user = await requireUser();
-  const parsed = parseQuickCapture(text);
-  if (!parsed.title) return;
+export type QuickCaptureResult =
+  | { ok: true; title: string; projectName: string | null; scheduledFor: string | null; unmatchedProject: string | null }
+  | { ok: false; error: string };
 
-  await prisma.task.create({
+/**
+ * The global "c" / "+" quick-capture box. Same parser the MCP server's
+ * create_task uses, read in the user's own timezone. A "#tag" that
+ * doesn't match a project is reported back rather than silently creating
+ * one — a typo'd tag shouldn't spawn a stray project.
+ */
+export async function quickCaptureTask(
+  text: string,
+  options?: { schedule?: boolean; defaultProjectId?: string | null },
+): Promise<QuickCaptureResult> {
+  const user = await requireUser();
+  const timeZone = user.timezone ?? undefined;
+  const parsed = parseQuickCapture(text, new Date(), timeZone, 17);
+  if (!parsed.title) return { ok: false, error: "Add a title." };
+
+  // An explicit "#tag" wins; otherwise the caller's context (e.g. the
+  // Tasks page filtered to one project) supplies the default.
+  const project = parsed.projectName
+    ? await findProjectByName(user.id, parsed.projectName)
+    : options?.defaultProjectId
+      ? await prisma.project.findFirst({
+          where: { id: options.defaultProjectId, userId: user.id },
+          select: { id: true, name: true },
+        })
+      : null;
+
+  const task = await prisma.task.create({
     data: {
       userId: user.id,
       title: parsed.title,
       priority: parsed.priority,
       dueAt: parsed.dueAt,
+      ...(parsed.durationMin ? { durationMin: parsed.durationMin } : {}),
+      ...(project ? { projectId: project.id } : {}),
     },
   });
+
+  runAutomationsForStatusChange(user.id, task.id, "CREATED").catch((err) => console.error("automation error:", err));
+
+  let scheduledFor: string | null = null;
+  if (options?.schedule || (await getAppSettings(user.id)).autoSchedule) {
+    const events = await scheduleTask(user.id, task.id).catch(() => null);
+    if (events && events.length > 0) scheduledFor = events[0].start.toISOString();
+  }
   revalidatePath("/tasks");
+  revalidatePath("/");
+  return {
+    ok: true,
+    title: task.title,
+    projectName: project?.name ?? null,
+    scheduledFor,
+    unmatchedProject: parsed.projectName && !project ? parsed.projectName : null,
+  };
 }
 
 const DEFAULT_QUICK_EVENT_DURATION_MIN = 30;
@@ -1011,22 +1097,36 @@ const DEFAULT_QUICK_EVENT_DURATION_MIN = 30;
 /**
  * Quick-add for calendar events (#38) — same "c" quick-capture parser as
  * tasks, just materialized as an Event instead. A time with no explicit
- * duration ("for 30 min"/"for 1h") gets a 30-min default block; no
+ * duration ("for 30 min"/"1h") gets a 30-min default block; no
  * date/time at all falls back to starting now.
  */
-export async function quickCaptureEvent(text: string) {
+export async function quickCaptureEvent(text: string): Promise<QuickCaptureResult> {
   const user = await requireUser();
-  const parsed = parseQuickCapture(text);
-  if (!parsed.title) return;
+  // A bare day with no time ("friday") starts at 9am that day.
+  const parsed = parseQuickCapture(text, new Date(), user.timezone ?? undefined, 9);
+  if (!parsed.title) return { ok: false, error: "Add a title." };
 
   const start = parsed.dueAt ?? new Date();
   const durationMin = parsed.durationMin ?? DEFAULT_QUICK_EVENT_DURATION_MIN;
   const end = new Date(start.getTime() + durationMin * 60_000);
 
-  await prisma.event.create({
-    data: { userId: user.id, title: parsed.title, start, end },
+  const event = await prisma.event.create({
+    data: { userId: user.id, title: parsed.title, start, end, locked: true, localDirty: true },
   });
+  await rescheduleConflictsWith(user.id, start, end, event.id);
+  await rescheduleConflictedHabits(user.id, start, end, event.id);
   revalidatePath("/");
+  return { ok: true, title: event.title, projectName: null, scheduledFor: start.toISOString(), unmatchedProject: null };
+}
+
+/** For quick capture's "#" autocomplete. */
+export async function listProjectNamesAction(): Promise<{ id: string; name: string; color: string }[]> {
+  const user = await requireUser();
+  return prisma.project.findMany({
+    where: { userId: user.id },
+    select: { id: true, name: true, color: true },
+    orderBy: { createdAt: "asc" },
+  });
 }
 
 export async function createProject(formData: FormData) {
@@ -1277,114 +1377,9 @@ export async function deleteAssignee(assigneeId: string) {
   revalidatePath("/tasks");
 }
 
-// Folds elapsed time since `timerStartedAt` into `trackedMinutes` and
-// clears it — called by every action that moves a task away from
-// ONGOING, so time is never silently lost (only ever added once, since
-// timerStartedAt is cleared in the same write).
-function stoppedTimerFields(task: { timerStartedAt: Date | null; trackedMinutes: number }) {
-  if (!task.timerStartedAt) return { patch: {}, elapsedMin: 0 };
-  const elapsedMin = Math.max(0, Math.round((Date.now() - task.timerStartedAt.getTime()) / 60_000));
-  return {
-    patch: {
-      trackedMinutes: task.trackedMinutes + elapsedMin,
-      timerStartedAt: null,
-    },
-    elapsedMin,
-  };
-}
-
-// One row per timer stop, for the time-tracking report — the plain
-// cumulative Task.trackedMinutes total can't be bucketed by week on its
-// own. Fire-and-forget-adjacent (awaited, but never blocks/fails the
-// status change it's attached to since a broken report is much lower
-// stakes than a task update failing).
-async function logTrackedTime(userId: string, taskId: string, elapsedMin: number) {
-  if (elapsedMin <= 0) return;
-  try {
-    await prisma.timeLogEntry.create({ data: { userId, taskId, minutes: elapsedMin } });
-  } catch (err) {
-    console.error("logTrackedTime failed:", err);
-  }
-}
-
 export async function toggleTaskDone(taskId: string, done: boolean) {
   const user = await requireUser();
-  const existing = await prisma.task.findFirst({
-    where: { id: taskId, userId: user.id },
-    include: { events: true },
-  });
-  if (!existing) return;
-
-  const timerStop = stoppedTimerFields(existing);
-  const task = await prisma.task.update({
-    where: { id: taskId },
-    data: {
-      status: done ? "DONE" : "CREATED",
-      ...timerStop.patch,
-    },
-  });
-  await logTrackedTime(user.id, taskId, timerStop.elapsedMin);
-
-  // Completing ahead of schedule shouldn't leave the block sitting there
-  // showing time that was never actually worked — same "end becomes now"
-  // truncation endTaskFocus already does for solo focus sessions, applied
-  // here for the plain checkbox/board completion path. Never deletes the
-  // block (that reads as "vanished"); a chunk whose start was still in
-  // the future gets pulled back to now too, so it always lands right at
-  // "now" instead of floating in the future or disappearing. A locked
-  // chunk is left alone, same "don't touch it" contract as everywhere else.
-  if (done) {
-    const now = new Date();
-    let finishedEarly = false;
-    for (const event of existing.events) {
-      if (event.locked) continue;
-      if (event.end <= now) continue;
-      finishedEarly = true;
-      // Already in progress — its real start stands, just clip the end
-      // to now. Hasn't started yet — keep its planned duration, anchored
-      // to end now, rather than moving the start to now (which would
-      // collapse a real block down to a 1-minute sliver).
-      const durationMs = event.end.getTime() - event.start.getTime();
-      const start = event.start < now ? event.start : new Date(now.getTime() - durationMs);
-      await prisma.event.update({ where: { id: event.id }, data: { start, end: now } });
-    }
-    // Finishing early frees up whatever time was left in the block —
-    // resweep so a pending task can slide into the gap instead of it
-    // sitting empty until the next periodic auto-schedule poll.
-    if (finishedEarly) {
-      await scheduleAllPendingTasks(user.id);
-    }
-  }
-  runAutomationsForStatusChange(user.id, taskId, task.status).catch((err) =>
-    console.error("automation error:", err),
-  );
-
-  // Recurring tasks aren't expanded like recurring events — completing one
-  // materializes the next occurrence as a new row, since a task carries
-  // per-instance state (status, its own scheduled event) that doesn't fit
-  // the "compute on the fly" model.
-  if (done && task.recurrenceRule && task.dueAt) {
-    const nextDueAt = nextTaskOccurrence(task.recurrenceRule, task.dueAt, userTimeZone(user));
-    if (nextDueAt) {
-      await prisma.task.create({
-        data: {
-          userId: user.id,
-          title: task.title,
-          notes: task.notes,
-          priority: task.priority,
-          energy: task.energy,
-          durationMin: task.durationMin,
-          dueAt: nextDueAt,
-          projectId: task.projectId,
-          assigneeId: task.assigneeId,
-          recurrenceRule: task.recurrenceRule,
-          hardDeadline: task.hardDeadline,
-          color: task.color,
-        },
-      });
-    }
-  }
-
+  if (!(await setTaskDone(user.id, taskId, done))) return;
   revalidatePath("/tasks");
   revalidatePath("/");
   revalidatePath("/calendar");
@@ -1669,6 +1664,10 @@ function meetingUrlFromFormData(formData: FormData): string | null {
   return /^https?:\/\//i.test(raw) ? raw : null;
 }
 
+// Apple and subscribed-feed events are read-only overlays: the next sync
+// rewrites them from the source, so an edit here would silently vanish.
+const EDITABLE_SOURCES = { in: ["LOCAL" as const, "GOOGLE" as const] };
+
 const EVENT_TYPES = ["DEFAULT", "OUT_OF_OFFICE", "FOCUS_TIME"] as const;
 
 function eventTypeFromFormData(formData: FormData): (typeof EVENT_TYPES)[number] {
@@ -1773,8 +1772,20 @@ export async function updateEvent(
     }
   }
 
-  const { count } = await prisma.event.updateMany({
+  // Once an event lives on a Google calendar it stays tied to that
+  // account — re-pointing it (or clearing it, which the modal does when it
+  // hides the picker for single-account users) made the next import
+  // create a second copy, or export to an account that 404s and deletes it.
+  const linked = await prisma.event.findFirst({
     where: { id: eventId, userId: user.id },
+    select: { googleEventId: true },
+  });
+  const accountUpdate = linked?.googleEventId
+    ? {}
+    : { googleCalendarId: await googleCalendarIdFromFormData(formData, user.id) };
+
+  const { count } = await prisma.event.updateMany({
+    where: { id: eventId, userId: user.id, source: EDITABLE_SOURCES },
     data: {
       title,
       start,
@@ -1788,7 +1799,7 @@ export async function updateEvent(
       eventType: eventTypeFromFormData(formData),
       allDay: allDayFromFormData(formData),
       reminderMinutes: reminderMinutesFromFormData(formData),
-      googleCalendarId: await googleCalendarIdFromFormData(formData, user.id),
+      ...accountUpdate,
       localDirty: true,
     },
   });
@@ -1835,7 +1846,7 @@ export async function updateEventOccurrence(
   const normalizedOriginalStart = normalizeExcludedStart(originalStartIso);
   if (!normalizedOriginalStart) return;
   const master = await prisma.event.findFirst({
-    where: { id: masterId, userId: user.id, recurrenceRule: { not: null } },
+    where: { id: masterId, userId: user.id, recurrenceRule: { not: null }, source: EDITABLE_SOURCES },
   });
   if (!master) return;
 
@@ -1930,7 +1941,7 @@ export async function resizeEventOccurrence(
     }),
     prisma.event.update({
       where: { id: masterId },
-      data: { excludeDates: withExcludedStart(master.excludeDates, normalizedOriginalStart) },
+      data: { excludeDates: withExcludedStart(master.excludeDates, normalizedOriginalStart), localDirty: true },
     }),
   ]);
 
@@ -1965,7 +1976,7 @@ export async function updateEventFollowing(
   const normalizedOriginalStart = normalizeExcludedStart(originalStartIso);
   if (!normalizedOriginalStart) return;
   const master = await prisma.event.findFirst({
-    where: { id: masterId, userId: user.id, recurrenceRule: { not: null } },
+    where: { id: masterId, userId: user.id, recurrenceRule: { not: null }, source: EDITABLE_SOURCES },
   });
   if (!master) return;
 
@@ -2030,14 +2041,14 @@ export async function updateEventFollowing(
     await Promise.all([
       tx.event.update({
         where: { id: masterId },
-        data: { recurrenceEndsBefore: splitPoint },
+        data: { recurrenceEndsBefore: splitPoint, localDirty: true },
       }),
       tx.event.updateMany({
         where: { id: { in: movingExceptions.map((e) => e.id) } },
         data: { recurrenceExceptionOfId: newMaster.id },
       }),
       newExcludeDates
-        ? tx.event.update({ where: { id: newMaster.id }, data: { excludeDates: newExcludeDates } })
+        ? tx.event.update({ where: { id: newMaster.id }, data: { excludeDates: newExcludeDates, localDirty: true } })
         : Promise.resolve(),
     ]);
   });
@@ -2051,13 +2062,13 @@ export async function deleteEventOccurrence(masterId: string, originalStartIso: 
   const normalizedOriginalStart = normalizeExcludedStart(originalStartIso);
   if (!normalizedOriginalStart) return;
   const master = await prisma.event.findFirst({
-    where: { id: masterId, userId: user.id, recurrenceRule: { not: null } },
+    where: { id: masterId, userId: user.id, recurrenceRule: { not: null }, source: EDITABLE_SOURCES },
   });
   if (!master) return;
 
   await prisma.event.update({
     where: { id: masterId },
-    data: { excludeDates: withExcludedStart(master.excludeDates, normalizedOriginalStart) },
+    data: { excludeDates: withExcludedStart(master.excludeDates, normalizedOriginalStart), localDirty: true },
   });
   revalidatePath("/");
 }
@@ -2074,7 +2085,7 @@ export async function deleteEventFollowing(masterId: string, originalStartIso: s
   const normalizedOriginalStart = normalizeExcludedStart(originalStartIso);
   if (!normalizedOriginalStart) return;
   const master = await prisma.event.findFirst({
-    where: { id: masterId, userId: user.id, recurrenceRule: { not: null } },
+    where: { id: masterId, userId: user.id, recurrenceRule: { not: null }, source: EDITABLE_SOURCES },
   });
   if (!master) return;
 
@@ -2086,7 +2097,7 @@ export async function deleteEventFollowing(masterId: string, originalStartIso: s
 
   await prisma.event.update({
     where: { id: masterId },
-    data: { recurrenceEndsBefore: splitPoint },
+    data: { recurrenceEndsBefore: splitPoint, localDirty: true },
   });
   revalidatePath("/");
 }
@@ -2199,7 +2210,7 @@ export async function moveEvent(eventId: string, startIso: string, endIso: strin
   // chunks need it, so the scheduler doesn't immediately undo the user's
   // manual placement; `undefined` leaves a plain event's `locked` as-is.
   const { count } = await prisma.event.updateMany({
-    where: { id: eventId, userId: user.id },
+    where: { id: eventId, userId: user.id, source: EDITABLE_SOURCES },
     data: { start, end, locked: event.taskId ? true : undefined, localDirty: true },
   });
   if (count > 0) {
@@ -2211,7 +2222,7 @@ export async function moveEvent(eventId: string, startIso: string, endIso: strin
 
 export async function deleteEvent(eventId: string) {
   const user = await requireUser();
-  const event = await prisma.event.findFirst({ where: { id: eventId, userId: user.id } });
+  const event = await prisma.event.findFirst({ where: { id: eventId, userId: user.id, source: EDITABLE_SOURCES } });
   if (!event) return;
   if (event.googleEventId) {
     // Untagged (pre-multi-calendar) rows fall back to whichever calendar
@@ -2305,7 +2316,7 @@ export async function syncGoogleCalendarAction() {
 // so it isn't hammering the Google API on every poll tick.
 const GOOGLE_AUTO_SYNC_INTERVAL_MS = 10 * 60 * 1000;
 
-export async function syncGoogleCalendarIfDueAction(): Promise<{ synced: boolean }> {
+export async function syncGoogleCalendarIfDueAction(): Promise<{ synced: boolean; errors?: string[] }> {
   const user = await requireUser();
   const calendars = await prisma.googleCalendar.findMany({
     where: { googleAccount: { userId: user.id } },
@@ -2319,11 +2330,11 @@ export async function syncGoogleCalendarIfDueAction(): Promise<{ synced: boolean
   );
   if (!due) return { synced: false };
 
-  await syncGoogleCalendar(user.id);
+  const result = await syncGoogleCalendar(user.id);
   revalidatePath("/");
   revalidatePath("/tasks");
   revalidatePath("/settings");
-  return { synced: true };
+  return { synced: true, errors: result.errors };
 }
 
 /** Disconnects one specific Google account (not all of a user's accounts). */
@@ -2333,15 +2344,22 @@ export async function disconnectGoogleAction(googleAccountId: string) {
     where: { id: googleAccountId, userId: user.id },
   });
   if (!account) return;
-  // Google-sourced events are a read-through copy, not user data — leaving
-  // them behind (googleCalendarId SetNull'd by the cascade below) makes
-  // reconnecting re-import the same events under a new GoogleCalendar id,
-  // duplicating everything. LOCAL events tied to this account are left
-  // alone; they just stop syncing (SetNull), same as before.
+  // Events pulled from this Google account are Google's copies — they go
+  // with it (reconnecting re-imports them cleanly instead of duplicating).
+  // Season's own events keep living here, unlinked, and export fresh to
+  // whichever calendar is default next.
+  const calendarIds = (await prisma.googleCalendar.findMany({ where: { googleAccountId: account.id }, select: { id: true } })).map((c) => c.id);
+  await prisma.event.updateMany({
+    where: { source: "LOCAL", googleCalendar: { googleAccountId: account.id } },
+    data: { googleCalendarId: null, googleEventId: null, googleUpdatedAt: null, localDirty: true },
+  });
   await prisma.event.deleteMany({
     where: { source: "GOOGLE", googleCalendar: { googleAccountId: account.id } },
   });
   await prisma.googleAccount.delete({ where: { id: account.id } });
+  // The deletes above queued Google-side deletions (src/lib/prisma.ts) —
+  // wrong for copies we just pulled in, and the calendars are gone anyway.
+  await prisma.googleDeletion.deleteMany({ where: { googleCalendarId: { in: calendarIds } } });
   if (account.isDefault) {
     // Keep the "exactly one default, if any account exists" invariant —
     // promote whichever's left (oldest first, an arbitrary but stable
@@ -2585,7 +2603,10 @@ export async function updateSchedulingSettingsAction(formData: FormData) {
     }
   }
 
-  await updateAppSettings(user.id, { bufferMin, dailyCapMin, secondaryTimezone });
+  const autoSchedule = formData.get("autoSchedule") === "on";
+  await updateAppSettings(user.id, { bufferMin, dailyCapMin, secondaryTimezone, autoSchedule });
+  // Turning it on plans everything now rather than at the next tick.
+  if (autoSchedule) await scheduleAllPendingTasks(user.id).catch(() => null);
   revalidatePath("/settings");
   revalidatePath("/");
 }
@@ -2616,6 +2637,7 @@ export async function updateWorkingHoursAction(formData: FormData) {
   }
   await updateAppSettings(user.id, { workDays, workStartMin, workEndMin });
   revalidatePath("/settings");
+  revalidatePath("/tasks");
   revalidatePath("/");
 }
 
@@ -2638,6 +2660,7 @@ export async function syncUserTimezoneAction(timezone: string): Promise<void> {
   const user = await requireUser();
   if (user.timezone || !isValidTimeZone(timezone)) return;
   await prisma.user.update({ where: { id: user.id }, data: { timezone } });
+  maybeApplyTimezoneChange(user, timezone);
 }
 
 /** Manual override from Settings — always wins, even over a later auto-detect. */
@@ -2646,6 +2669,7 @@ export async function setUserTimezoneAction(formData: FormData): Promise<void> {
   const timezone = String(formData.get("timezone") ?? "").trim();
   if (!timezone || !isValidTimeZone(timezone)) return;
   await prisma.user.update({ where: { id: user.id }, data: { timezone } });
+  maybeApplyTimezoneChange(user, timezone);
   revalidatePath("/settings");
 }
 
@@ -3260,4 +3284,54 @@ export async function revokeApiTokenAction(tokenId: string) {
   const user = await requireUser();
   await prisma.personalAccessToken.deleteMany({ where: { id: tokenId, userId: user.id } });
   revalidatePath("/settings");
+}
+
+// ---------------------------------------------------------------------------
+// Web Push opt-in (Settings → Notifications; see src/lib/push.ts)
+
+export async function getPushPublicKeyAction(): Promise<string> {
+  await requireUser();
+  return (await getVapidKeys()).publicKey;
+}
+
+export async function listPushDevicesAction() {
+  const user = await requireUser();
+  return prisma.pushSubscription.findMany({
+    where: { userId: user.id },
+    select: { id: true, label: true, createdAt: true, endpoint: true },
+    orderBy: { createdAt: "asc" },
+  });
+}
+
+export async function savePushSubscriptionAction(
+  sub: { endpoint: string; keys: { p256dh: string; auth: string } },
+  label: string,
+) {
+  const user = await requireUser();
+  if (!sub?.endpoint?.startsWith("https://") || !sub.keys?.p256dh || !sub.keys?.auth) {
+    throw new Error("Invalid push subscription.");
+  }
+  // Endpoint is unique per browser install — re-enabling on the same
+  // device (or a different account on it) just takes the row over.
+  const data = { userId: user.id, p256dh: sub.keys.p256dh, auth: sub.keys.auth, label: label.slice(0, 60) || null };
+  await prisma.pushSubscription.upsert({
+    where: { endpoint: sub.endpoint },
+    update: data,
+    create: { ...data, endpoint: sub.endpoint },
+  });
+}
+
+export async function removePushSubscriptionAction(id: string) {
+  const user = await requireUser();
+  await prisma.pushSubscription.deleteMany({ where: { id, userId: user.id } });
+}
+
+export async function sendTestPushAction(): Promise<number> {
+  const user = await requireUser();
+  return sendPushToUser(user.id, {
+    title: "Season notifications are on",
+    body: "You'll get event reminders and a heads-up before unscheduled tasks come due.",
+    url: "/",
+    tag: "test",
+  });
 }

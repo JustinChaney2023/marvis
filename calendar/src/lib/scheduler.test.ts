@@ -222,4 +222,17 @@ const horizon = new Date(2026, 7, 31, 0, 0);
   );
 }
 
+// Deadline is about *finishing*: a 2h task due 10:30 shouldn't take the
+// 9:00 slot as "on time" — but with nothing earlier available it's still
+// placed (best effort), so this checks the scoring prefers a slot that
+// ends before the deadline when one exists later in the scan.
+{
+  const due = new Date(2026, 7, 17, 10, 30);
+  // 9:00-9:30 open, then busy until noon: a 30-min task fits before due.
+  const busy = [{ start: new Date(2026, 7, 17, 9, 30), end: new Date(2026, 7, 17, 12, 0) }];
+  const slot = findBestSlot({ durationMin: 30, dueAt: due, energy: "MEDIUM" }, busy, horizon, from);
+  assert.ok(slot);
+  assert.ok(slot.end <= due, "30-min task finishes before its 10:30 deadline");
+}
+
 console.log("scheduler.test.ts: all checks passed");

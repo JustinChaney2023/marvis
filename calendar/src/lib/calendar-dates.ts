@@ -286,3 +286,13 @@ export const WEEKDAY_LABELS_SUN_FIRST = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri
 export function dayWeekdayLabel(d: Date): string {
   return WEEKDAY_LABELS_SUN_FIRST[d.getDay()];
 }
+
+/**
+ * A form's "YYYY-MM-DDTHH:MM" wall time, read in the *browser's* zone and
+ * sent to the server as an exact ISO instant. Sending the naive string
+ * instead made the server parse it in its own zone — fine when self-hosted
+ * on your own machine, hours off on a UTC cloud host.
+ */
+export function localWallTimeToIso(wallTime: string): string {
+  return new Date(wallTime).toISOString();
+}

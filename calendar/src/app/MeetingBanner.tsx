@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { getUpcomingMeetingBannerAction } from "./actions";
 import { CloseIcon } from "./icons";
+import { useNow } from "./useNow";
 
 const POLL_MS = 30_000;
 
@@ -31,7 +32,7 @@ export default function MeetingBanner() {
   const hidden = HIDDEN_PREFIXES.some((p) => pathname.startsWith(p));
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
-  const [now, setNow] = useState<number | null>(null);
+  const now = useNow(30_000);
 
   useEffect(() => {
     if (hidden) return;
@@ -39,10 +40,7 @@ export default function MeetingBanner() {
     const poll = async () => {
       try {
         const upcoming = await getUpcomingMeetingBannerAction();
-        if (!cancelled) {
-          setMeetings(upcoming);
-          setNow(Date.now());
-        }
+        if (!cancelled) setMeetings(upcoming);
       } catch (err) {
         console.error(err);
       }
@@ -55,7 +53,7 @@ export default function MeetingBanner() {
     };
   }, [hidden]);
 
-  if (hidden || now === null) return null;
+  if (hidden) return null;
   const visible = meetings.filter((m) => !dismissedIds.has(m.id));
   if (visible.length === 0) return null;
 

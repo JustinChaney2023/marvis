@@ -2,9 +2,10 @@ generator client {
   provider = "prisma-client-js"
 }
 
+// The connection URL lives in prisma.config.ts (Prisma 7); the app
+// connects through the better-sqlite3 driver adapter (src/lib/prisma.ts).
 datasource db {
   provider = "sqlite"
-  url      = env("DATABASE_URL")
 }
 
 // Real per-person accounts (added when this moved from a single-user app
@@ -56,6 +57,8 @@ model User {
   sharesReceived          CalendarShare[] @relation("SharesReceived")
   calendarSubscriptions   CalendarSubscription[]
   personalAccessTokens    PersonalAccessToken[]
+  oauthCodes              OAuthAuthorizationCode[]
+  pushSubscriptions       PushSubscription[]
   recordings              Recording[]
 }
 
@@ -617,6 +620,10 @@ model AppSettings {
   // that day and moves on to the next, leaving slack for unplanned work
   // instead of packing every open slot. Null = no cap (previous behavior).
   dailyCapMin        Int?
+  // Motion-style hands-off planning: a background loop (src/lib/autoPlan.ts)
+  // re-plans missed/conflicting blocks and places new tasks every few
+  // minutes, and new tasks are placed the moment they're created.
+  autoSchedule       Boolean  @default(false)
   // The user-facing "these are my working hours" declaration (#35) —
   // promotes the scheduler's old hardcoded 9-6 weekday default into a
   // real per-user setting. Same "SU,MO,..." format as TimeSlot.daysOfWeek
@@ -1046,4 +1053,83 @@ model ReservedBlock {
   updatedAt DateTime        @updatedAt
 
   @@index([profileId])
+}
+
+// OAuth 2.1 for the MCP server (src/lib/oauth.ts) — lets claude.ai / the
+// Claude apps connect through a normal "Allow access" screen instead of a
+// token pasted into a URL. Clients self-register (RFC 7591 dynamic client
+// registration, which MCP clients expect); the access token they end up
+// with is an ordinary PersonalAccessToken, so it shows up — and can be
+// revoked — in Settings like any other.
+model OAuthClient {
+  id           String   @id @default(cuid())
+  // Public identifier handed back from /oauth/register.
+  clientId     String   @unique
+  name         String
+  // JSON array of exact redirect URIs the client registered.
+  redirectUris String
+  createdAt    DateTime @default(now())
+  codes        OAuthAuthorizationCode[]
+}
+
+model OAuthAuthorizationCode {
+  id            String      @id @default(cuid())
+  // SHA-256 of the one-time code, never the code itself.
+  codeHash      String      @unique
+  clientId      String
+  client        OAuthClient @relation(fields: [clientId], references: [clientId], onDelete: Cascade)
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  redirectUri   String
+  // PKCE (S256 only).
+  codeChallenge String
+  expiresAt     DateTime
+  createdAt     DateTime    @default(now())
+}
+
+// Web Push (src/lib/push.ts) — reminders that reach a phone even when
+// Season isn't open. One row per browser/device that opted in.
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  // Shown in Settings so you can tell your phone from your laptop.
+  label     String?
+  createdAt DateTime @default(now())
+}
+
+// Dedupe log for the push loop: one row per reminder already sent
+// (e.g. "event:<occurrence id>" or "task-due:<id>:<dueAt>"), so a restart
+// or overlapping tick never notifies twice. Old rows are swept.
+model PushDelivery {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  createdAt DateTime @default(now())
+}
+
+// Small server-generated secrets that must survive restarts — currently
+// the VAPID key pair Web Push needs (generated on first use).
+model ServerSecret {
+  key       String   @id
+  value     String
+  createdAt DateTime @default(now())
+}
+
+// A Google-linked Event deleted locally, waiting for the next sync to
+// delete its Google copy (src/lib/google-sync.ts). Recorded automatically
+// for every event delete (src/lib/prisma.ts), so code paths that remove
+// task blocks wholesale — rescheduling, task/habit deletion, Claude —
+// can't leave orphans on Google that the next import would bring back.
+model GoogleDeletion {
+  id               String   @id @default(cuid())
+  // GoogleCalendar.id (the row, not Google's calendar id) — an account can
+  // sync several calendars, and the delete must hit the one that holds it.
+  googleCalendarId String
+  googleEventId    String
+  createdAt        DateTime @default(now())
+
+  @@unique([googleCalendarId, googleEventId])
 }

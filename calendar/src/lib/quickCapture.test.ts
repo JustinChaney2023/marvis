@@ -45,12 +45,16 @@ const now = new Date(2026, 7, 19, 10, 0);
   assert.equal(r.priority, 0);
 }
 
-// time only, no date word -> defaults to today at that time
+// time only, no date word -> today if still ahead, else tomorrow
 {
-  const r = parseQuickCapture("Standup at 9:30am", now);
+  const r = parseQuickCapture("Standup at 11:30am", now);
+  assert.equal(r.dueAt?.getDate(), 19);
+}
+{
+  const r = parseQuickCapture("Standup at 9:30am", now); // now is 10:00
   assert.equal(r.title, "Standup");
   assert.ok(r.dueAt);
-  assert.equal(r.dueAt.getDate(), 19);
+  assert.equal(r.dueAt.getDate(), 20);
   assert.equal(r.dueAt.getHours(), 9);
   assert.equal(r.dueAt.getMinutes(), 30);
 }
@@ -83,6 +87,139 @@ const now = new Date(2026, 7, 19, 10, 0);
 {
   const r = parseQuickCapture("Buy milk", now);
   assert.equal(r.durationMin, null);
+}
+
+// project tags, bare durations, bang priority
+{
+  const r = parseQuickCapture("Essay draft #intro-writing 1.5h !!", now);
+  assert.equal(r.title, "Essay draft");
+  assert.equal(r.projectName, "intro writing");
+  assert.equal(r.durationMin, 90);
+  assert.equal(r.priority, 2);
+  assert.equal(r.dueAt, null);
+}
+{
+  const r = parseQuickCapture("Gym 1h30m", now);
+  assert.equal(r.title, "Gym");
+  assert.equal(r.durationMin, 90);
+}
+// a number + spaced unit inside a title isn't a duration
+{
+  const r = parseQuickCapture("Watch 2 hour lecture", now);
+  assert.equal(r.durationMin, null);
+}
+
+// bare weekday: next occurrence, today counts (now is a Wednesday)
+{
+  const r = parseQuickCapture("Lab report due friday", now);
+  assert.equal(r.title, "Lab report");
+  assert.ok(r.dueAt);
+  assert.equal(r.dueAt.getDate(), 21);
+  assert.equal(r.hasTime, false);
+}
+{
+  const r = parseQuickCapture("Club meeting wednesday 6pm", now);
+  assert.ok(r.dueAt);
+  assert.equal(r.dueAt.getDate(), 19);
+  assert.equal(r.dueAt.getHours(), 18);
+  assert.equal(r.hasTime, true);
+}
+
+// month/day forms, rolling into next year when already past
+{
+  const r = parseQuickCapture("Pay rent sep 1st", now);
+  assert.equal(r.title, "Pay rent");
+  assert.ok(r.dueAt);
+  assert.equal(r.dueAt.getMonth(), 8);
+  assert.equal(r.dueAt.getDate(), 1);
+  assert.equal(r.dueAt.getFullYear(), 2026);
+}
+{
+  const r = parseQuickCapture("Taxes 4/15", now);
+  assert.ok(r.dueAt);
+  assert.equal(r.dueAt.getFullYear(), 2027);
+  assert.equal(r.dueAt.getMonth(), 3);
+}
+{
+  const r = parseQuickCapture("Trip 3 dec at 14:30", now);
+  assert.equal(r.title, "Trip");
+  assert.ok(r.dueAt);
+  assert.equal(r.dueAt.getMonth(), 11);
+  assert.equal(r.dueAt.getHours(), 14);
+  assert.equal(r.dueAt.getMinutes(), 30);
+}
+
+// next week -> the coming Monday; tonight -> 8pm
+{
+  const r = parseQuickCapture("Plan sprint next week", now);
+  assert.ok(r.dueAt);
+  assert.equal(r.dueAt.getDay(), 1);
+  assert.equal(r.dueAt.getDate(), 24);
+}
+{
+  const r = parseQuickCapture("Read chapter tonight", now);
+  assert.equal(r.title, "Read chapter");
+  assert.ok(r.dueAt);
+  assert.equal(r.dueAt.getHours(), 20);
+}
+
+// explicit timeZone: wall-clock in that zone, independent of the runtime's
+{
+  const instant = new Date("2026-08-19T14:00:00Z"); // 10:00 in New York
+  const r = parseQuickCapture("Call mom tomorrow 3pm", instant, "America/New_York");
+  assert.ok(r.dueAt);
+  assert.equal(r.dueAt.toISOString(), "2026-08-20T19:00:00.000Z");
+  const late = new Date("2026-08-20T03:00:00Z"); // still the 19th, 11pm in New York
+  const r2 = parseQuickCapture("Thing today 9am", late, "America/New_York");
+  assert.equal(r2.dueAt?.toISOString(), "2026-08-19T13:00:00.000Z");
+}
+
+// short weekday names; sat/sun only with a lead-in word
+{
+  const r = parseQuickCapture("Essay draft fri 3pm", now);
+  assert.equal(r.title, "Essay draft");
+  assert.equal(r.dueAt?.getDate(), 21);
+  assert.equal(r.dueAt?.getHours(), 15);
+}
+{
+  const r = parseQuickCapture("Quiz next tues", now);
+  assert.equal(r.title, "Quiz");
+  assert.equal(r.dueAt?.getDate(), 25);
+}
+{
+  const r = parseQuickCapture("SAT prep", now);
+  assert.equal(r.title, "SAT prep");
+  assert.equal(r.dueAt, null);
+}
+{
+  const r = parseQuickCapture("Laundry on sat", now);
+  assert.equal(r.title, "Laundry");
+  assert.equal(r.dueAt?.getDay(), 6);
+}
+{
+  // "thu" / "thurs" both work
+  assert.equal(parseQuickCapture("Lab thurs", now).dueAt?.getDay(), 4);
+  assert.equal(parseQuickCapture("Lab thu", now).dueAt?.getDay(), 4);
+}
+
+// impossible dates/times stay in the title instead of rolling over
+{
+  const r = parseQuickCapture("Pay 2/30", now);
+  assert.equal(r.dueAt, null);
+  assert.equal(r.title, "Pay 2/30");
+}
+{
+  assert.equal(parseQuickCapture("Trip 31 nov", now).dueAt, null);
+  assert.equal(parseQuickCapture("Party 25pm", now).dueAt, null);
+}
+// words that only look like dates
+{
+  const r = parseQuickCapture("Ask may 5 people", now);
+  assert.equal(r.dueAt, null);
+  assert.equal(r.title, "Ask may 5 people");
+  assert.equal(parseQuickCapture("Read 1/2 of book", now).dueAt, null);
+  assert.equal(parseQuickCapture("Recital on may 5", now).dueAt?.getMonth(), 4);
+  assert.equal(parseQuickCapture("Leap feb 29", now).dueAt?.getDate(), 29);
 }
 
 console.log("quickCapture.test.ts: all checks passed");

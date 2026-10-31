@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireApiUser } from "@/lib/apiAuth";
+import { setTaskDone } from "@/lib/taskOps";
+import { unscheduleTask } from "@/lib/scheduler";
 
 const STATUSES = ["CREATED", "ONGOING", "DELAYED", "DONE"] as const;
 
@@ -53,6 +55,21 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     return NextResponse.json({ error: "Nothing to update — provide title, notes, and/or status." }, { status: 400 });
   }
 
-  const updated = await prisma.task.update({ where: { id }, data });
+  // Completing (or reopening) goes through the same path as the app, so
+  // the timer is folded in, automations fire, and a recurring task gets
+  // its next occurrence — a raw status write skipped all of that.
+  const { status, ...rest } = data;
+  if (status === "DONE" || (status && task.status === "DONE")) {
+    await setTaskDone(auth.user.id, id, status === "DONE");
+  } else if (status) {
+    (rest as typeof data).status = status;
+  }
+  if (status === "DELAYED") await unscheduleTask(auth.user.id, id);
+  const updated = Object.keys(rest).length > 0
+    ? await prisma.task.update({ where: { id }, data: rest })
+    : await prisma.task.findUniqueOrThrow({ where: { id } });
+  if (rest.title) {
+    await prisma.event.updateMany({ where: { taskId: id }, data: { title: rest.title, localDirty: true } });
+  }
   return NextResponse.json(serialize(updated));
 }

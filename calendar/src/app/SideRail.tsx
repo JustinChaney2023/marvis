@@ -6,15 +6,15 @@ import { useEffect, useState } from "react";
 import NavLinks from "./NavLinks";
 import ThemeToggle from "./ThemeToggle";
 import FeedbackButton from "./FeedbackButton";
-import { MarkIcon, MenuIcon, CloseIcon } from "./icons";
+import { MarkIcon, PlusIcon } from "./icons";
+import { openQuickCapture } from "./quickCaptureEvents";
 import { getCurrentEventIdAction } from "./actions";
-import { useModalOpen } from "@/lib/keyboard";
 
 const LIVE_EVENT_POLL_MS = 30_000;
 
 // Public/pre-auth routes render their own minimal chrome, so the app nav
 // and settings/feedback icons (which assume a logged-in user) stay hidden.
-const HIDDEN_PREFIXES = ["/login", "/signup", "/forgot-password", "/reset-password", "/book/", "/rsvp/"];
+export const HIDDEN_CHROME_PREFIXES = ["/login", "/signup", "/forgot-password", "/reset-password", "/book/", "/rsvp/", "/oauth/"];
 
 // Keep in sync with package.json's "version" — duplicated rather than
 // imported so this client bundle doesn't pull in the whole package.json
@@ -27,18 +27,7 @@ const APP_VERSION = "0.1.0";
 // the shell shape the paper/chalkboard design language was drawn for.
 export default function SideRail() {
   const pathname = usePathname();
-  const hidden = HIDDEN_PREFIXES.some((p) => pathname.startsWith(p));
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  useModalOpen(drawerOpen);
-  // A route change closes the drawer, same as a menu link click would —
-  // catches back/forward navigation too, not just clicking a NavLinks item.
-  // Adjusted during render (not an effect) per
-  // https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes
-  const [prevPathname, setPrevPathname] = useState(pathname);
-  if (pathname !== prevPathname) {
-    setPrevPathname(pathname);
-    setDrawerOpen(false);
-  }
+  const hidden = HIDDEN_CHROME_PREFIXES.some((p) => pathname.startsWith(p));
 
   // A little hidden feature: during a live event, the mark itself jumps
   // straight to its fullscreen timer instead of home — no visible
@@ -64,11 +53,10 @@ export default function SideRail() {
 
   if (hidden) return null;
 
-  const railContents = (onNavigate?: () => void) => (
-    <>
+  return (
+    <aside className="hidden h-full w-44 flex-shrink-0 flex-col gap-4 overflow-y-auto border-r border-rule bg-surface px-3 py-4 md:flex print:hidden">
       <Link
         href={liveEventId ? `/timer?eventId=${liveEventId}` : "/"}
-        onClick={onNavigate}
         className="flex items-center gap-2 px-1.5 text-ink"
       >
         <MarkIcon className="h-6 w-6 flex-shrink-0" />
@@ -78,6 +66,17 @@ export default function SideRail() {
         </span>
       </Link>
 
+      <button
+        type="button"
+        onClick={() => openQuickCapture()}
+        title="Quick add (c)"
+        className="flex items-center gap-2 rounded-lg border border-rule bg-paper px-2.5 py-2 text-sm text-ink-2 transition-colors hover:border-accent hover:text-ink"
+      >
+        <PlusIcon className="h-4 w-4 flex-shrink-0 text-accent" />
+        <span className="flex-1 text-left">Quick add</span>
+        <kbd className="font-mono text-[10px] text-muted">c</kbd>
+      </button>
+
       <NavLinks />
 
       <div className="flex-grow" />
@@ -86,57 +85,6 @@ export default function SideRail() {
         <ThemeToggle />
         <FeedbackButton />
       </div>
-    </>
-  );
-
-  return (
-    <>
-      {/* Below md, the persistent rail collapses to a top bar + hamburger
-          — a fixed-width sidebar with no way to hide it was clipping every
-          other page's content at phone/narrow-tablet widths. */}
-      <div className="flex flex-shrink-0 items-center justify-between border-b border-rule bg-surface px-3 py-2 print:hidden md:hidden">
-        <Link href="/" className="flex items-center gap-2 text-ink">
-          <MarkIcon className="h-5 w-5 flex-shrink-0" />
-          <span className="font-serif text-base leading-none">Season</span>
-        </Link>
-        <button
-          type="button"
-          onClick={() => setDrawerOpen(true)}
-          aria-label="Open menu"
-          className="flex h-8 w-8 items-center justify-center rounded-md text-ink-2 transition-colors hover:bg-rule-soft"
-        >
-          <MenuIcon className="h-5 w-5" />
-        </button>
-      </div>
-
-      {drawerOpen && (
-        <div
-          className="fixed inset-0 z-50 md:hidden"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Menu"
-        >
-          <div
-            className="absolute inset-0 bg-scrim"
-            onClick={() => setDrawerOpen(false)}
-          />
-          <aside className="relative flex h-full w-64 max-w-[85vw] flex-col gap-4 overflow-y-auto border-r border-rule bg-surface px-3 py-4">
-            <button
-              type="button"
-              onClick={() => setDrawerOpen(false)}
-              aria-label="Close menu"
-              className="flex h-8 w-8 items-center justify-center self-end rounded-md text-ink-2 transition-colors hover:bg-rule-soft"
-            >
-              <CloseIcon className="h-4 w-4" />
-            </button>
-            {railContents(() => setDrawerOpen(false))}
-          </aside>
-        </div>
-      )}
-
-      <aside className="hidden h-full w-44 flex-shrink-0 flex-col gap-4 overflow-y-auto border-r border-rule bg-surface px-3 py-4 print:hidden md:flex">
-        {railContents()}
-      </aside>
-    </>
+    </aside>
   );
 }

@@ -16,6 +16,7 @@ export async function updateAppSettings(
   data: {
     bufferMin?: number;
     dailyCapMin?: number | null;
+    autoSchedule?: boolean;
     workDays?: string;
     workStartMin?: number;
     workEndMin?: number;

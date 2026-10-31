@@ -97,10 +97,25 @@ export async function signupAction(formData: FormData) {
   redirect("/");
 }
 
+// Only same-site paths — "next" round-trips through the URL, so without
+// this "/login?next=https://evil.example" would bounce a fresh login
+// straight off-site. Resolved with the real URL parser rather than string
+// checks: it strips tabs/newlines and treats "\\" like "/", so "/\t/evil.com"
+// or "/\\evil.com" really are protocol-relative.
+function safeNextPath(raw: string): string {
+  try {
+    const url = new URL(raw, "http://season.invalid");
+    if (url.origin !== "http://season.invalid") return "/";
+    return url.pathname + url.search + url.hash;
+  } catch {
+    return "/";
+  }
+}
+
 export async function loginAction(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const password = String(formData.get("password") ?? "");
-  const next = String(formData.get("next") ?? "/");
+  const next = safeNextPath(String(formData.get("next") ?? "/"));
 
   if (isLoginRateLimited(await requestIp())) {
     redirect(

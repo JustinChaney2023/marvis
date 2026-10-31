@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { toggleTaskDone } from "../actions";
+import { showToast } from "../toast";
 import { formatDueDateTime } from "@/lib/calendar-dates";
 import TaskModal, { type TaskModalTask } from "./TaskModal";
 import { STATUS_BADGE, STATUS_LABEL, type TaskStatus } from "./taskStatus";
@@ -92,7 +93,16 @@ export default function TaskTable({
                           type="checkbox"
                           checked={task.status === "DONE"}
                           onClick={(e) => e.stopPropagation()}
-                          onChange={(e) => toggleTaskDone(task.id, e.target.checked)}
+                          onChange={async (e) => {
+                            const done = e.target.checked;
+                            await toggleTaskDone(task.id, done);
+                            if (done && !task.recurrenceRule) {
+                              showToast({
+                                message: `Completed “${task.title}”`,
+                                action: { label: "Undo", onClick: () => toggleTaskDone(task.id, false) },
+                              });
+                            }
+                          }}
                           className="flex-shrink-0"
                         />
                         <span className={task.status === "DONE" ? "line-through text-muted" : ""}>

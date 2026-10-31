@@ -6,34 +6,68 @@ test.afterEach(async ({ request }) => {
   await request.post("/api/test/cleanup", { data: { prefix: PREFIX } });
 });
 
-test("add-task form remembers the last-used project", async ({ page }) => {
-  await page.goto("/tasks");
+test("inline add parses shorthand into a task", async ({ page }) => {
+  await page.goto("/tasks", { waitUntil: "networkidle" });
+  const input = page.getByLabel("Add a task");
+  await input.fill(`${PREFIX} read chapter 4 tomorrow 3pm 1h !!`);
+  // Live preview of what the shorthand means, before submitting.
+  await expect(page.getByText("Tomorrow, 3:00 PM")).toBeVisible();
+  await expect(page.getByText("1h", { exact: true })).toBeVisible();
+  await input.press("Enter");
 
-  // Create a project via the "+ Project" quick-add.
+  const row = page.locator("li", { hasText: `${PREFIX} read chapter 4` }).first();
+  await expect(row).toBeVisible();
+  await expect(row.getByText("High")).toBeVisible();
+  await expect(row.getByText("60m est.")).toBeVisible();
+  await expect(row).toContainText("3:00 PM");
+});
+
+test("quick capture files a #project task and stays open for the next one", async ({ page }) => {
+  await page.goto("/tasks", { waitUntil: "networkidle" });
   await page.getByText("+ Project").click();
-  await page.getByPlaceholder("Project name").fill(`${PREFIX} Sticky Project`);
+  await page.getByPlaceholder("Project name").fill(`${PREFIX} Biology`);
   await page.locator('form:has(input[placeholder="Project name"])').getByRole("button", { name: "Add" }).click();
-  await expect(page.getByRole("link", { name: `${PREFIX} Sticky Project` })).toBeVisible();
+  await expect(page.getByRole("link", { name: `${PREFIX} Biology` })).toBeVisible();
 
-  const projectSelect = page.locator('select[name="projectId"]');
-  await projectSelect.selectOption({ label: `${PREFIX} Sticky Project` });
+  await page.locator("body").press("c");
+  const box = page.getByRole("dialog", { name: "Quick add" });
+  await expect(box).toBeVisible();
+  const input = box.getByRole("textbox");
+  // A #tag matches a project loosely (exact, then prefix, then substring).
+  await input.fill(`${PREFIX} lab writeup #biology`);
+  await input.press("Enter");
+  await expect(box.getByText(`${PREFIX} lab writeup · in ${PREFIX} Biology`)).toBeVisible();
+  await expect(input).toHaveValue("");
 
-  const taskForm = page.locator('form:has(input[placeholder="What needs doing?"])');
-  await taskForm.getByPlaceholder("What needs doing?").fill(`${PREFIX} first task`);
-  await taskForm.getByRole("button", { name: "Add" }).click();
-  await expect(page.getByText(`${PREFIX} first task`)).toBeVisible();
+  await page.keyboard.press("Escape");
+  const row = page.locator("li", { hasText: `${PREFIX} lab writeup` }).first();
+  await expect(row.getByText(`${PREFIX} Biology`)).toBeVisible();
+});
 
-  // Reload — the project select should now default to what we just used,
-  // not fall back to "No project".
-  await page.reload();
-  const expectedValue = await projectSelect.evaluate((el: HTMLSelectElement) => {
-    const opt = Array.from(el.options).find(
-      (o) => o.textContent === "[e2e] Sticky Project",
-    );
-    return opt?.value ?? "";
-  });
-  expect(expectedValue).not.toBe("");
-  await expect(page.locator('select[name="projectId"]')).toHaveValue(
-    expectedValue,
-  );
+test("completing a task offers undo", async ({ page }) => {
+  await page.goto("/tasks", { waitUntil: "networkidle" });
+  await page.getByLabel("Add a task").fill(`${PREFIX} undo me`);
+  await page.getByLabel("Add a task").press("Enter");
+  const list = page.locator("main ul").first();
+  const row = list.locator("li", { hasText: `${PREFIX} undo me` });
+  await expect(row).toBeVisible();
+
+  await row.getByLabel("mark done").click();
+  await expect(page.getByRole("status")).toContainText(`Completed “${PREFIX} undo me”`);
+  await expect(row).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(row).toBeVisible();
+});
+
+test("new-task form fills fields from title shorthand", async ({ page }) => {
+  await page.goto("/tasks?new=1", { waitUntil: "networkidle" });
+  const title = page.locator('input[name="title"]');
+  await title.fill(`${PREFIX} essay draft fri 2h !!!`);
+  await title.blur();
+  await expect(title).toHaveValue(`${PREFIX} essay draft`);
+  await expect(page.getByRole("radio", { name: "Urgent" })).toHaveAttribute("aria-checked", "true");
+  await expect(page.locator('input[name="durationMin"]')).toHaveValue("120");
+  await page.getByRole("button", { name: "Add task" }).click();
+  await expect(page.locator("li", { hasText: `${PREFIX} essay draft` }).first()).toBeVisible();
 });

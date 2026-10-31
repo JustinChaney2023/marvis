@@ -19,7 +19,16 @@ export async function requireApiUser(request: NextRequest): Promise<ApiAuthResul
   if (!match) {
     return { error: NextResponse.json({ error: "Missing or malformed Authorization header." }, { status: 401 }) };
   }
-  const tokenHash = hashApiToken(match[1].trim());
+  return authenticateApiToken(match[1].trim());
+}
+
+/**
+ * Shared by the Authorization-header path above and the MCP route's
+ * token-in-URL form (/api/mcp/<token>), for MCP clients like claude.ai's
+ * custom connectors that can't send a custom header.
+ */
+export async function authenticateApiToken(rawToken: string): Promise<ApiAuthResult> {
+  const tokenHash = hashApiToken(rawToken);
 
   if (isRateLimited(tokenHash)) {
     return { error: NextResponse.json({ error: "Too many requests." }, { status: 429 }) };

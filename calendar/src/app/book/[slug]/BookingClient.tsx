@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createBookingAction } from "../../actions";
 import { CloseIcon } from "../../icons";
 import Button from "../../ui/Button";
@@ -32,32 +32,42 @@ function formatTime(iso: string): string {
   });
 }
 
+// "YYYY-MM-DD" in the visitor's own zone. Parsed as a local date — `new
+// Date("2026-11-05")` would be UTC midnight, i.e. the 4th west of UTC.
 function formatDayHeading(dayLabel: string): string {
-  // dayLabel is a bare "YYYY-MM-DD" (the owner's calendar day — see
-  // getAvailableBookingSlots). `new Date("YYYY-MM-DD")` parses date-only
-  // strings as UTC midnight per spec; formatting that in the viewer's
-  // local timezone then shows the WRONG day for anyone west of UTC (all
-  // of the US), off by one — a booker could pick "Thursday" and land on
-  // the host's Friday. Parsing the Y/M/D components into the multi-arg
-  // Date constructor instead builds *local* midnight, so formatting it
-  // back reads the same calendar day regardless of the viewer's zone.
-  const match = dayLabel.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!match) return dayLabel;
-  const [, y, m, d] = match;
-  const local = new Date(Number(y), Number(m) - 1, Number(d));
-  return local.toLocaleDateString(undefined, {
+  const [y, m, d] = dayLabel.split("-").map(Number);
+  const parsed = new Date(y, (m ?? 1) - 1, d ?? 1);
+  if (Number.isNaN(parsed.getTime())) return dayLabel;
+  return parsed.toLocaleDateString(undefined, {
     weekday: "long",
     month: "long",
     day: "numeric",
   });
 }
 
+function localDayKey(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 export default function BookingClient({
   slug,
   title,
   durationMinutes,
-  availability,
+  availability: ownerDays,
 }: Props) {
+  // The server groups slots by the owner's day; a visitor elsewhere sees
+  // times in their own zone, so regroup by *their* day to match.
+  const availability = useMemo(() => {
+    const byDay = new Map<string, string[]>();
+    for (const iso of ownerDays.flatMap((d) => d.slots)) {
+      const key = localDayKey(iso);
+      byDay.set(key, [...(byDay.get(key) ?? []), iso]);
+    }
+    return [...byDay.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([dayLabel, slots]) => ({ dayLabel, slots: slots.sort() }));
+  }, [ownerDays]);
   const [selectedSlot, setSelectedSlot] = useState<{
     dayLabel: string;
     slotIso: string;

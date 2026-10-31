@@ -35,7 +35,7 @@ export default function ShortcutHint() {
   if (dismissed) return null;
 
   return (
-    <p className="flex items-center gap-2 font-mono text-xs text-muted print:hidden">
+    <p className="hidden items-center gap-2 font-mono text-xs text-muted md:flex print:hidden">
       <span>
         Shortcuts: <kbd>j</kbd>/<kbd>k</kbd> prev/next, <kbd>d</kbd>/<kbd>w</kbd>/<kbd>m</kbd> view,{" "}
         <kbd>t</kbd> today, <kbd>?</kbd> all shortcuts

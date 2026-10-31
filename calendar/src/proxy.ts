@@ -16,7 +16,29 @@ import type { NextRequest } from "next/server";
 // page's cookies, so without this exemption every afterEach cleanup
 // call was silently redirecting to /login and never actually running —
 // a real, no-op-but-looks-successful gap this proxy check created.
-const PUBLIC_PATH_PREFIXES = ["/book/", "/login", "/signup", "/api/test/"];
+// /api/v1/ and /api/mcp authenticate with a Bearer personal access token
+// (requireApiUser), never a session cookie — redirecting them to /login
+// here meant no API client could ever reach them.
+// The manifest and app icons are fetched by the browser without cookies
+// (that's how manifest fetches work), so they must never redirect.
+const PUBLIC_PATH_PREFIXES = [
+  "/book/",
+  "/login",
+  "/signup",
+  "/api/test/",
+  "/api/v1/",
+  "/api/mcp",
+  "/manifest.webmanifest",
+  "/sw.js",
+  // OAuth for MCP clients: discovery metadata, client registration, and
+  // the code->token exchange are called server-to-server with no cookie.
+  // (/oauth/authorize is deliberately NOT here — it needs a login.)
+  "/.well-known/",
+  "/oauth/register",
+  "/oauth/token",
+  "/icon",
+  "/apple-icon",
+];
 const SESSION_COOKIE = "marvis_session";
 
 function isPublicPath(pathname: string): boolean {
@@ -31,7 +53,9 @@ export function proxy(request: NextRequest) {
   if (hasSessionCookie) return NextResponse.next();
 
   const loginUrl = new URL("/login", request.url);
-  loginUrl.searchParams.set("next", pathname);
+  // Keep the query string — /oauth/authorize?client_id=...&state=... has
+  // to come back intact after signing in.
+  loginUrl.searchParams.set("next", pathname + request.nextUrl.search);
   return NextResponse.redirect(loginUrl);
 }
 

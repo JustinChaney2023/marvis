@@ -5,8 +5,12 @@ Personal calendar/task planner — a Motion-style auto-scheduling tool, being bu
 ## Stack
 
 - Next.js (App Router) + TypeScript + Tailwind
-- SQLite via Prisma (`prisma/schema.prisma`) — single-user, no DB server to run
+- SQLite via Prisma 7 (`prisma/schema.prisma`, `prisma.config.ts`, better-sqlite3 adapter) — single-user, no DB server to run
 - Server Actions for writes, no separate API layer
+
+## Deploying
+
+See `docs/deploy.md` — updating a server is `bash calendar/scripts/deploy.sh`.
 
 ## Dev setup
 
@@ -16,6 +20,10 @@ cp .env.example .env
 npx prisma migrate dev
 npm run dev
 ```
+
+Tests: `npm test` (unit), and for end-to-end run `E2E_TEST_ROUTES=1 npm run dev`
+in one terminal and `npm run test:e2e` in another (it signs in as
+`e2e@example.com`, creating the account on first run). CI runs both.
 
 Note: `tsc --noEmit` depends on Next's generated route types (`.next/types/`),
 which only exist after `next dev` or `next build` has run at least once on a
@@ -34,6 +42,19 @@ same weighting order as FluidCalendar, simplified to a strict sort. Each
 placement creates/updates the linked `Event` and flips the task to
 `SCHEDULED`. "Schedule all" runs this over every open task sequentially, so
 earlier (more urgent) tasks claim the better slots.
+
+## Phone app & notifications
+
+Season is an installable web app: open it on your phone and use "Add to Home
+Screen" (iPhone: Share → Add to Home Screen). Settings → Notifications turns on
+push reminders per device — event reminders and a heads-up an hour before an
+unscheduled task is due — sent by a once-a-minute loop in the server process
+(`src/lib/push.ts`, started from `src/instrumentation.ts`).
+
+## Claude (MCP)
+
+Season runs an MCP server at `/api/mcp` so Claude can see your agenda, add and
+complete tasks, and run the scheduler — see `docs/mcp.md` for setup.
 
 ## Status
 

@@ -1,7 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getAppSettings } from "@/lib/settings";
-import { windowFnForWorkingHours, fetchBusyIntervals, findEarliestSlot, padForBuffer } from "@/lib/scheduler";
-import { deleteEventsWithGoogleCleanup } from "@/lib/google-sync";
+import { windowFnForWorkingHours, fetchBusyIntervals, findEarliestSlot, padForBuffer, dateKey } from "@/lib/scheduler";
 import { startOfWeek, startOfDay, addDays } from "@/lib/calendar-dates";
 import { getZonedDateParts, zonedWallTimeToUtc } from "@/lib/timezone";
 import type { Habit } from "@prisma/client";
@@ -20,7 +19,15 @@ type ScheduleCtx = {
   horizonEnd: Date;
   getWindow: ReturnType<typeof windowFnForWorkingHours>;
   timeZone: string;
+  bufferMin: number;
 };
+
+// findEarliestSlot expects `busy` sorted, and a newly placed block gets the
+// same buffer as everything else.
+function addBusy(ctx: ScheduleCtx, busy: BusyInterval[], slot: BusyInterval) {
+  busy.push(...padForBuffer([slot], ctx.bufferMin));
+  busy.sort((a, b) => a.start.getTime() - b.start.getTime());
+}
 
 // Advances to the start of the NEXT day, not just past a slot's end — a
 // habit's occurrences spread across different days, not back-to-back
@@ -39,19 +46,30 @@ async function topUpWeekly(ctx: ScheduleCtx, habit: Habit, busy: BusyInterval[])
   let weekStart = startOfWeek(ctx.now);
   for (let week = 0; week < WEEKS_AHEAD; week++, weekStart = addDays(weekStart, 7)) {
     const weekEnd = addDays(weekStart, 7);
-    const existingCount = await prisma.event.count({
+    const existing = await prisma.event.findMany({
       where: { habitId: habit.id, start: { gte: weekStart, lt: weekEnd } },
+      select: { start: true },
     });
-    let needed = habit.timesPerWeek - existingCount;
+    const usedDays = new Set(existing.map((e) => dateKey(e.start, ctx.timeZone)));
+    let needed = habit.timesPerWeek - existing.length;
+    if (needed <= 0) continue;
     let cursor = ctx.now > weekStart ? ctx.now : weekStart;
 
+    // One occurrence per day — "gym 3x a week" means three different
+    // days, not three back-to-back blocks on Monday (which is what
+    // continuing from the previous slot's end used to produce).
     while (needed > 0) {
       const slot = findEarliestSlot(cursor, habit.durationMin, busy, weekEnd, ctx.getWindow, ctx.timeZone);
       if (!slot) break;
+      if (usedDays.has(dateKey(slot.start, ctx.timeZone))) {
+        cursor = nextDayStart(slot.start, ctx.timeZone);
+        continue;
+      }
       await prisma.event.create({
         data: { userId: ctx.userId, habitId: habit.id, title: habit.title, notes: habit.notes, start: slot.start, end: slot.end },
       });
-      busy.push(slot);
+      addBusy(ctx, busy, slot);
+      usedDays.add(dateKey(slot.start, ctx.timeZone));
       cursor = nextDayStart(slot.start, ctx.timeZone);
       needed--;
       placed++;
@@ -86,7 +104,7 @@ async function topUpInterval(ctx: ScheduleCtx, habit: Habit, busy: BusyInterval[
     await prisma.event.create({
       data: { userId: ctx.userId, habitId: habit.id, title: habit.title, notes: habit.notes, start: slot.start, end: slot.end },
     });
-    busy.push(slot);
+    addBusy(ctx, busy, slot);
     dueAt = addDays(slot.start, intervalDays);
     placed++;
   }
@@ -121,6 +139,7 @@ export async function scheduleHabitsForWeek(userId: string): Promise<{ placed: n
     horizonEnd,
     getWindow: windowFnForWorkingHours(settings, timeZone),
     timeZone,
+    bufferMin: settings.bufferMin,
   };
 
   let placed = 0;
@@ -205,11 +224,9 @@ export async function rescheduleHabitOccurrence(userId: string, eventId: string)
   const durationMin = (event.end.getTime() - event.start.getTime()) / 60_000;
 
   // Delete first so the occurrence's own old slot doesn't show up as
-  // "busy" against itself when re-placing it. Routed through the
-  // Google-cleanup-aware delete, not a bare prisma.event.delete — a
-  // synced occurrence deleted the bare way orphans on Google's side and
-  // comes back as a duplicate, unlinked local row on the next sync.
-  await deleteEventsWithGoogleCleanup({ id: eventId });
+  // "busy" against itself when re-placing it. (prisma.ts queues the Google
+  // copy for deletion on the next sync.)
+  await prisma.event.delete({ where: { id: eventId } });
 
   const settings = await getAppSettings(userId);
   const owner = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { timezone: true } });

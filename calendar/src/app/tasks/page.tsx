@@ -18,6 +18,7 @@ import { RepeatIcon } from "../icons";
 import Button from "../ui/Button";
 import { ConfirmForm } from "../ui/ConfirmForm";
 import NewTaskButton from "./NewTaskButton";
+import InlineTaskAdd from "./InlineTaskAdd";
 import TaskRow from "./TaskRow";
 import TaskBoard from "./TaskBoard";
 import TaskTable from "./TaskTable";
@@ -94,6 +95,7 @@ export default async function Home(props: PageProps<"/tasks">) {
     ...t,
     event: t.events.length > 0 ? t.events.reduce((min, e) => (e.start < min.start ? e : min)) : null,
     eventCount: t.events.length,
+    lastEventEnd: t.events.length > 0 ? t.events.reduce((max, e) => (e.end > max ? e.end : max), t.events[0].end) : null,
   });
 
   const allOpenTasksRaw = await prisma.task.findMany({
@@ -162,7 +164,7 @@ export default async function Home(props: PageProps<"/tasks">) {
   };
 
   return (
-    <main className="mx-auto w-full max-w-[100rem] flex-1 px-6 py-12">
+    <main className="mx-auto w-full max-w-[100rem] flex-1 px-4 py-6 md:px-6 md:py-12">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <div className="font-mono text-[10px] tracking-wide text-muted uppercase">Everything open</div>
@@ -178,28 +180,48 @@ export default async function Home(props: PageProps<"/tasks">) {
               Schedule all
             </Button>
           </form>
-          <form action={rescheduleAllAction}>
-            <Button
-              type="submit"
-              variant="secondary"
-              title="Re-plan every unlocked scheduled task from scratch"
+          <div className="hidden items-center gap-2 md:flex">
+            <form action={rescheduleAllAction}>
+              <Button
+                type="submit"
+                variant="secondary"
+                title="Re-plan every unlocked scheduled task from scratch"
+              >
+                <RepeatIcon className="h-3.5 w-3.5" />
+                Reschedule all
+              </Button>
+            </form>
+            <Link
+              href="/tasks/import"
+              className="rounded-[9px] border border-rule bg-surface px-4 py-[10px] text-[13px] font-medium text-ink-2 transition-all hover:bg-rule-soft active:scale-[0.98]"
             >
-              <RepeatIcon className="h-3.5 w-3.5" />
-              Reschedule all
-            </Button>
-          </form>
-          <Link
-            href="/tasks/import"
-            className="rounded-[9px] border border-rule bg-surface px-4 py-[10px] text-[13px] font-medium text-ink-2 transition-all hover:bg-rule-soft active:scale-[0.98]"
-          >
-            Import
-          </Link>
-          <Link
-            href="/tasks/generate-project"
-            className="rounded-[9px] border border-rule bg-surface px-4 py-[10px] text-[13px] font-medium text-ink-2 transition-all hover:bg-rule-soft active:scale-[0.98]"
-          >
-            Generate project
-          </Link>
+              Import
+            </Link>
+            <Link
+              href="/tasks/generate-project"
+              className="rounded-[9px] border border-rule bg-surface px-4 py-[10px] text-[13px] font-medium text-ink-2 transition-all hover:bg-rule-soft active:scale-[0.98]"
+            >
+              Generate project
+            </Link>
+          </div>
+          <details className="relative md:hidden">
+            <summary className="cursor-pointer list-none rounded-[9px] border border-rule bg-surface px-3 py-[10px] text-[13px] font-medium text-ink-2">
+              More
+            </summary>
+            <div className="absolute right-0 z-20 mt-1 flex w-48 flex-col gap-1 rounded-xl border border-rule bg-surface p-1.5 text-sm shadow-lg shadow-black/10">
+              <form action={rescheduleAllAction}>
+                <button type="submit" className="w-full rounded-lg px-3 py-2 text-left text-ink-2 hover:bg-rule-soft">
+                  Reschedule all
+                </button>
+              </form>
+              <Link href="/tasks/import" className="rounded-lg px-3 py-2 text-ink-2 hover:bg-rule-soft">
+                Import
+              </Link>
+              <Link href="/tasks/generate-project" className="rounded-lg px-3 py-2 text-ink-2 hover:bg-rule-soft">
+                Generate project
+              </Link>
+            </div>
+          </details>
           <NewTaskButton
             projects={projects}
             assignees={assignees}
@@ -208,9 +230,15 @@ export default async function Home(props: PageProps<"/tasks">) {
             otherTasks={taskOptions}
             defaultProjectId={defaultProjectId}
             defaultAssigneeId={myselfAssignee.id}
+            initialOpen={sp?.new === "1"}
           />
         </div>
       </div>
+
+      <InlineTaskAdd
+        projects={projects.map((p) => ({ id: p.id, name: p.name, color: p.color }))}
+        currentProjectId={projectFilter}
+      />
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <Link
@@ -352,8 +380,18 @@ export default async function Home(props: PageProps<"/tasks">) {
             />
           ))}
           {tasks.length === 0 && (
-            <li className="col-span-full rounded-xl border border-dashed border-rule py-8 text-center text-sm text-muted">
-              No open tasks.
+            <li className="col-span-full rounded-xl border border-dashed border-rule px-4 py-8 text-center text-sm text-muted">
+              {searchQuery ? (
+                <>No open tasks match “{searchQuery}”.</>
+              ) : (
+                <>
+                  <p className="font-medium text-ink-2">All clear.</p>
+                  <p className="mt-1">
+                    Type into the box above — like <code className="font-mono text-ink-2">read ch. 4 fri 1h</code> —
+                    or press <kbd>c</kbd> anywhere. Press <kbd>?</kbd> for all the shorthand.
+                  </p>
+                </>
+              )}
             </li>
           )}
         </ul>

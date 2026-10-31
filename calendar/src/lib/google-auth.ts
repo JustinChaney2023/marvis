@@ -2,20 +2,11 @@ import { google } from "googleapis";
 import { prisma } from "@/lib/prisma";
 import { decryptSecret, encryptSecret } from "@/lib/tokenCrypto";
 
-function getAppBaseUrl(): string {
-  return process.env.APP_URL ?? "http://localhost:3000";
-}
+export const GOOGLE_STATE_COOKIE = "google_oauth_state";
 
 export function getRedirectUri(): string {
-  return `${getAppBaseUrl()}/api/google/callback`;
-}
-
-// Behind a reverse proxy, request.nextUrl.origin reflects the app's local
-// bind address, not the public host Google actually redirects back to —
-// building the post-OAuth redirect from it sends the browser to
-// http://localhost:3000 instead of the real APP_URL, which just hangs.
-export function getAppOrigin(): string {
-  return new URL(getAppBaseUrl()).origin;
+  const base = (process.env.APP_URL || "http://localhost:3000").replace(/\/+$/, "");
+  return `${base}/api/google/callback`;
 }
 
 export function createOAuthClient() {

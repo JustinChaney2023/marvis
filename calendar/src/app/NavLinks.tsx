@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { CalendarIcon, ListIcon, TargetIcon, BarsIcon, UsersIcon, ChatIcon, MicIcon, FolderIcon, GearIcon } from "./icons";
 
-const LINKS = [
+export const NAV_LINKS = [
   { href: "/", label: "Calendar", icon: CalendarIcon },
   { href: "/tasks", label: "Tasks", icon: ListIcon },
   { href: "/focus", label: "Focus", icon: TargetIcon },
@@ -27,8 +27,8 @@ export default function NavLinks() {
 
   return (
     <nav className="flex flex-col gap-0.5">
-      {LINKS.map(({ href, label, icon: Icon }) => {
-        const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
+      {NAV_LINKS.map(({ href, label, icon: Icon }) => {
+        const active = isActiveNav(pathname, href);
         return (
           <Link
             key={href}
@@ -47,4 +47,8 @@ export default function NavLinks() {
       })}
     </nav>
   );
+}
+
+export function isActiveNav(pathname: string, href: string): boolean {
+  return href === "/" ? pathname === "/" : pathname.startsWith(href);
 }

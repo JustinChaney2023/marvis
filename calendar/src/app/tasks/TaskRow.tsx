@@ -22,6 +22,8 @@ import { formatDueDateTime } from "@/lib/calendar-dates";
 import TaskModal, { type TaskModalTask } from "./TaskModal";
 import { STATUS_BADGE, STATUS_LABEL, type TaskStatus } from "./taskStatus";
 import { PROJECT_EVENT_COLORS, isCustomColor, customColorStyle } from "@/lib/eventColors";
+import { useNow } from "../useNow";
+import { showToast } from "../toast";
 
 type Project = { id: string; name: string };
 type Assignee = { id: string; name: string; type: "HUMAN" | "AI" };
@@ -55,6 +57,9 @@ export type TaskRowData = {
   // tasks/page.tsx. eventCount > 1 means it's split into that many.
   event: { start: Date; locked: boolean } | null;
   eventCount: number;
+  // When the task's last scheduled block ends — later than dueAt means
+  // the plan won't make the deadline.
+  lastEventEnd?: Date | null;
   subtasks: Subtask[];
   labels: Label[];
   blockedBy: { id: string; title: string; status: TaskStatus }[];
@@ -182,17 +187,26 @@ export default function TaskRow({
   const [docDraft, setDocDraft] = usePersistedState<{ title: string; body: string }>(`task-draft-doc-${task.id}`, null);
   const [copyDocStatus, setCopyDocStatus] = useState<"idle" | "copied">("idle");
   const [delaying, setDelaying] = useState(false);
+
+  // Completing removes the row, so offer a way back. Not for recurring
+  // tasks: completing one already created the next occurrence, and an
+  // un-complete would leave both open.
+  const completeWithUndo = async () => {
+    await toggleTaskDone(task.id, true);
+    showToast({
+      message: `Completed “${task.title}”`,
+      action: task.recurrenceRule
+        ? undefined
+        : { label: "Undo", onClick: () => toggleTaskDone(task.id, false) },
+    });
+  };
   const [delayDate, setDelayDate] = useState("");
 
   // Unscheduled and either overdue or due within 48h — a scheduled task
   // (task.event set) already has a slot on the calendar, so it's not
   // "at risk" in the same way even if the due date is close.
   const dueSoonMs = 48 * 60 * 60 * 1000;
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 30_000);
-    return () => clearInterval(id);
-  }, []);
+  const now = useNow();
   const isOverdue = Boolean(task.dueAt && task.dueAt.getTime() < now && !task.event);
   const isDueSoon =
     !isOverdue &&
@@ -351,8 +365,14 @@ export default function TaskRow({
         onDragStart ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"
       } ${pending ? "opacity-50" : ""}`}
     >
-      <div className="flex items-center gap-3">
-        <form action={toggleTaskDone.bind(null, task.id, task.status !== "DONE")}>
+      {/* On phones the action buttons wrap to their own row under the
+          title (the w-full actions group below) instead of squeezing the
+          title down to a few characters. */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <form
+          action={task.status === "DONE" ? toggleTaskDone.bind(null, task.id, false) : completeWithUndo}
+          className="self-start pt-0.5 sm:self-center sm:pt-0"
+        >
           <button
             type="submit"
             aria-label={task.status === "DONE" ? "reopen task" : "mark done"}
@@ -360,7 +380,7 @@ export default function TaskRow({
             className={
               task.status === "DONE"
                 ? "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-ink bg-ink text-[10px] text-paper transition-all hover:scale-110 focus:outline focus:outline-2 focus:outline-accent focus:outline-offset-2"
-                : "h-5 w-5 shrink-0 rounded-full border border-rule bg-surface transition-all hover:scale-110 hover:border-accent focus:outline focus:outline-2 focus:outline-accent focus:outline-offset-2"
+                : "block h-5 w-5 shrink-0 rounded-full border border-rule bg-surface transition-all hover:scale-110 hover:border-accent focus:outline focus:outline-2 focus:outline-accent focus:outline-offset-2"
             }
           >
             {task.status === "DONE" ? "✓" : ""}
@@ -371,13 +391,17 @@ export default function TaskRow({
           onClick={() => setEditing(true)}
           className="flex min-w-0 flex-1 flex-col justify-center text-left"
         >
-          <p className="truncate text-sm font-medium">{task.title}</p>
+          <p className="line-clamp-2 text-sm font-medium sm:truncate">{task.title}</p>
           <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted">
-            <span
-              className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_BADGE[displayStatus]}`}
-            >
-              {STATUS_LABEL[displayStatus]}
-            </span>
+            {/* "Created" is every task's resting state — only badge the
+                ones that say something (ongoing, delayed, done). */}
+            {displayStatus !== "CREATED" && (
+              <span
+                className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_BADGE[displayStatus]}`}
+              >
+                {STATUS_LABEL[displayStatus]}
+              </span>
+            )}
             {task.project && (() => {
               const badgeColor = task.color ?? task.project.color;
               const custom = isCustomColor(badgeColor);
@@ -422,6 +446,17 @@ export default function TaskRow({
               <span>
                 · due {formatDueDateTime(task.dueAt)}
                 {!task.hardDeadline && <span className="text-muted"> (soft)</span>}
+              </span>
+            )}
+            {/* Motion-style deadline risk: it's on the calendar, but the
+                plan finishes after the due date. */}
+            {task.dueAt && task.lastEventEnd && task.lastEventEnd > task.dueAt && task.status !== "DONE" && (
+              <span
+                className="inline-flex items-center gap-1 rounded-full bg-accent-wash px-2 py-0.5 text-xs font-medium text-accent"
+                title="Its scheduled time ends after the due date — move something, shorten it, or change the deadline"
+              >
+                <AlertTriangleIcon />
+                Finishes late
               </span>
             )}
             {(isOverdue || isDueSoon) && (
@@ -471,6 +506,7 @@ export default function TaskRow({
             ))}
           </div>
         </button>
+        <div className="flex w-full items-center gap-2 pl-8 sm:w-auto sm:pl-0">
         {task.status === "CREATED" && (
           <form action={setTaskStatusAction.bind(null, task.id, "ONGOING")}>
             <button
@@ -554,6 +590,7 @@ export default function TaskRow({
             <CloseIcon className="h-3.5 w-3.5" />
           </button>
         </ConfirmForm>
+        </div>
       </div>
 
       {delaying && (

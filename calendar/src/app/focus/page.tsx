@@ -42,7 +42,7 @@ export default async function FocusPage(props: PageProps<"/focus">) {
         eventStart: null,
       };
       return (
-        <main className="mx-auto flex w-full max-w-lg flex-1 flex-col px-6 py-12">
+        <main className="mx-auto flex w-full max-w-lg flex-1 flex-col px-4 py-8 sm:px-6 sm:py-12">
           <Suspense fallback={<p className="font-serif text-lg text-muted">Reading today&apos;s calendar…</p>}>
             <DailyAgenda userId={user.id} timeZone={userTimeZone(user)} />
           </Suspense>
@@ -53,23 +53,23 @@ export default async function FocusPage(props: PageProps<"/focus">) {
     }
   }
 
-  const now = new Date();
-  // Missing the status filter here used to pull in DONE tasks that still
-  // had old Event rows attached — a finished study session from weeks
-  // ago would outrank everything actually coming up, since it sorted by
-  // its own (long-past) earliest event. `events: { where: ... }` (not a
-  // client-side filter after the fact) also keeps the query itself
-  // bounded to events that haven't already happened, instead of loading
-  // every event a task has ever had.
+  // Open tasks with a block from today on — done tasks (and every
+  // task that ever had a block) used to land in the queue. The status
+  // filter matters: a finished study session from weeks ago would
+  // otherwise outrank everything actually coming up. `events: { where }`
+  // (not a client-side filter) keeps the query bounded to events that
+  // haven't already happened.
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
   const [scheduled, todo] = await Promise.all([
     prisma.task.findMany({
       where: {
         userId: user.id,
         status: { in: ["CREATED", "ONGOING"] },
-        events: { some: { end: { gte: now } } },
+        events: { some: { end: { gte: startOfToday } } },
         parentId: null,
       },
-      include: { events: { where: { end: { gte: now } } } },
+      include: { events: { where: { end: { gte: startOfToday } } } },
     }),
     prisma.task.findMany({
       where: {
@@ -111,7 +111,7 @@ export default async function FocusPage(props: PageProps<"/focus">) {
   // back empty (a stale link) — nothing left to pin, just show the queue.
 
   return (
-    <main className="mx-auto flex w-full max-w-lg flex-1 flex-col px-6 py-12">
+    <main className="mx-auto flex w-full max-w-lg flex-1 flex-col px-4 py-8 sm:px-6 sm:py-12">
       <Suspense fallback={<p className="font-serif text-lg text-muted">Reading today&apos;s calendar…</p>}>
         <DailyAgenda userId={user.id} timeZone={userTimeZone(user)} />
       </Suspense>

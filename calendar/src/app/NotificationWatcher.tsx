@@ -52,6 +52,16 @@ function getServerSnapshot(): NotificationPermission {
   return "denied";
 }
 
+async function hasPushSubscription(): Promise<boolean> {
+  try {
+    if (!("serviceWorker" in navigator)) return false;
+    const reg = await navigator.serviceWorker.getRegistration("/sw.js");
+    return Boolean(await reg?.pushManager.getSubscription());
+  } catch {
+    return false;
+  }
+}
+
 // Same read-only-sync shape as the permission store above — localStorage
 // has no change event either, so this is "re-read on demand" (via
 // forceRecheck after our own write), not a real subscription.
@@ -103,7 +113,10 @@ export default function NotificationWatcher() {
         // The server only returns occurrences whose own per-event
         // reminderMinutes has already come due — nothing left to
         // threshold-check here, just dedup against what's already fired.
-        const upcoming = await getUpcomingEventReminders();
+        // With Web Push on for this browser (Settings → Notifications) the
+        // server already sends event reminders — don't double up.
+        const pushOn = await hasPushSubscription();
+        const upcoming = pushOn ? [] : await getUpcomingEventReminders();
         const now = Date.now();
         for (const occ of upcoming) {
           if (notifiedIds.current.has(occ.id)) continue;
@@ -174,7 +187,7 @@ export default function NotificationWatcher() {
   if (toasts.length === 0 && (permission !== "default" || dismissed)) return null;
 
   return (
-    <div className="fixed bottom-4 right-4 z-40 flex w-72 flex-col items-end gap-2 print:hidden">
+    <div className="fixed right-4 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-40 flex w-72 md:bottom-4 flex-col items-end gap-2 print:hidden">
       {toasts.map((t) => (
         <div
           key={t.id}

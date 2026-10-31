@@ -23,8 +23,8 @@ test("editing an unrelated field on a complex-rule event preserves the rule", as
   });
   expect(created.ok()).toBeTruthy();
 
-  await page.goto("/?view=week&start=2026-08-24");
-  await page.getByText("CSCE A490").first().click();
+  await page.goto("/?view=week&start=2026-08-24", { waitUntil: "networkidle" });
+  await page.locator("button[data-event]", { hasText: "CSCE A490" }).filter({ visible: true }).first().click();
 
   const modal = page.getByRole("dialog");
   await expect(modal).toBeVisible();

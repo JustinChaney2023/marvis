@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { testRoutesAllowed } from "@/lib/testRouteGuard";
+import { getCurrentUser } from "@/lib/auth";
 
 /** Test-only: create an Event with an arbitrary recurrenceRule, for
  * reproducing behavior around rules this app's UI can't fully represent
@@ -11,7 +12,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "test routes disabled" }, { status: 403 });
   }
 
-  const user = await prisma.user.findFirst();
+  // The Playwright request fixture carries the suite's session cookie —
+  // seed for that user (the one whose calendar the test then opens),
+  // falling back to the first account for cookie-less callers.
+  const user = (await getCurrentUser()) ?? (await prisma.user.findFirst());
   const body = await request.json();
   const event = await prisma.event.create({
     data: {

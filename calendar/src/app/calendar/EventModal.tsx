@@ -15,7 +15,7 @@ import {
   setTaskStatusAction,
   toggleTaskDone,
 } from "../actions";
-import { toLocalInputValue, formatYMD, parseYMD } from "@/lib/calendar-dates";
+import { toLocalInputValue, formatYMD, parseYMD, localWallTimeToIso } from "@/lib/calendar-dates";
 import { CloseIcon } from "../icons";
 import Button from "../ui/Button";
 import ColorPicker from "../ui/ColorPicker";
@@ -264,12 +264,12 @@ export default function EventModal({
       // exclusive day-after (Google Calendar's own all-day convention —
       // see the endDateValue comment above) so display/layout math
       // elsewhere doesn't need a separate all-day code path.
-      formData.set("start", `${sd}T00:00`);
+      formData.set("start", localWallTimeToIso(`${sd}T00:00`));
       const exclusiveEnd = new Date(parseYMD(ed || sd).getTime() + 86_400_000);
-      formData.set("end", `${formatYMD(exclusiveEnd)}T00:00`);
+      formData.set("end", localWallTimeToIso(`${formatYMD(exclusiveEnd)}T00:00`));
     } else {
-      if (sd && st) formData.set("start", `${sd}T${st}`);
-      if (ed && et) formData.set("end", `${ed}T${et}`);
+      if (sd && st) formData.set("start", localWallTimeToIso(`${sd}T${st}`));
+      if (ed && et) formData.set("end", localWallTimeToIso(`${ed}T${et}`));
     }
 
     const submittedStart = new Date(String(formData.get("start")));

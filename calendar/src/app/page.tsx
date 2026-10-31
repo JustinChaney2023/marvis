@@ -20,7 +20,7 @@ import {
   parseViewParam,
   type CalendarView,
 } from "@/lib/calendar-dates";
-import { expandEvents } from "@/lib/recurrence";
+import { expandEvents, recurringOverlapping } from "@/lib/recurrence";
 import { getAppSettings } from "@/lib/settings";
 import { scheduleHabitsForWeek } from "@/lib/habits";
 import CalendarClient, { type CalendarEvent, type SharedEvent } from "./calendar/CalendarClient";
@@ -28,6 +28,7 @@ import { NowProvider } from "./calendar/NowContext";
 import { CalendarVisibilityProvider } from "./calendar/CalendarVisibilityContext";
 import CalendarSidebarLeft from "./calendar/CalendarSidebarLeft";
 import CalendarSidebarRight, {
+  AttentionStrip,
   type AttentionTask,
   type UpcomingDay,
   type UpcomingItem,
@@ -149,7 +150,7 @@ export default async function Page(props: PageProps<"/">) {
         // missed entirely at the query level, before rendering even
         // gets a chance to draw it.
         { start: { lt: to }, end: { gt: from } },
-        { recurrenceRule: { not: null } },
+        recurringOverlapping(from, to),
       ],
     },
     include: { task: { include: { project: true } } },
@@ -246,16 +247,17 @@ export default async function Page(props: PageProps<"/">) {
                 userId: share.ownerId,
                 OR: [
                   { start: { lt: to }, end: { gt: from } },
-                  { recurrenceRule: { not: null } },
+                  recurringOverlapping(from, to),
                 ],
               },
             });
             const ownerLabel = share.owner.name ?? share.owner.email;
+            const allDayById = new Map(ownerRows.map((r) => [r.id, r.allDay]));
             return expandEvents(ownerRows, from, to, userTimeZone(share.owner)).map((o) => ({
               id: `${share.ownerId}:${o.id}`,
               start: o.start,
               end: o.end,
-              allDay: ownerRows.find((r) => r.id === o.masterId)?.allDay ?? false,
+              allDay: allDayById.get(o.masterId) ?? false,
               title: share.permission === "FULL_DETAILS" ? o.title : "Busy",
               ownerLabel,
             }));
@@ -286,12 +288,27 @@ export default async function Page(props: PageProps<"/">) {
     take: 6,
     select: { id: true, title: true, dueAt: true },
   });
-  const attentionTasks: AttentionTask[] = attentionRows.map((t) => ({
-    id: t.id,
-    title: t.title,
-    dueAt: t.dueAt!,
-    isOverdue: t.dueAt! < today,
-  }));
+  // Scheduled tasks whose plan finishes after their deadline (next 2 weeks).
+  const scheduledWithDeadline = await prisma.task.findMany({
+    where: {
+      userId: user.id,
+      parentId: null,
+      status: { in: ["CREATED", "ONGOING"] },
+      events: { some: {} },
+      dueAt: { gte: today, lt: new Date(today.getTime() + 14 * 86_400_000) },
+    },
+    select: { id: true, title: true, dueAt: true, events: { select: { end: true } } },
+  });
+  const lateRows = scheduledWithDeadline.filter((t) => t.events.some((e) => e.end > t.dueAt!));
+  const attentionTasks: AttentionTask[] = [
+    ...lateRows.map((t) => ({ id: t.id, title: t.title, dueAt: t.dueAt!, isOverdue: false, isLate: true })),
+    ...attentionRows.map((t) => ({
+      id: t.id,
+      title: t.title,
+      dueAt: t.dueAt!,
+      isOverdue: t.dueAt! < today,
+    })),
+  ].sort((a, b) => a.dueAt.getTime() - b.dueAt.getTime());
 
   // Overcommitment warning — a visible nudge (Sunsama-style) distinct
   // from dailyCapMin's existing job of silently gating the auto-
@@ -313,7 +330,7 @@ export default async function Page(props: PageProps<"/">) {
       userId: user.id,
       OR: [
         { start: { lt: agendaEnd }, end: { gt: agendaStart } },
-        { recurrenceRule: { not: null } },
+        recurringOverlapping(agendaStart, agendaEnd),
       ],
     },
     include: { task: { select: { id: true } } },
@@ -361,7 +378,7 @@ export default async function Page(props: PageProps<"/">) {
     const todayRows = await prisma.event.findMany({
       where: {
         userId: user.id,
-        OR: [{ start: { lt: dayEnd }, end: { gt: dayStart } }, { recurrenceRule: { not: null } }],
+        OR: [{ start: { lt: dayEnd }, end: { gt: dayStart } }, recurringOverlapping(dayStart, dayEnd)],
       },
     });
     todayPlannedMinutes = expandEvents(todayRows, dayStart, dayEnd, timeZone).reduce(
@@ -371,10 +388,10 @@ export default async function Page(props: PageProps<"/">) {
   }
 
   return (
-    <main className="mx-auto flex h-full min-h-0 w-full max-w-[96rem] flex-col px-6 pb-6 pt-4 print:h-auto">
+    <main className="mx-auto flex h-full min-h-0 w-full max-w-[96rem] flex-col px-3 pb-4 pt-3 sm:px-6 sm:pb-6 sm:pt-4 print:h-auto">
       <header className="flex flex-col gap-3">
         <p className="hidden text-lg font-semibold print:block">{nav.label}</p>
-        <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
+        <div className="flex flex-wrap-reverse items-center justify-between gap-2 sm:flex-wrap sm:gap-3 print:hidden">
           <nav className="flex flex-wrap items-center gap-1">
             <div className="inline-flex items-center gap-1 rounded-full border border-rule bg-paper p-1">
               <Link
@@ -399,15 +416,23 @@ export default async function Page(props: PageProps<"/">) {
             <span className="mx-1 h-5 w-px bg-rule" />
             <Link
               href={`/?view=${view}&start=${nav.prev}`}
+              aria-label="Previous"
               className="rounded-full px-3 py-1.5 text-sm text-ink-2 transition-colors hover:bg-rule-soft hover:text-ink"
             >
-              ← Prev
+              ←<span className="hidden sm:inline"> Prev</span>
+            </Link>
+            <Link
+              href={`/?view=${view}`}
+              className="rounded-full px-2 py-1.5 text-sm text-ink-2 transition-colors hover:bg-rule-soft hover:text-ink"
+            >
+              Today
             </Link>
             <Link
               href={`/?view=${view}&start=${nav.next}`}
+              aria-label="Next"
               className="rounded-full px-3 py-1.5 text-sm text-ink-2 transition-colors hover:bg-rule-soft hover:text-ink"
             >
-              Next →
+              <span className="hidden sm:inline">Next </span>→
             </Link>
           </nav>
           <div className="flex items-center gap-1">
@@ -418,6 +443,10 @@ export default async function Page(props: PageProps<"/">) {
         </div>
         <ShortcutHint />
       </header>
+
+      <div className="mt-3 xl:hidden print:hidden">
+        <AttentionStrip tasks={attentionTasks} />
+      </div>
 
       <NowProvider>
       <CalendarVisibilityProvider>

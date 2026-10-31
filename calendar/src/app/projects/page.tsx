@@ -37,9 +37,9 @@ export default async function ProjectsPage() {
   const now = new Date();
 
   return (
-    <main className="mx-auto w-full max-w-4xl flex-1 px-6 py-10">
-      <div className="flex items-center justify-between gap-3">
-        <div>
+    <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-8 sm:px-6 sm:py-10">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="min-w-[16rem] flex-1">
           <h1 className="font-serif text-3xl text-ink">Projects</h1>
           <p className="mt-1 text-sm text-ink-2">
             Each project holds its own notes, files, and tasks — a course

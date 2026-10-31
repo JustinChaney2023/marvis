@@ -19,6 +19,7 @@ import CalendarSharingManager from "./CalendarSharingManager";
 import IcsImportForm from "./IcsImportForm";
 import CalendarSubscriptionsManager from "./CalendarSubscriptionsManager";
 import ApiTokensManager from "./ApiTokensManager";
+import PushNotificationsManager from "./PushNotificationsManager";
 import AutomationRulesManager from "./AutomationRulesManager";
 import HabitsManager from "./HabitsManager";
 import TimeSlotsManager from "./TimeSlotsManager";
@@ -123,7 +124,7 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
   });
 
   return (
-    <main className="mx-auto w-full max-w-2xl flex-1 px-6 py-12">
+    <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-8 sm:px-6 sm:py-12">
       <div className="flex items-center justify-between">
         <h1 className="font-serif text-3xl text-ink">Settings</h1>
         <Link
@@ -146,6 +147,7 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
       )}
 
       <SettingsTabs
+        initialTab={typeof sp?.tab === "string" ? sp.tab : undefined}
         tabs={[
           {
             key: "scheduling",
@@ -232,6 +234,21 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
               />
               <span className="text-ink-2">minutes</span>
             </div>
+          </label>
+          <label className="flex cursor-pointer items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              name="autoSchedule"
+              defaultChecked={settings.autoSchedule}
+              className="mt-0.5 accent-[var(--accent)]"
+            />
+            <span>
+              <span className="text-ink">Auto-schedule</span>
+              <span className="block text-xs text-muted">
+                New tasks go straight onto your calendar, and missed or bumped blocks get re-planned
+                automatically every few minutes — no need to press Schedule all.
+              </span>
+            </span>
           </label>
           <Button type="submit">Save</Button>
         </form>
@@ -499,18 +516,6 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
       </section>
 
       <section className="mt-6 rounded-xl border border-rule bg-surface p-5">
-        <h2 className="font-serif text-xl text-ink">API tokens</h2>
-        <p className="mt-1 text-xs text-muted">
-          For external clients that can&apos;t sign in through the browser,
-          like the Obsidian plugin. Each token acts as you — treat it like a
-          password.
-        </p>
-        <div className="mt-3">
-          <ApiTokensManager tokens={apiTokens} />
-        </div>
-      </section>
-
-      <section className="mt-6 rounded-xl border border-rule bg-surface p-5">
         <h2 className="font-serif text-xl text-ink">Subscribed calendars</h2>
         <p className="mt-1 text-xs text-muted">
           Subscribe to an external calendar by its ICS URL — holidays, a
@@ -635,6 +640,41 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
               hidden: s.hiddenByRecipient,
             }))}
           />
+        </div>
+      </section>
+              </>
+            ),
+          },
+          {
+            key: "notifications",
+            label: "Notifications",
+            content: (
+              <section className="mt-6 rounded-xl border border-rule bg-surface p-5">
+                <h2 className="font-serif text-xl text-ink">Notifications</h2>
+                <p className="mt-1 text-xs text-muted">
+                  Reminders before your events (each event&apos;s own reminder time) and a heads-up an hour
+                  before an unscheduled task is due — delivered even when Season isn&apos;t open.
+                </p>
+                <div className="mt-3">
+                  <PushNotificationsManager />
+                </div>
+              </section>
+            ),
+          },
+          {
+            key: "claude",
+            label: "Claude",
+            content: (
+              <>
+      <section className="mt-6 rounded-xl border border-rule bg-surface p-5">
+        <h2 className="font-serif text-xl text-ink">API tokens &amp; Claude</h2>
+        <p className="mt-1 text-xs text-muted">
+          For external clients that can&apos;t sign in through the browser —
+          Claude (via Season&apos;s MCP server) or the Obsidian plugin. Each
+          token acts as you — treat it like a password.
+        </p>
+        <div className="mt-3">
+          <ApiTokensManager tokens={apiTokens} />
         </div>
       </section>
               </>
