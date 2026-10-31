@@ -39,7 +39,7 @@ export default function MiniMonthPicker({
   const cells = buildMonthGrid(cursor);
 
   const goToDay = (d: Date) => {
-    router.push(`/?view=${view === "month" ? "day" : view}&start=${formatYMD(d)}`);
+    router.push(`/home?view=${view === "month" ? "day" : view}&start=${formatYMD(d)}`);
     setOpen(false);
   };
 

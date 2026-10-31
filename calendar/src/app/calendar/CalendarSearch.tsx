@@ -41,7 +41,7 @@ export default function CalendarSearch({ view }: { view: string }) {
   const selectResult = (result: Result) => {
     setOpen(false);
     setQuery("");
-    router.push(`/?view=${view}&start=${result.startYMD}&edit=${result.id}`);
+    router.push(`/home?view=${view}&start=${result.startYMD}&edit=${result.id}`);
   };
 
   return (

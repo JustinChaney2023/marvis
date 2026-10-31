@@ -313,7 +313,7 @@ export default function CalendarClient({
     [allEvents, isVisible],
   );
   // "Upcoming" (right sidebar) links to a plain event as
-  // `/?view=day&start=...&edit=<eventId>` — open its editor immediately
+  // `/home?view=day&start=...&edit=<eventId>` — open its editor immediately
   // if that event is already in `events` (the day it was jumped to),
   // computed as the initial state rather than set from an effect so it
   // doesn't cost an extra render.
@@ -497,7 +497,7 @@ export default function CalendarClient({
         if (isAlreadyToday) {
           scrollToNowRef.current?.();
         } else {
-          router.push(`/?view=${view}&start=${formatYMD(new Date())}`);
+          router.push(`/home?view=${view}&start=${formatYMD(new Date())}`);
         }
         return;
       }
@@ -510,7 +510,7 @@ export default function CalendarClient({
             : nextView === "week"
               ? formatYMD(startOfWeek(start))
               : formatYMD(new Date(start.getFullYear(), start.getMonth(), 1));
-        router.push(`/?view=${nextView}&start=${target}`);
+        router.push(`/home?view=${nextView}&start=${target}`);
         return;
       }
       if (e.key === "j" || e.key === "ArrowLeft" || e.key === "k" || e.key === "ArrowRight") {
@@ -520,7 +520,7 @@ export default function CalendarClient({
           view === "month"
             ? formatYMD(addMonths(new Date(start.getFullYear(), start.getMonth(), 1), forward ? 1 : -1))
             : formatYMD(addDays(start, forward ? step : -step));
-        router.push(`/?view=${view}&start=${target}`);
+        router.push(`/home?view=${view}&start=${target}`);
       }
     };
 
@@ -854,7 +854,7 @@ function AgendaView({
                             : undefined
                         }
                       >
-                        <span className="w-14 flex-shrink-0 font-mono text-xs text-muted">
+                        <span className="w-16 flex-shrink-0 whitespace-nowrap font-mono text-xs text-muted">
                           {e.allDay
                             ? "All day"
                             : e.start.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}
@@ -1524,6 +1524,7 @@ function EventBlock({
 
   const displayTop = top + (previewTopDelta ?? 0);
   const displayHeight = previewHeight ?? height;
+  const compact = displayHeight < 28;
   // Each strip capped at a third of the block's own height, so short
   // blocks always keep a clickable middle (see the handles' own comment).
   const resizeHandleSize = Math.max(3, Math.min(12, displayHeight / 3));
@@ -1562,7 +1563,11 @@ function EventBlock({
       }}
       type="button"
       title="Shift/Cmd/Ctrl-click to select multiple events"
-      className={`group absolute overflow-hidden rounded-lg border-y border-r border-rule border-l-4 p-1.5 text-left transition-all hover:brightness-95 ${boxFill} ${custom ? "" : color.bar} ${
+      className={`group absolute overflow-hidden rounded-lg border-y border-r border-rule border-l-4 text-left transition-all hover:brightness-95 ${
+        // A 15-minute block is ~12px tall: normal padding leaves no room
+        // for even one line, so the title got clipped to a sliver.
+        compact ? "flex items-center px-1.5 py-0" : "p-1.5"
+      } ${boxFill} ${custom ? "" : color.bar} ${
         isDragging ? "opacity-40" : ""
       } ${selected ? "outline outline-2 outline-accent" : ""}`}
       style={{
@@ -1605,7 +1610,7 @@ function EventBlock({
         </span>
       )}
       <div
-        className={`truncate pr-3 text-xs font-medium ${
+        className={`truncate pr-3 font-medium ${compact ? "text-[10px] leading-none" : "text-xs"} ${
           event.taskPriority !== null && event.taskPriority >= 2 ? "pl-3" : ""
         }`}
       >
@@ -1760,7 +1765,7 @@ function MonthCell({
     // On a phone the cell is too small to tell an event from empty space,
     // so a tap opens that day instead of starting a new 9am event.
     if (!window.matchMedia("(min-width: 640px)").matches) {
-      router.push(`/?view=day&start=${dateYMD}`);
+      router.push(`/home?view=day&start=${dateYMD}`);
       return;
     }
     const start = new Date(day);
@@ -1783,7 +1788,7 @@ function MonthCell({
     >
       <Link
         data-day-link
-        href={`/?view=day&start=${dateYMD}`}
+        href={`/home?view=day&start=${dateYMD}`}
         className={dayNumberClass}
       >
         {day.getDate()}
@@ -1825,7 +1830,7 @@ function MonthCell({
         {more > 0 && (
           <Link
             data-day-link
-            href={`/?view=day&start=${dateYMD}`}
+            href={`/home?view=day&start=${dateYMD}`}
             className="px-1.5 font-mono text-[11px] text-muted transition-colors hover:text-ink"
           >
             +{more} more

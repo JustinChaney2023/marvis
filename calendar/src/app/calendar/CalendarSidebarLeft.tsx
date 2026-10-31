@@ -77,7 +77,7 @@ export default function CalendarSidebarLeft({
   const cells = buildMonthGrid(cursor);
 
   const goToDay = (d: Date) => {
-    router.push(`/?view=${view === "month" ? "day" : view}&start=${formatYMD(d)}`);
+    router.push(`/home?view=${view === "month" ? "day" : view}&start=${formatYMD(d)}`);
   };
 
   // Same behavior the button used to have on the calendar toolbar: if
@@ -87,7 +87,7 @@ export default function CalendarSidebarLeft({
     if (startYMD === formatYMD(today)) {
       triggerScrollToNow();
     } else {
-      router.push(`/?view=${view}&start=${formatYMD(today)}`);
+      router.push(`/home?view=${view}&start=${formatYMD(today)}`);
     }
   };
 

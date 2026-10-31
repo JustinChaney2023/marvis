@@ -11,7 +11,7 @@ test.afterEach(async ({ request }) => {
 
 test("create a one-off event via the modal", async ({ page }) => {
   // New events default to today, so open the current week.
-  await page.goto("/?view=week", { waitUntil: "networkidle" });
+  await page.goto("/home?view=week", { waitUntil: "networkidle" });
   await page.getByRole("button", { name: "+ New event" }).click();
 
   const modal = page.getByRole("dialog");
@@ -28,7 +28,7 @@ test("custom weekly repeat shows day toggles and persists on reopen", async ({
   page,
 }) => {
   // New events default to today, so open the current week.
-  await page.goto("/?view=week", { waitUntil: "networkidle" });
+  await page.goto("/home?view=week", { waitUntil: "networkidle" });
   await page.getByRole("button", { name: "+ New event" }).click();
 
   const modal = page.getByRole("dialog");
@@ -46,7 +46,7 @@ test("custom weekly repeat shows day toggles and persists on reopen", async ({
   // occurrence may be next week — look a week ahead.
   const nextWeek = new Date(Date.now() + 7 * 86_400_000);
   const ymd = `${nextWeek.getFullYear()}-${String(nextWeek.getMonth() + 1).padStart(2, "0")}-${String(nextWeek.getDate()).padStart(2, "0")}`;
-  await page.goto(`/?view=week&start=${ymd}`, { waitUntil: "networkidle" });
+  await page.goto(`/home?view=week&start=${ymd}`, { waitUntil: "networkidle" });
   await page.locator("button[data-event]", { hasText: `${PREFIX} Custom repeat` }).filter({ visible: true }).first().click();
   const reopened = page.getByRole("dialog");
   await expect(reopened).toBeVisible();
@@ -69,7 +69,7 @@ test("custom weekly repeat shows day toggles and persists on reopen", async ({
 
 test("locked toggle persists on reopen", async ({ page }) => {
   // New events default to today, so open the current week.
-  await page.goto("/?view=week", { waitUntil: "networkidle" });
+  await page.goto("/home?view=week", { waitUntil: "networkidle" });
   await page.getByRole("button", { name: "+ New event" }).click();
 
   const modal = page.getByRole("dialog");

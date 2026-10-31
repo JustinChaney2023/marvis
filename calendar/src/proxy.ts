@@ -50,7 +50,9 @@ function isPublicPath(pathname: string): boolean {
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  if (isPublicPath(pathname)) return NextResponse.next();
+  // "/" is the calendar when signed in and the public landing page when not
+  // (src/app/page.tsx decides), so it never redirects to /login.
+  if (pathname === "/" || isPublicPath(pathname)) return NextResponse.next();
 
   const hasSessionCookie = Boolean(request.cookies.get(SESSION_COOKIE)?.value);
   if (hasSessionCookie) return NextResponse.next();

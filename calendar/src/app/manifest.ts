@@ -8,7 +8,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "Season",
     short_name: "Season",
     description: "A calm personal OS for your calendar, tasks, and focus time",
-    start_url: "/",
+    start_url: "/home",
     display: "standalone",
     background_color: "#f7f4ef",
     theme_color: "#f7f4ef",

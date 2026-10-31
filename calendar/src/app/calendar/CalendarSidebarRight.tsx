@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { AlertTriangleIcon, LockIcon } from "../icons";
-import { formatTime, formatYMD } from "@/lib/calendar-dates";
+import { formatTime } from "@/lib/calendar-dates";
 import Card from "../ui/Card";
 
 export type AttentionTask = {
@@ -38,7 +38,7 @@ export type Overcommitment = {
   capMinutes: number;
 };
 
-function UpcomingItemList({ items }: { items: UpcomingItem[] }) {
+function UpcomingItemList({ items, dayKey, timeZone }: { items: UpcomingItem[]; dayKey: string; timeZone: string }) {
   return (
     <ul className="mt-1 flex flex-col gap-1 pb-1">
       {items.map((item) => {
@@ -48,7 +48,7 @@ function UpcomingItemList({ items }: { items: UpcomingItem[] }) {
         // to its day.
         const href = item.isTask && item.taskId
           ? `/tasks?edit=${item.taskId}`
-          : `/?view=day&start=${formatYMD(new Date(item.startIso))}&edit=${item.eventId}`;
+          : `/home?view=day&start=${dayKey}&edit=${item.eventId}`;
         return (
           <li key={item.id}>
             <Link
@@ -63,7 +63,7 @@ function UpcomingItemList({ items }: { items: UpcomingItem[] }) {
                   {item.title}
                 </span>
                 <span className="font-mono text-muted">
-                  {formatTime(new Date(item.startIso))} – {formatTime(new Date(item.endIso))}
+                  {formatTime(new Date(item.startIso), timeZone)} – {formatTime(new Date(item.endIso), timeZone)}
                 </span>
               </span>
             </Link>
@@ -83,10 +83,14 @@ export default function CalendarSidebarRight({
   tasks,
   upcomingDays,
   overcommitment,
+  timeZone,
 }: {
   tasks: AttentionTask[];
   upcomingDays: UpcomingDay[];
   overcommitment: Overcommitment | null;
+  // The account's zone — this renders on the server first, whose own
+  // zone isn't the user's.
+  timeZone: string;
 }) {
   return (
     <div className="flex flex-col gap-4">
@@ -124,7 +128,7 @@ export default function CalendarSidebarRight({
                     </span>
                     <span className="font-mono text-muted">
                       {t.isLate ? "Finishes late · due " : t.isOverdue ? "Overdue · " : "Due "}
-                      {t.dueAt.toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                      {t.dueAt.toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone })}
                     </span>
                   </span>
                 </Link>
@@ -148,7 +152,7 @@ export default function CalendarSidebarRight({
                   </span>
                 </>
               );
-              const list = <UpcomingItemList items={day.items} />;
+              const list = <UpcomingItemList items={day.items} dayKey={day.dayKey} timeZone={timeZone} />;
 
               // Today always shows in full — collapsing the one day
               // you're actually living in would hide what's still ahead
@@ -202,7 +206,7 @@ export default function CalendarSidebarRight({
  * for screens too narrow for the right rail (below xl) — otherwise phones
  * never see overdue work from the calendar at all.
  */
-export function AttentionStrip({ tasks }: { tasks: AttentionTask[] }) {
+export function AttentionStrip({ tasks, timeZone }: { tasks: AttentionTask[]; timeZone: string }) {
   if (tasks.length === 0) return null;
   const overdue = tasks.filter((t) => t.isOverdue || t.isLate).length;
   return (
@@ -227,7 +231,7 @@ export function AttentionStrip({ tasks }: { tasks: AttentionTask[] }) {
               <span className="min-w-0 truncate font-medium text-ink-2">{t.title}</span>
               <span className={`flex-shrink-0 font-mono ${t.isOverdue ? "text-accent" : "text-muted"}`}>
                 {t.isLate ? "Late · due" : t.isOverdue ? "Overdue" : "Due"}{" "}
-                {t.dueAt.toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                {t.dueAt.toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone })}
               </span>
             </Link>
           </li>

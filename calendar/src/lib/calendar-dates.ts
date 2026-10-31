@@ -73,11 +73,14 @@ export function overlapsDay(event: { start: Date; end: Date }, day: Date): boole
   return event.start < dayEnd && event.end > dayStart;
 }
 
-export function formatTime(d: Date): string {
+// Pass `timeZone` from anything rendered on the server: without it this
+// formats in the server host's zone, not the account's.
+export function formatTime(d: Date, timeZone?: string): string {
   return d.toLocaleTimeString("en-US", {
     hour: "numeric",
     minute: "2-digit",
     hour12: true,
+    timeZone,
   });
 }
 
