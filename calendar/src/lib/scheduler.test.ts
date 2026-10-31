@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { dateKey, excludeDaysWindowFn, findBestSlot, findEarliestSlot, splitIntoChunks } from "./scheduler";
+import { dateKey, excludeDaysWindowFn, expandReservedBlocks, findBestSlot, findEarliestSlot, splitIntoChunks } from "./scheduler";
+import { getZonedDateParts, zonedWallTimeToUtc } from "./timezone";
 
 // Monday 2026-08-17 09:00 local
 const from = new Date(2026, 7, 17, 9, 0);
@@ -192,6 +193,33 @@ const horizon = new Date(2026, 7, 31, 0, 0);
   assert.ok(noWeekends(monday) !== null, "weekday stays open");
   assert.equal(noWeekends(saturday), null, "excluded day closed");
   assert.ok(excludeDaysWindowFn(null)(saturday) === null, "null excludeDays falls back to the base window (weekday-only default)");
+}
+
+// expandReservedBlocks must walk by zoned calendar day, not a fixed 24h
+// step, or it skips/repeats a day across a DST transition.
+{
+  const tz = "America/New_York";
+  const sunday10to11 = [{ dayOfWeek: 0, startMin: 600, endMin: 660 }];
+
+  // 2026-03-08 is the US spring-forward Sunday (a 23h local day).
+  const marchStart = zonedWallTimeToUtc(2026, 3, 1, 0, 0, tz);
+  const marchEnd = zonedWallTimeToUtc(2026, 3, 16, 0, 0, tz);
+  const marchBusy = expandReservedBlocks(sunday10to11, marchStart, marchEnd, tz);
+  assert.equal(marchBusy.length, 3, "spring-forward week: all 3 Sundays present, none skipped");
+  assert.deepEqual(
+    marchBusy.map((b) => getZonedDateParts(b.start, tz).day),
+    [1, 8, 15],
+  );
+
+  // 2026-11-01 is the US fall-back Sunday (a 25h local day).
+  const novStart = zonedWallTimeToUtc(2026, 10, 25, 0, 0, tz);
+  const novEnd = zonedWallTimeToUtc(2026, 11, 9, 0, 0, tz);
+  const novBusy = expandReservedBlocks(sunday10to11, novStart, novEnd, tz);
+  assert.equal(novBusy.length, 3, "fall-back week: all 3 Sundays present, none doubled or dropped");
+  assert.deepEqual(
+    novBusy.map((b) => getZonedDateParts(b.start, tz).day),
+    [25, 1, 8],
+  );
 }
 
 // Deadline is about *finishing*: a 2h task due 10:30 shouldn't take the

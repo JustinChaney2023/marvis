@@ -8,6 +8,8 @@ import {
   addTaskCommentAction,
   addTaskAttachmentAction,
   deleteTaskAttachmentAction,
+  setTaskStatusAction,
+  toggleTaskDone,
   type TaskActivityEntry,
 } from "../actions";
 import { CloseIcon } from "../icons";
@@ -21,11 +23,12 @@ import {
   parseCustomWeeklyDays,
   type WeekdayCode,
 } from "@/lib/recurrence";
-import { PROJECT_EVENT_COLORS } from "@/lib/eventColors";
 import DatePicker from "../ui/DatePicker";
+import PresetInput from "../ui/PresetInput";
 import NotesEditor from "../ui/NotesEditor";
-
-const TASK_COLOR_OPTIONS = Object.keys(PROJECT_EVENT_COLORS);
+import ColorPicker from "../ui/ColorPicker";
+import { useModalOpen } from "@/lib/keyboard";
+import { type TaskStatus } from "./taskStatus";
 
 type Project = { id: string; name: string };
 type Assignee = { id: string; name: string; type: "HUMAN" | "AI" };
@@ -36,6 +39,7 @@ type TaskOption = { id: string; title: string };
 export type TaskModalTask = {
   id: string;
   title: string;
+  status: TaskStatus;
   notes: string | null;
   priority: number;
   durationMin: number;
@@ -71,6 +75,15 @@ type Props = {
 };
 
 const PRIORITY_LABEL = ["Low", "Medium", "High", "Urgent"];
+// 11:59 PM is a common value because a lot of classes have assignments due then.
+const TIME_PRESETS = [
+  { value: "09:00", label: "9:00 AM" },
+  { value: "12:00", label: "12:00 PM" },
+  { value: "17:00", label: "5:00 PM" },
+  { value: "18:00", label: "6:00 PM" },
+  { value: "20:00", label: "8:00 PM" },
+  { value: "23:59", label: "11:59 PM" },
+];
 // Picking just a due *date* with no time used to leave the time at
 // midnight (a browser datetime-local default nobody wants for a task
 // due date) — default to end-of-workday instead.
@@ -100,6 +113,7 @@ export default function TaskModal({
   defaultAssigneeId,
   onClose,
 }: Props) {
+  useModalOpen(true);
   const [selectedLabelIds, setSelectedLabelIds] = useState<string[]>(
     () => task?.labels.map((l) => l.id) ?? [],
   );
@@ -113,6 +127,7 @@ export default function TaskModal({
     setSelectedBlockedByIds((prev) => (prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id]));
   };
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   const [activity, setActivity] = useState<TaskActivityEntry[]>([]);
   const [commentText, setCommentText] = useState("");
@@ -171,6 +186,7 @@ export default function TaskModal({
   };
 
   const handleDeleteAttachment = async (attachmentId: string) => {
+    if (!confirm("Delete this attachment?")) return;
     await deleteTaskAttachmentAction(attachmentId);
     await refreshActivity();
   };
@@ -183,8 +199,8 @@ export default function TaskModal({
   const [customDays, setCustomDays] = useState<WeekdayCode[]>(() =>
     task?.recurrenceRule ? (parseCustomWeeklyDays(task.recurrenceRule) ?? []) : [],
   );
-  const [startAtValue, setStartAtValue] = useState(task?.startAt ? formatYMD(task.startAt) : "");
   const [dueAtDateValue, setDueAtDateValue] = useState(task?.dueAt ? formatYMD(task.dueAt) : "");
+  const [startAtValue, setStartAtValue] = useState(task?.startAt ? formatYMD(task.startAt) : "");
   const hasDueDate = Boolean(dueAtDateValue);
   const initialDuration = task?.durationMin ?? 30;
   // A single always-editable number input, not a two-step "pick Custom,
@@ -259,6 +275,11 @@ export default function TaskModal({
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (isSubmitting) return;
+    setFormError(null);
+    if (!(Number(durationValue) >= 1)) {
+      setFormError("Duration must be at least 1 minute.");
+      return;
+    }
     const formData = new FormData(e.currentTarget);
 
     const ruleValue =
@@ -285,13 +306,21 @@ export default function TaskModal({
       onClose();
     } catch (err) {
       console.error(err);
+      setFormError("Couldn't save — try again.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const onBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (e.target === e.currentTarget) onClose();
+    if (e.target !== e.currentTarget) return;
+    // TaskRow renders this modal nested inside its own clickable <li>
+    // (onCardClick reopens the editor for any click that isn't on a
+    // button/input) — without stopping propagation here, closing on the
+    // backdrop click immediately gets undone by that same click bubbling
+    // up to the row.
+    e.stopPropagation();
+    onClose();
   };
 
   return (
@@ -315,6 +344,54 @@ export default function TaskModal({
             <CloseIcon />
           </button>
         </div>
+
+        {mode === "edit" && task && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {task.status === "CREATED" && (
+              <button
+                type="button"
+                onClick={() => setTaskStatusAction(task.id, "ONGOING")}
+                className="rounded-lg border border-rule bg-surface px-2.5 py-1 text-xs font-medium text-ink-2 transition-colors hover:bg-rule-soft"
+              >
+                Start
+              </button>
+            )}
+            {task.status === "ONGOING" && (
+              <button
+                type="button"
+                onClick={() => setTaskStatusAction(task.id, "CREATED")}
+                className="rounded-lg border border-rule bg-surface px-2.5 py-1 text-xs font-medium text-ink-2 transition-colors hover:bg-rule-soft"
+              >
+                Pause
+              </button>
+            )}
+            {task.status !== "DONE" ? (
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    await toggleTaskDone(task.id, true);
+                    onClose();
+                  } catch (err) {
+                    console.error(err);
+                    setFormError("Couldn't mark done — try again.");
+                  }
+                }}
+                className="rounded-lg border border-rule bg-surface px-2.5 py-1 text-xs font-medium text-ink-2 transition-colors hover:bg-rule-soft"
+              >
+                Finish
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => toggleTaskDone(task.id, false)}
+                className="rounded-lg border border-rule bg-surface px-2.5 py-1 text-xs font-medium text-ink-2 transition-colors hover:bg-rule-soft"
+              >
+                Reopen
+              </button>
+            )}
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="mt-4 flex flex-col gap-4">
           <label className="flex flex-col gap-1 text-sm">
@@ -346,14 +423,17 @@ export default function TaskModal({
                   <DatePicker name="dueAtDate" value={dueAtDateValue} onChange={setDueAtDateValue} placeholder="No due date" />
                 </div>
                 {hasDueDate && (
-                  <input
-                    type="time"
-                    name="dueAtTime"
-                    value={dueTimeValue}
-                    onChange={(e) => setDueTimeValue(e.target.value)}
-                    aria-label="Due time"
-                    className="w-32 flex-none rounded-lg border border-rule bg-paper px-3 py-2 text-sm text-ink transition-colors focus:border-accent focus:outline-none"
-                  />
+                  <div className="w-32 flex-none">
+                    <PresetInput
+                      name="dueAtTime"
+                      type="time"
+                      value={dueTimeValue}
+                      onChange={setDueTimeValue}
+                      presets={TIME_PRESETS}
+                      ariaLabel="Due time"
+                      className="w-full rounded-lg border border-rule bg-paper px-3 py-2 text-sm text-ink transition-colors focus:border-accent focus:outline-none"
+                    />
+                  </div>
                 )}
               </div>
             </div>
@@ -448,8 +528,58 @@ export default function TaskModal({
 
           <div className="flex flex-col gap-1 text-sm">
             <span className="text-muted">Notes</span>
-            <NotesEditor name="notes" defaultValue={task?.notes ?? ""} />
+            <NotesEditor
+              name="notes"
+              defaultValue={task?.notes ?? ""}
+              onAttachFile={mode === "edit" && task ? handleUploadAttachment : undefined}
+            />
           </div>
+
+          {mode === "edit" && task && (
+            <div className="flex flex-col gap-2 text-sm">
+              <span className="text-muted">Attachments</span>
+              <div className="flex flex-col gap-1.5">
+                {activity
+                  .filter((e) => e.attachment)
+                  .map((e) => (
+                    <div
+                      key={e.id}
+                      className="flex items-center justify-between gap-2 rounded-lg border border-rule px-2.5 py-1.5 text-xs"
+                    >
+                      <a
+                        href={e.attachment!.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="truncate text-ink-2 hover:underline"
+                      >
+                        {e.attachment!.filename}
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteAttachment(e.attachment!.id)}
+                        className="text-muted hover:text-accent"
+                        aria-label={`Remove ${e.attachment!.filename}`}
+                      >
+                        <CloseIcon className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+              </div>
+              <input
+                ref={attachmentInputRef}
+                type="file"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleUploadAttachment(file);
+                }}
+                disabled={isUploadingAttachment}
+                className="text-xs text-muted"
+              />
+              {attachmentError && (
+                <span className="text-xs text-accent">{attachmentError}</span>
+              )}
+            </div>
+          )}
 
           <div className="border-t border-rule pt-4">
             <label className="flex flex-col gap-1 text-sm">
@@ -531,17 +661,10 @@ export default function TaskModal({
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <label className="flex flex-col gap-1 text-sm">
                   <span className="text-muted">Color</span>
-                  <select name="color" defaultValue={task?.color ?? ""} className={inputClass}>
-                    <option value="">Use project color</option>
-                    {TASK_COLOR_OPTIONS.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </select>
+                  <ColorPicker name="color" defaultValue={task?.color ?? ""} noneLabel="Use project color" />
                 </label>
                 <label className="flex flex-col gap-1 text-sm">
-                  <span className="text-muted">Min chunk</span>
+                  <span className="text-muted">Split into chunks of</span>
                   <div className="flex items-center gap-1.5">
                     <input
                       type="number"
@@ -554,8 +677,9 @@ export default function TaskModal({
                       aria-label="Split into chunks of this many minutes"
                       className={inputClass}
                     />
+                    <span className="text-xs text-muted">min, at least</span>
                   </div>
-                  <span className="text-xs text-muted">min per piece, with breaks between</span>
+                  <span className="text-xs text-muted">Each chunk gets scheduled with a break before the next.</span>
                 </label>
               </div>
               {timeSlots.length > 0 && (
@@ -601,7 +725,7 @@ export default function TaskModal({
 
               <input type="hidden" name="blockedByIds" value={selectedBlockedByIds.join(",")} />
               {otherTasks.length > 0 && (
-                <details className="text-sm">
+                <details className="text-sm" open={selectedBlockedByIds.length > 0}>
                   <summary className="cursor-pointer text-muted">
                     Blocked by{selectedBlockedByIds.length > 0 ? ` (${selectedBlockedByIds.length})` : ""}
                   </summary>
@@ -628,49 +752,7 @@ export default function TaskModal({
 
           {mode === "edit" && task && (
             <div className="flex flex-col gap-2 border-t border-rule pt-4 text-sm">
-              <span className="text-muted">Attachments</span>
-              <div className="flex flex-col gap-1.5">
-                {activity
-                  .filter((e) => e.attachment)
-                  .map((e) => (
-                    <div
-                      key={e.id}
-                      className="flex items-center justify-between gap-2 rounded-lg border border-rule px-2.5 py-1.5 text-xs"
-                    >
-                      <a
-                        href={e.attachment!.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="truncate text-ink-2 hover:underline"
-                      >
-                        {e.attachment!.filename}
-                      </a>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteAttachment(e.attachment!.id)}
-                        className="text-muted hover:text-accent"
-                        aria-label={`Remove ${e.attachment!.filename}`}
-                      >
-                        <CloseIcon className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  ))}
-              </div>
-              <input
-                ref={attachmentInputRef}
-                type="file"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) handleUploadAttachment(file);
-                }}
-                disabled={isUploadingAttachment}
-                className="text-xs text-muted"
-              />
-              {attachmentError && (
-                <span className="text-xs text-accent">{attachmentError}</span>
-              )}
-
-              <span className="mt-2 text-muted">Activity</span>
+              <span className="text-muted">Activity</span>
               <div className="flex max-h-40 flex-col gap-1.5 overflow-y-auto">
                 {activity.length === 0 && (
                   <span className="text-xs text-muted">No activity yet.</span>
@@ -713,6 +795,8 @@ export default function TaskModal({
               </div>
             </div>
           )}
+
+          {formError && <p className="text-sm text-accent">{formError}</p>}
 
           <div className="mt-2 flex items-center justify-end gap-2">
             <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>

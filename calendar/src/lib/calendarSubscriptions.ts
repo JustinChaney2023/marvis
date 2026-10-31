@@ -118,7 +118,14 @@ export async function syncCalendarSubscription(
   const windowStart = new Date(Date.now() - SYNC_PAST_DAYS * 86_400_000);
   const windowEnd = new Date(Date.now() + SYNC_FUTURE_DAYS * 86_400_000);
   const inScope = parsed.filter(
-    (e) => e.recurrenceRule || (e.end >= windowStart && e.start <= windowEnd),
+    (e) =>
+      // A recurring series' modified-occurrence override shares its UID
+      // with the master — both the task-mode and event-mode paths below
+      // dedupe by uid, so keeping an override here would have it collide
+      // with (and unpredictably overwrite, or be overwritten by) its own
+      // master. Drop it and keep the master's series intact; see
+      // ics.ts's ParsedIcsEvent comment for the full reasoning.
+      !e.isRecurrenceException && (e.recurrenceRule || (e.end >= windowStart && e.start <= windowEnd)),
   );
 
   let imported = 0;
@@ -196,12 +203,14 @@ export async function syncCalendarSubscription(
       imported++;
     }
 
-    await prisma.event.deleteMany({
-      where: {
-        subscriptionId,
-        subscriptionEventUid: { notIn: [...seenUids] },
-      },
-    });
+    if (seenUids.size > 0) {
+      await prisma.event.deleteMany({
+        where: {
+          subscriptionId,
+          subscriptionEventUid: { notIn: [...seenUids] },
+        },
+      });
+    }
   }
 
   await prisma.calendarSubscription.update({

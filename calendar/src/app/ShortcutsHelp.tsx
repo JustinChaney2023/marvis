@@ -1,12 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-
-function isTypingTarget(el: EventTarget | null): boolean {
-  if (!(el instanceof HTMLElement)) return false;
-  const tag = el.tagName;
-  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
-}
+import { isTypingTarget, isAnyModalOpen, useModalOpen } from "@/lib/keyboard";
 
 // Phones have no "?" key — MobileNav's More sheet fires this instead.
 export const HELP_EVENT = "season:help";
@@ -45,6 +40,7 @@ const SHORTHAND: [string, string][] = [
 
 export default function ShortcutsHelp() {
   const [open, setOpen] = useState(false);
+  useModalOpen(open);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -52,7 +48,7 @@ export default function ShortcutsHelp() {
         if (e.key === "Escape") setOpen(false);
         return;
       }
-      if (e.key === "?" && !isTypingTarget(e.target) && !e.metaKey && !e.ctrlKey) {
+      if (e.key === "?" && !isTypingTarget(e.target) && !isAnyModalOpen() && !e.metaKey && !e.ctrlKey) {
         e.preventDefault();
         setOpen(true);
       }

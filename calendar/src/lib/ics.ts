@@ -47,7 +47,16 @@ function foldLine(line: string): string {
 }
 
 function escapeIcsText(s: string): string {
-  return s.replace(/\\/g, "\\\\").replace(/,/g, "\\,").replace(/;/g, "\\;").replace(/\n/g, "\\n");
+  // \r must be escaped alongside \n — an unescaped raw CR is a line break
+  // to many real-world ICS parsers just like LF is, and this text can
+  // come from the public, unauthenticated booking form (see booking.ts),
+  // so a bare CR would let a booking submission inject extra-looking
+  // ICS properties into the calendar owner's exported file.
+  return s
+    .replace(/\\/g, "\\\\")
+    .replace(/,/g, "\\,")
+    .replace(/;/g, "\\;")
+    .replace(/\r\n|\r|\n/g, "\\n");
 }
 
 /** Builds a VCALENDAR document for one or more events (#33 — export). */
@@ -85,6 +94,14 @@ export type ParsedIcsEvent = {
   notes: string | null;
   location: string | null;
   excludeDates: string | null;
+  // True for a recurring series' modified-occurrence override
+  // (RECURRENCE-ID) — shares its UID with the master, so a caller that
+  // dedupes/upserts by uid (calendarSubscriptions.ts) needs to filter
+  // these out itself rather than colliding master and override on the
+  // same key. The one-off file-import caller (actions.ts's
+  // importIcsAction) doesn't dedupe by uid at all, so it's fine for it to
+  // keep both as separate one-off events same as before.
+  isRecurrenceException: boolean;
 };
 
 /**
@@ -117,6 +134,7 @@ export function parseIcsEvents(icsText: string): ParsedIcsEvent[] {
       notes: event.description || null,
       location: event.location || null,
       excludeDates,
+      isRecurrenceException: event.isRecurrenceException(),
     });
   }
   return events;

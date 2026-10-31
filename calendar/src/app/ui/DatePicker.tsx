@@ -92,14 +92,14 @@ export default function DatePicker({ name, value, onChange, placeholder = "Pick 
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full z-40 mt-1 flex w-max overflow-hidden rounded-xl border border-rule bg-surface">
-          <div className="flex flex-col gap-0.5 border-r border-rule p-2">
+        <div className="absolute left-0 top-full z-40 mt-1 flex w-72 max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-xl border border-rule bg-surface">
+          <div className="flex flex-col gap-0.5 border-b border-rule p-2">
             {quickPicks.map((qp) => (
               <button
                 key={qp.label}
                 type="button"
                 onClick={() => pick(qp.date)}
-                className="flex items-center justify-between gap-3 rounded-md px-2 py-1 text-left text-xs text-ink-2 transition-colors hover:bg-rule-soft"
+                className="flex w-full items-center justify-between gap-3 rounded-md px-2 py-1 text-left text-xs text-ink-2 transition-colors hover:bg-rule-soft"
               >
                 <span>{qp.label}</span>
                 <span className="font-mono text-muted">

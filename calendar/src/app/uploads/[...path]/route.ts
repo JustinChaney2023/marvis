@@ -54,6 +54,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     "Content-Type": contentType,
     "Cache-Control": "private, max-age=3600",
     "Accept-Ranges": "bytes",
+    // Content-Type here comes from a filename extension, not a sniffed
+    // check of the actual bytes — without this, a browser that content-
+    // sniffs a text/plain upload as HTML could render it instead of
+    // showing it as text.
+    "X-Content-Type-Options": "nosniff",
   };
 
   // Static hosting answered Range requests; dropping that would break

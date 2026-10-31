@@ -11,13 +11,21 @@ export type GenerateSubtasksResult =
 
 const MAX_CONTEXT_CHARS = 4000;
 
+/** Trims each suggestion and drops any that are empty/whitespace-only. */
+export function cleanSubtasks(subtasks: string[]): string[] {
+  return subtasks.map((s) => s.trim()).filter(Boolean);
+}
+
 /**
  * Proposes a short checklist of subtasks for a task, from its own
- * title/notes/project — not the user's whole task list or other
- * context, which keeps the privacy/scope story simple ("this task's own
- * text, nothing else") until there's a real reason to widen it. Returns
- * suggestions for review, same pattern as syllabus import: nothing gets
- * created until the user confirms which ones to keep.
+ * title/notes/project (plus, when provided, text extracted from the
+ * task's own attached files — e.g. a pasted-in assignment sheet — which
+ * is what actually makes the suggestions concrete instead of generic) —
+ * not the user's whole task list or other context, which keeps the
+ * privacy/scope story simple ("this task's own text, nothing else")
+ * until there's a real reason to widen it. Returns suggestions for
+ * review, same pattern as syllabus import: nothing gets created until
+ * the user confirms which ones to keep.
  */
 export async function generateSubtasks(
   taskTitle: string,
@@ -25,6 +33,7 @@ export async function generateSubtasks(
   projectName: string | null,
   localAi: LocalAiConfig | null,
   anthropicApiKey: string | null = null,
+  attachmentsText: string | null = null,
 ): Promise<GenerateSubtasksResult> {
   const title = taskTitle.trim();
   if (!title) return { ok: false, error: "The task needs a title first." };
@@ -33,6 +42,7 @@ export async function generateSubtasks(
     `Task: ${title}`,
     projectName ? `Project: ${projectName}` : null,
     taskNotes ? `Notes: ${taskNotes.trim().slice(0, MAX_CONTEXT_CHARS)}` : null,
+    attachmentsText ? `Attached file contents:\n${attachmentsText.trim().slice(0, MAX_CONTEXT_CHARS)}` : null,
   ]
     .filter(Boolean)
     .join("\n");
@@ -53,5 +63,5 @@ export async function generateSubtasks(
   });
 
   if (!result.ok) return result;
-  return { ok: true, subtasks: result.data.subtasks.filter((s) => s.trim()) };
+  return { ok: true, subtasks: cleanSubtasks(result.data.subtasks) };
 }

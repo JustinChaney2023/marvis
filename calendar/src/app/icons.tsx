@@ -220,6 +220,23 @@ export function FlagIcon({ className = "h-3 w-3" }: IconProps) {
   );
 }
 
+export function NoteIcon({ className = "h-3 w-3" }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className={className} aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M5 3.5h14a1 1 0 011 1V19a1 1 0 01-1 1H5a1 1 0 01-1-1V4.5a1 1 0 011-1z" />
+      <path strokeLinecap="round" d="M7.5 8.5h9M7.5 12.5h9M7.5 16.5h5.5" />
+    </svg>
+  );
+}
+
+export function MenuIcon({ className = "h-4 w-4" }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className={className} aria-hidden="true">
+      <path strokeLinecap="round" d="M4 6h16M4 12h16M4 18h16" />
+    </svg>
+  );
+}
+
 export function SearchIcon({ className = "h-4 w-4" }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className={className} aria-hidden="true">

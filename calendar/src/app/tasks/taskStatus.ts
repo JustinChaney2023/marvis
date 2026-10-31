@@ -8,7 +8,7 @@ export const STATUS_BADGE: Record<TaskStatus, string> = {
 };
 
 export const STATUS_LABEL: Record<TaskStatus, string> = {
-  CREATED: "Created",
+  CREATED: "To do",
   ONGOING: "Ongoing",
   DELAYED: "Delayed",
   DONE: "Completed",

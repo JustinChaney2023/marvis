@@ -3,13 +3,10 @@
 // so EventModal/TaskModal (which need the option list for their Color
 // select) can import it without a circular import back into the
 // component that renders them.
-// `bar` (the border-left accent) is used everywhere a color shows up:
-// the week/day hour grid's event blocks, the mobile agenda list, task
-// badges. `bg`/`text` are only used by the mobile agenda list's chip
-// rows (AgendaView in CalendarClient.tsx) — the desktop hour grid's
-// blocks intentionally use a fixed neutral/translucent fill instead (see
-// EventBlock), not a per-color one, so they read consistently regardless
-// of which color a task's project happens to be.
+// `bar` is the border-left accent (used by every colored surface —
+// hour-grid blocks, agenda rows, task badges). `bg`/`text` fill the
+// whole block for colored events and the mobile agenda list, matching
+// each other; uncolored events keep a flat neutral fill (EventBlock).
 // `dot`/`badge` are the plain swatch treatments (a small colored circle,
 // or a light-bg/dark-text label chip) used by the Projects/Gantt/Tasks
 // pages — previously each of those files kept its own copy of this same
@@ -76,7 +73,65 @@ export const PROJECT_EVENT_COLORS: Record<
     dot: "bg-pink-500",
     badge: "bg-pink-100 text-pink-700 dark:bg-pink-950/40 dark:text-pink-300",
   },
+  orange: {
+    bar: "border-l-orange-500",
+    bg: "bg-orange-50 dark:bg-orange-950",
+    text: "text-orange-900 dark:text-orange-100",
+    dot: "bg-orange-500",
+    badge: "bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-300",
+  },
+  teal: {
+    bar: "border-l-teal-500",
+    bg: "bg-teal-50 dark:bg-teal-950",
+    text: "text-teal-900 dark:text-teal-100",
+    dot: "bg-teal-500",
+    badge: "bg-teal-100 text-teal-700 dark:bg-teal-950/40 dark:text-teal-300",
+  },
+  sky: {
+    bar: "border-l-sky-500",
+    bg: "bg-sky-50 dark:bg-sky-950",
+    text: "text-sky-900 dark:text-sky-100",
+    dot: "bg-sky-500",
+    badge: "bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300",
+  },
+  emerald: {
+    bar: "border-l-emerald-500",
+    bg: "bg-emerald-50 dark:bg-emerald-950",
+    text: "text-emerald-900 dark:text-emerald-100",
+    dot: "bg-emerald-500",
+    badge: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300",
+  },
+  rose: {
+    bar: "border-l-rose-500",
+    bg: "bg-rose-50 dark:bg-rose-950",
+    text: "text-rose-900 dark:text-rose-100",
+    dot: "bg-rose-500",
+    badge: "bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300",
+  },
 };
+
+// A color value is either one of the curated Tailwind family names above,
+// or a custom hex string (from the <input type="color"> swatch) — anything
+// starting with "#". Hex can't go through Tailwind's class scanner (it
+// only picks up literal class strings in source, not runtime-built ones),
+// so it's rendered via inline style instead, computed here rather than at
+// each of the several render sites that used to duplicate this palette.
+export function isCustomColor(color: string | null | undefined): color is string {
+  return !!color && color.startsWith("#");
+}
+
+// Same five roles as PROJECT_EVENT_COLORS, as inline-style objects instead
+// of class strings. `1a`/`33` hex alpha suffixes give the same "soft tint"
+// look as the Tailwind -50/-950 backgrounds without needing a palette.
+export function customColorStyle(hex: string) {
+  return {
+    bar: { borderLeftColor: hex } as const,
+    bg: { backgroundColor: `${hex}1a` } as const,
+    text: { color: hex } as const,
+    dot: { backgroundColor: hex } as const,
+    badge: { backgroundColor: `${hex}33`, color: hex } as const,
+  };
+}
 
 // A task/event with no project color set shouldn't grab a random hue
 // from the categorical palette above — that reads as an arbitrary,

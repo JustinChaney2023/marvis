@@ -280,7 +280,7 @@ async function listOccurrences(userId: string, from: Date, to: Date, timeZone: s
     },
   });
   const byId = new Map(rows.map((r) => [r.id, r]));
-  return expandEvents(rows, from, to)
+  return expandEvents(rows, from, to, timeZone)
     .sort((a, b) => a.start.getTime() - b.start.getTime())
     .map((o) => {
       const master = byId.get(o.masterId);
@@ -585,7 +585,7 @@ const TOOLS: Tool<z.ZodType>[] = [
         const task = await getOwnedTask(userId, taskId);
         return { scheduled: true, task: serializeTask(task, timeZone) };
       }
-      const results = await scheduleAllPendingTasks(userId);
+      const { results } = await scheduleAllPendingTasks(userId);
       const tasks = await prisma.task.findMany({
         where: { id: { in: results.map((r) => r.taskId) } },
         include: TASK_INCLUDE,
@@ -741,10 +741,7 @@ const TOOLS: Tool<z.ZodType>[] = [
         throw new ToolError("That event comes from a read-only calendar feed and can't be deleted here.");
       }
       if (event.googleEventId) {
-        const accountId =
-          event.googleAccountId ??
-          (await prisma.googleAccount.findFirst({ where: { userId, isDefault: true } }))?.id;
-        if (accountId) await deleteFromGoogle(accountId, event.googleEventId);
+        if (event.googleCalendarId) await deleteFromGoogle(event.googleCalendarId, event.googleEventId);
       }
       await prisma.event.delete({ where: { id: eventId } });
       return { ok: true, deleted: event.title };

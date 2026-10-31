@@ -8,17 +8,7 @@ import { PROJECT_EVENT_COLORS } from "@/lib/eventColors";
 import { QUICK_CAPTURE_EVENT, type QuickCaptureMode } from "./quickCaptureEvents";
 import { CloseIcon } from "./icons";
 import Button from "./ui/Button";
-
-function isTypingTarget(el: EventTarget | null): boolean {
-  if (!(el instanceof HTMLElement)) return false;
-  const tag = el.tagName;
-  return (
-    tag === "INPUT" ||
-    tag === "TEXTAREA" ||
-    tag === "SELECT" ||
-    el.isContentEditable
-  );
-}
+import { isTypingTarget, isAnyModalOpen, useModalOpen } from "@/lib/keyboard";
 
 export type CaptureProject = { id: string; name: string; color: string };
 type Project = CaptureProject;
@@ -68,6 +58,7 @@ function matchProject(projects: Project[], name: string): Project | null {
  */
 export default function QuickCapture() {
   const [open, setOpen] = useState(false);
+  useModalOpen(open);
   const [value, setValue] = useState("");
   const [mode, setMode] = useState<QuickCaptureMode>("task");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -91,7 +82,7 @@ export default function QuickCapture() {
         if (e.key === "Escape") setOpen(false);
         return;
       }
-      if (e.key === "c" && !isTypingTarget(e.target) && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      if (e.key === "c" && !isTypingTarget(e.target) && !isAnyModalOpen() && !e.metaKey && !e.ctrlKey && !e.altKey) {
         e.preventDefault();
         setOpen(true);
       }

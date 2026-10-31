@@ -16,10 +16,13 @@ function ev(id: string, startHour: number, endHour: number) {
     allDay: false,
     projectColor: null,
     taskPriority: null,
+    taskId: null,
+    taskStatus: null,
     meetingUrl: null,
     eventType: "DEFAULT" as const,
     reminderMinutes: null,
-    googleAccountId: null,
+    googleCalendarId: null,
+    calendarKey: "events",
   };
 }
 

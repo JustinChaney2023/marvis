@@ -20,13 +20,13 @@ function createBaseClient() {
  */
 async function recordGoogleDeletions(base: PrismaClient, where: Prisma.EventWhereInput | undefined) {
   const linked = await base.event.findMany({
-    where: { AND: [where ?? {}, { googleEventId: { not: null }, googleAccountId: { not: null } }] },
-    select: { googleAccountId: true, googleEventId: true },
+    where: { AND: [where ?? {}, { googleEventId: { not: null }, googleCalendarId: { not: null } }] },
+    select: { googleCalendarId: true, googleEventId: true },
   });
   for (const row of linked) {
-    const key = { googleAccountId: row.googleAccountId!, googleEventId: row.googleEventId! };
+    const key = { googleCalendarId: row.googleCalendarId!, googleEventId: row.googleEventId! };
     await base.googleDeletion.upsert({
-      where: { googleAccountId_googleEventId: key },
+      where: { googleCalendarId_googleEventId: key },
       create: key,
       update: {},
     });

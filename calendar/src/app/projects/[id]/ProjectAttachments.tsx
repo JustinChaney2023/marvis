@@ -40,6 +40,7 @@ export default function ProjectAttachments({
   };
 
   const handleDelete = async (attachmentId: string) => {
+    if (!confirm("Delete this attachment?")) return;
     await deleteProjectAttachmentAction(attachmentId);
     router.refresh();
   };

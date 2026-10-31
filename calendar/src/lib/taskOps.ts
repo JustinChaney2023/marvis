@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { runAutomationsForStatusChange } from "@/lib/automations";
 import { nextTaskOccurrence } from "@/lib/taskRecurrence";
+import { scheduleAllPendingTasks } from "@/lib/scheduler";
+import { userTimeZone } from "@/lib/timezone";
 
 // Shared between the toggleTaskDone server action and the MCP endpoint
 // (src/app/api/mcp) — completing a task has real side effects (timer
@@ -40,7 +42,7 @@ export async function logTrackedTime(userId: string, taskId: string, elapsedMin:
 
 /** Returns false when the task doesn't exist or isn't this user's. */
 export async function setTaskDone(userId: string, taskId: string, done: boolean): Promise<boolean> {
-  const existing = await prisma.task.findFirst({ where: { id: taskId, userId } });
+  const existing = await prisma.task.findFirst({ where: { id: taskId, userId }, include: { events: true } });
   if (!existing) return false;
 
   const timerStop = stoppedTimerFields(existing);
@@ -52,6 +54,31 @@ export async function setTaskDone(userId: string, taskId: string, done: boolean)
     },
   });
   await logTrackedTime(userId, taskId, timerStop.elapsedMin);
+
+  // Completing ahead of schedule shouldn't leave the block sitting there
+  // showing time that was never actually worked — same "end becomes now"
+  // truncation endTaskFocus already does for solo focus sessions. Never
+  // deletes the block (that reads as "vanished"); a chunk whose start was
+  // still in the future gets pulled back to now too, so it always lands
+  // right at "now". A locked chunk is left alone, same "don't touch it"
+  // contract as everywhere else.
+  if (done) {
+    const now = new Date();
+    let finishedEarly = false;
+    for (const event of existing.events) {
+      if (event.locked || event.end <= now) continue;
+      finishedEarly = true;
+      // Already in progress — its real start stands, just clip the end to
+      // now. Hasn't started yet — keep its planned duration, anchored to
+      // end now, rather than collapsing a real block to a 1-minute sliver.
+      const durationMs = event.end.getTime() - event.start.getTime();
+      const start = event.start < now ? event.start : new Date(now.getTime() - durationMs);
+      await prisma.event.update({ where: { id: event.id }, data: { start, end: now } });
+    }
+    // Finishing early frees up the rest of the block — resweep so a pending
+    // task can slide into the gap instead of waiting for the next poll.
+    if (finishedEarly) await scheduleAllPendingTasks(userId);
+  }
   runAutomationsForStatusChange(userId, taskId, task.status).catch((err) =>
     console.error("automation error:", err),
   );
@@ -64,7 +91,8 @@ export async function setTaskDone(userId: string, taskId: string, done: boolean)
   // occurrence doesn't already exist — done, undo, done again used to
   // spawn a second copy.
   if (done && existing.status !== "DONE" && task.recurrenceRule && task.dueAt) {
-    const nextDueAt = nextTaskOccurrence(task.recurrenceRule, task.dueAt);
+    const owner = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { timezone: true } });
+    const nextDueAt = nextTaskOccurrence(task.recurrenceRule, task.dueAt, userTimeZone(owner));
     const alreadySpawned =
       nextDueAt &&
       (await prisma.task.findFirst({

@@ -60,5 +60,13 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  // _next/webpack-hmr is dev mode's hot-reload websocket — routing a
+  // protocol-upgrade request through this proxy at all (even when it's a
+  // same-request no-op via NextResponse.next()) breaks the handshake when
+  // self-hosted behind a reverse proxy: a signed-out request got a plain
+  // 307 redirect back instead of the 101 Switching Protocols a WebSocket
+  // client expects, which just looks like "the socket failed" in devtools
+  // with no other clue. Not sensitive data, doesn't need auth-gating —
+  // same treatment as _next/static/_next/image below.
+  matcher: ["/((?!_next/static|_next/image|_next/webpack-hmr|favicon.ico).*)"],
 };

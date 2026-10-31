@@ -49,8 +49,10 @@ export async function POST(request: NextRequest) {
   // The cast is only a lib-types mismatch: File.stream() is typed as the
   // DOM ReadableStream, which structurally differs from node:stream/web's
   // even though it's the very same object at runtime under Node.
+  // UPLOADS_ROOT is a static path (see uploads.ts); the per-user segment is
+  // the only dynamic part, and traceability isn't needed at build time.
   await writeFile(
-    path.join(dir, storedName),
+    path.join(/* turbopackIgnore: true */ dir, storedName),
     Readable.fromWeb(file.stream() as NodeReadableStream<Uint8Array>),
   );
 

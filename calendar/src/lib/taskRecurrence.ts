@@ -26,13 +26,14 @@ function addCalendarMonths(date: Date, months: number): Date {
 export function nextTaskOccurrence(
   recurrenceRule: string,
   currentDueAt: Date,
+  timeZone: string,
 ): Date | null {
   if (recurrenceRule === "FREQ=MONTHLY") return addCalendarMonths(currentDueAt, 1);
   if (recurrenceRule === "FREQ=YEARLY") return addCalendarMonths(currentDueAt, 12);
 
-  const rule = buildLocalRRule(recurrenceRule, currentDueAt);
+  const rule = buildLocalRRule(recurrenceRule, currentDueAt, timeZone);
   // .after(dt, inclusive) with inclusive=false to skip the occurrence we
   // just completed, not return the same date again.
-  const next = rule.after(toFakeUTC(currentDueAt), false);
-  return next ? fromFakeUTC(next) : null;
+  const next = rule.after(toFakeUTC(currentDueAt, timeZone), false);
+  return next ? fromFakeUTC(next, timeZone) : null;
 }

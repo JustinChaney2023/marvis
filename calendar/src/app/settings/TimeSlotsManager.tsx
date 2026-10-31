@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { createTimeSlotAction, deleteTimeSlotAction } from "../actions";
 import Button from "../ui/Button";
+import { ConfirmForm } from "../ui/ConfirmForm";
 
 const WEEKDAY_CODES = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"] as const;
 const WEEKDAY_SHORT = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
@@ -48,14 +49,14 @@ export default function TimeSlotsManager({ timeSlots }: { timeSlots: TimeSlotDat
               — {formatDays(slot.daysOfWeek)}, {formatTime(slot.startMin)}–{formatTime(slot.endMin)}
             </span>
           </p>
-          <form action={deleteTimeSlotAction.bind(null, slot.id)}>
+          <ConfirmForm message="Delete this time slot?" action={deleteTimeSlotAction.bind(null, slot.id)}>
             <button
               type="submit"
               className="rounded-full px-2.5 py-1 text-xs text-ink-2 transition-colors hover:bg-accent-wash hover:text-accent"
             >
               Delete
             </button>
-          </form>
+          </ConfirmForm>
         </div>
       ))}
       {timeSlots.length === 0 && <p className="text-sm text-muted">No time slots yet.</p>}

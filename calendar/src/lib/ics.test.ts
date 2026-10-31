@@ -71,4 +71,48 @@ import { buildIcsCalendar, parseIcsEvents } from "./ics";
   assert.equal(new Date(parsed.excludeDates!.split(",")[0]).getTime(), excluded.getTime());
 }
 
+// A recurring series' modified-occurrence override (RECURRENCE-ID) shares
+// its UID with the master. parseIcsEvents itself must keep BOTH (the
+// one-off file-import caller doesn't dedupe by uid at all, so dropping the
+// override there would just lose data) but flag the override via
+// isRecurrenceException so a uid-deduping caller (calendarSubscriptions.ts)
+// can filter it out itself.
+{
+  const masterVevent = [
+    "BEGIN:VEVENT",
+    "UID:series-with-override@example.com",
+    "DTSTART:20260803T090000Z",
+    "DTEND:20260803T093000Z",
+    "RRULE:FREQ=WEEKLY",
+    "SUMMARY:Standup",
+    "END:VEVENT",
+  ].join("\r\n");
+  const overrideVevent = [
+    "BEGIN:VEVENT",
+    "UID:series-with-override@example.com",
+    "RECURRENCE-ID:20260810T090000Z",
+    "DTSTART:20260810T100000Z",
+    "DTEND:20260810T103000Z",
+    "SUMMARY:Standup (moved)",
+    "END:VEVENT",
+  ].join("\r\n");
+  const wrap = (body: string) =>
+    ["BEGIN:VCALENDAR", "VERSION:2.0", body, "END:VCALENDAR"].join("\r\n");
+
+  for (const [label, body] of [
+    ["master first", [masterVevent, overrideVevent].join("\r\n")],
+    ["override first", [overrideVevent, masterVevent].join("\r\n")],
+  ] as const) {
+    const parsed = parseIcsEvents(wrap(body));
+    assert.equal(parsed.length, 2, `${label}: both the master and the override are returned`);
+    const master = parsed.find((e) => !e.isRecurrenceException);
+    const override = parsed.find((e) => e.isRecurrenceException);
+    assert.ok(master, `${label}: the master is present and flagged isRecurrenceException: false`);
+    assert.ok(override, `${label}: the override is present and flagged isRecurrenceException: true`);
+    assert.equal(master.title, "Standup", `${label}: the master keeps its own data`);
+    assert.equal(master.recurrenceRule, "FREQ=WEEKLY", `${label}: the series' RRULE is intact`);
+    assert.equal(override.title, "Standup (moved)", `${label}: the override keeps its own data too`);
+  }
+}
+
 console.log("ics.test.ts: all checks passed");

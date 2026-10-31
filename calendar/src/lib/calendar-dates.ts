@@ -117,11 +117,8 @@ export function getQuickPickOptions(today: Date): QuickPickOption[] {
   return [
     { label: "Today", date: today },
     { label: "Tomorrow", date: addDays(today, 1) },
-    { label: "This week", date: fridayOfWeek(today) },
-    { label: "7 days from now", date: addDays(today, 7) },
     { label: "Next week", date: fridayOfWeek(addDays(today, 7)) },
     { label: "In 2 weeks", date: fridayOfWeek(addDays(today, 14)) },
-    { label: "This month", date: lastDayOfMonth(today) },
     { label: "Next month", date: lastDayOfMonth(addMonths(today, 1)) },
   ];
 }
@@ -161,31 +158,42 @@ export function formatHourLabelInZone(day: Date, hour24: number, timeZone: strin
   }).format(reference);
 }
 
-export function formatDayLabel(d: Date): string {
+// `timeZone` defaults to the JS engine's own zone — correct as-is for
+// every client-side caller (the browser's zone already matches the
+// account's zone there); pass the account's real zone explicitly when
+// formatting a label server-side, where the engine's own zone is the
+// server host's, not the viewer's.
+export function formatDayLabel(d: Date, timeZone?: string): string {
   return new Intl.DateTimeFormat("en-US", {
     weekday: "short",
     month: "short",
     day: "numeric",
     year: "numeric",
+    timeZone,
   }).format(d);
 }
 
-export function formatWeekRangeLabel(start: Date, end: Date): string {
+export function formatWeekRangeLabel(start: Date, end: Date, timeZone?: string): string {
   const startStr = new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",
+    timeZone,
   }).format(start);
-  const sameMonth = start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear();
+  const startParts = new Intl.DateTimeFormat("en-US", { year: "numeric", month: "numeric", timeZone }).formatToParts(start);
+  const endParts = new Intl.DateTimeFormat("en-US", { year: "numeric", month: "numeric", day: "numeric", timeZone }).formatToParts(end);
+  const get = (parts: Intl.DateTimeFormatPart[], type: string) => parts.find((p) => p.type === type)?.value;
+  const sameMonth = get(startParts, "month") === get(endParts, "month") && get(startParts, "year") === get(endParts, "year");
   const endStr = sameMonth
-    ? end.getDate().toString()
-    : new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(end);
-  return `${startStr} – ${endStr}, ${start.getFullYear()}`;
+    ? String(Number(get(endParts, "day")))
+    : new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone }).format(end);
+  return `${startStr} – ${endStr}, ${get(startParts, "year")}`;
 }
 
-export function formatMonthLabel(d: Date): string {
+export function formatMonthLabel(d: Date, timeZone?: string): string {
   return new Intl.DateTimeFormat("en-US", {
     month: "long",
     year: "numeric",
+    timeZone,
   }).format(d);
 }
 

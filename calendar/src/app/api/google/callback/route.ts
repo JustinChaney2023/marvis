@@ -60,6 +60,11 @@ export async function GET(request: NextRequest) {
         accessToken: encryptSecret(tokens.access_token),
         refreshToken: encryptSecret(tokens.refresh_token),
         expiresAt: new Date(tokens.expiry_date ?? Date.now() + 3600_000),
+        // Every account starts synced to its own primary calendar —
+        // more can be added from Settings (GoogleAccountsManager).
+        calendars: {
+          create: { calendarId: "primary", summary: email, isDefault: true },
+        },
       },
       update: {
         accessToken: encryptSecret(tokens.access_token),

@@ -12,9 +12,11 @@ import {
   rescheduleAllAction,
   saveProjectAsTemplateAction,
   scheduleAllAction,
+  toggleTaskDone,
 } from "../actions";
 import { RepeatIcon } from "../icons";
 import Button from "../ui/Button";
+import { ConfirmForm } from "../ui/ConfirmForm";
 import NewTaskButton from "./NewTaskButton";
 import InlineTaskAdd from "./InlineTaskAdd";
 import TaskRow from "./TaskRow";
@@ -119,6 +121,15 @@ export default async function Home(props: PageProps<"/tasks">) {
   // filtered by TaskModal's caller (edit mode passes an otherTasks list
   // with itself excluded below).
   const taskOptions = allOpenTasksRaw.map((t) => ({ id: t.id, title: t.title }));
+  // Reverse of `blockedBy`: for a given task, which OTHER open tasks would
+  // lose their dependency if it were deleted — surfaced as a warning on
+  // delete, since that currently happens silently.
+  const blockingMap = new Map<string, string[]>();
+  for (const t of allOpenTasksRaw) {
+    for (const blocker of t.blockedBy) {
+      blockingMap.set(blocker.id, [...(blockingMap.get(blocker.id) ?? []), t.title]);
+    }
+  }
   const tasks = searchQuery
     ? allOpenTasks.filter((t) =>
         t.title.toLowerCase().includes(searchQuery.toLowerCase()),
@@ -365,6 +376,7 @@ export default async function Home(props: PageProps<"/tasks">) {
               labels={labels}
               otherTasks={taskOptions}
               defaultProjectId={defaultProjectId}
+              blockingTitles={blockingMap.get(task.id) ?? []}
             />
           ))}
           {tasks.length === 0 && (
@@ -407,14 +419,14 @@ export default async function Home(props: PageProps<"/tasks">) {
                     Save as template
                   </button>
                 </form>
-                <form action={deleteProject.bind(null, project.id)}>
+                <ConfirmForm message="Delete this project?" action={deleteProject.bind(null, project.id)}>
                   <button
                     type="submit"
                     className="text-muted transition-colors hover:text-accent"
                   >
                     Delete
                   </button>
-                </form>
+                </ConfirmForm>
               </li>
             ))}
           </ul>
@@ -443,14 +455,14 @@ export default async function Home(props: PageProps<"/tasks">) {
                     New project from this
                   </button>
                 </form>
-                <form action={deleteProjectTemplateAction.bind(null, template.id)}>
+                <ConfirmForm message="Delete this project template?" action={deleteProjectTemplateAction.bind(null, template.id)}>
                   <button
                     type="submit"
                     className="text-muted transition-colors hover:text-accent"
                   >
                     Delete
                   </button>
-                </form>
+                </ConfirmForm>
               </li>
             ))}
           </ul>
@@ -468,14 +480,14 @@ export default async function Home(props: PageProps<"/tasks">) {
                 className={`h-1.5 w-1.5 rounded-full ${PROJECT_COLOR_DOT[label.color] ?? PROJECT_COLOR_DOT.zinc}`}
               />
               <span className="flex-1">{label.name}</span>
-              <form action={deleteLabel.bind(null, label.id)}>
+              <ConfirmForm message="Delete this label?" action={deleteLabel.bind(null, label.id)}>
                 <button
                   type="submit"
                   className="text-muted transition-colors hover:text-accent"
                 >
                   Delete
                 </button>
-              </form>
+              </ConfirmForm>
             </li>
           ))}
         </ul>
@@ -513,8 +525,16 @@ export default async function Home(props: PageProps<"/tasks">) {
           </summary>
           <ul className="mt-2 space-y-1">
             {done.map((task) => (
-              <li key={task.id} className="line-through">
-                {task.title}
+              <li key={task.id} className="flex items-center justify-between gap-2">
+                <span className="line-through">{task.title}</span>
+                <form action={toggleTaskDone.bind(null, task.id, false)}>
+                  <button
+                    type="submit"
+                    className="rounded-md px-1.5 py-0.5 text-xs text-muted no-underline transition-colors hover:bg-rule-soft hover:text-ink"
+                  >
+                    Reopen
+                  </button>
+                </form>
               </li>
             ))}
           </ul>

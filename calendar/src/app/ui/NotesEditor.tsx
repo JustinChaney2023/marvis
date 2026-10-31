@@ -6,7 +6,13 @@ import { renderMarkdown } from "@/lib/markdown";
 type Props = {
   name: string;
   defaultValue: string;
+  // Lets a dropped non-image file (a PDF, .docx, etc.) become a task
+  // attachment instead — omitted in create mode, where there's no task
+  // yet to attach it to.
+  onAttachFile?: (file: File) => void;
 };
+
+const IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
 
 const inputClass =
   "w-full rounded-lg border border-rule bg-surface px-3 py-2 text-[13px] transition-colors focus:border-ink focus:outline-none";
@@ -23,11 +29,12 @@ const toolbarButtonClass =
  * "Preview" renders the current text through the same renderMarkdown
  * used everywhere else notes are displayed.
  */
-export default function NotesEditor({ name, defaultValue }: Props) {
+export default function NotesEditor({ name, defaultValue, onAttachFile }: Props) {
   const [value, setValue] = useState(defaultValue);
   const [mode, setMode] = useState<"write" | "preview">("write");
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -102,6 +109,23 @@ export default function NotesEditor({ name, defaultValue }: Props) {
     }
   };
 
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+
+    if (IMAGE_TYPES.has(file.type)) {
+      handleImageChosen(file);
+      return;
+    }
+    if (onAttachFile) {
+      onAttachFile(file);
+      return;
+    }
+    setUploadError("Save the task first, then drop other files into its Attachments section.");
+  };
+
   return (
     <div>
       <input type="hidden" name={name} value={value} />
@@ -171,9 +195,15 @@ export default function NotesEditor({ name, defaultValue }: Props) {
           ref={textareaRef}
           value={value}
           onChange={(e) => setValue(e.target.value)}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setIsDragOver(true);
+          }}
+          onDragLeave={() => setIsDragOver(false)}
+          onDrop={handleDrop}
           rows={5}
-          placeholder="Notes... supports **bold**, links, images, checklists"
-          className={`${inputClass} rounded-t-none`}
+          placeholder="Notes... supports **bold**, links, images, checklists — drop a file to attach it"
+          className={`${inputClass} rounded-t-none ${isDragOver ? "border-accent bg-accent-wash" : ""}`}
         />
       ) : (
         <div

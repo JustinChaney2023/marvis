@@ -1,6 +1,8 @@
+import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth";
 import { PROJECT_EVENT_COLORS } from "@/lib/eventColors";
+import { LockIcon } from "../icons";
 
 const DAY_MS = 86_400_000;
 const DAY_WIDTH_PX = 32;
@@ -58,13 +60,24 @@ export default async function GanttPage() {
     include: {
       tasks: {
         where: { status: { not: "DONE" }, parentId: null },
-        include: { events: true },
+        include: {
+          events: true,
+          blockedBy: { select: { id: true, title: true, status: true } },
+        },
         orderBy: [{ dueAt: { sort: "asc", nulls: "last" } }],
       },
     },
   });
 
-  type Bar = { taskId: string; title: string; start: Date; end: Date };
+  type Bar = {
+    taskId: string;
+    title: string;
+    start: Date;
+    end: Date;
+    // Open (not-yet-DONE) blockers only — a done blocker no longer blocks
+    // anything, same "isBlocked" definition the Tasks list already uses.
+    blockedByTitles: string[];
+  };
   const projectBars: { id: string; name: string; color: string; bars: Bar[] }[] =
     projects.map((p) => ({
       id: p.id,
@@ -72,6 +85,7 @@ export default async function GanttPage() {
       color: p.color,
       bars: p.tasks
         .map((t) => {
+          const blockedByTitles = t.blockedBy.filter((b) => b.status !== "DONE").map((b) => b.title);
           // Prefer the actual scheduled slot(s); otherwise a span from
           // the task's start date (or creation date, if it has none) to
           // due date. A chunked task's bar spans its earliest chunk's
@@ -80,12 +94,12 @@ export default async function GanttPage() {
           if (t.events.length > 0) {
             const start = t.events.reduce((min, e) => (e.start < min ? e.start : min), t.events[0].start);
             const end = t.events.reduce((max, e) => (e.end > max ? e.end : max), t.events[0].end);
-            return { taskId: t.id, title: t.title, start, end };
+            return { taskId: t.id, title: t.title, start, end, blockedByTitles };
           }
           if (!t.dueAt) return null;
           const inferredStart = t.startAt ?? t.createdAt;
           const start = inferredStart < t.dueAt ? inferredStart : new Date(t.dueAt.getTime() - DAY_MS);
-          return { taskId: t.id, title: t.title, start, end: t.dueAt };
+          return { taskId: t.id, title: t.title, start, end: t.dueAt, blockedByTitles };
         })
         .filter((b): b is Bar => b !== null),
     }));
@@ -179,8 +193,13 @@ export default async function GanttPage() {
                 {project.bars.map((bar) => {
                   const offset = Math.max(0, dayDiff(bar.start, rangeStart));
                   const span = Math.max(MIN_BAR_DAYS, dayDiff(bar.end, bar.start));
+                  const isBlocked = bar.blockedByTitles.length > 0;
                   return (
-                    <div key={bar.taskId} className="flex border-b border-rule-soft">
+                    <Link
+                      key={bar.taskId}
+                      href={`/tasks?edit=${bar.taskId}`}
+                      className="flex border-b border-rule-soft transition-colors hover:bg-rule-soft/40"
+                    >
                       <div className="w-32 flex-shrink-0 truncate px-2 py-1.5 text-xs text-ink-2">
                         {bar.title}
                       </div>
@@ -189,12 +208,17 @@ export default async function GanttPage() {
                         style={{ height: `${ROW_HEIGHT_PX}px`, width: `${totalDays * DAY_WIDTH_PX}px` }}
                       >
                         <div
-                          title={`${bar.start.toLocaleDateString()} – ${bar.end.toLocaleDateString()}`}
-                          className={`absolute top-1 h-5 rounded ${PROJECT_BAR_COLOR[project.color] ?? PROJECT_BAR_COLOR.zinc} opacity-80`}
+                          title={
+                            `${bar.start.toLocaleDateString()} – ${bar.end.toLocaleDateString()}` +
+                            (isBlocked ? ` · Blocked by: ${bar.blockedByTitles.join(", ")}` : "")
+                          }
+                          className={`absolute top-1 flex h-5 items-center justify-end rounded pr-0.5 ${PROJECT_BAR_COLOR[project.color] ?? PROJECT_BAR_COLOR.zinc} ${isBlocked ? "opacity-50" : "opacity-80"}`}
                           style={{ left: `${offset * DAY_WIDTH_PX}px`, width: `${span * DAY_WIDTH_PX - 2}px` }}
-                        />
+                        >
+                          {isBlocked && <LockIcon className="h-2.5 w-2.5 text-ink" />}
+                        </div>
                       </div>
-                    </div>
+                    </Link>
                   );
                 })}
               </div>

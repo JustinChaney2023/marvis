@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import NavLinks from "./NavLinks";
 import ThemeToggle from "./ThemeToggle";
-import SettingsButton from "./SettingsButton";
 import FeedbackButton from "./FeedbackButton";
 import { MarkIcon, PlusIcon } from "./icons";
 import { openQuickCapture } from "./quickCaptureEvents";
@@ -85,7 +84,6 @@ export default function SideRail() {
       <div className="flex items-center gap-1.5 px-0.5">
         <ThemeToggle />
         <FeedbackButton />
-        <SettingsButton />
       </div>
     </aside>
   );

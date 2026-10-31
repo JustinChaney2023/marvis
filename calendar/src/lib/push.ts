@@ -137,7 +137,7 @@ async function tickForUser(userId: string, now: Date): Promise<number> {
     },
   });
   const reminderById = new Map(rows.map((r) => [r.id, r.reminderMinutes ?? 0]));
-  for (const occ of expandEvents(rows, lookback, horizon)) {
+  for (const occ of expandEvents(rows, lookback, horizon, tz ?? Intl.DateTimeFormat().resolvedOptions().timeZone)) {
     const minutesAway = (occ.start.getTime() - now.getTime()) / 60_000;
     // -1 min of grace so a "0 minutes before" reminder (and one a tick
     // runs slightly late for) still fires.

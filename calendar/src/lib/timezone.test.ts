@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { getTimeZoneOffsetMinutes, getZonedWeekday, zonedWallTimeToUtc } from "./timezone";
+import { getTimeZoneOffsetMinutes, getZonedWeekday, zonedWallTimeToUtc, parseZonedWallTime } from "./timezone";
 
 // 2026-01-15 is standard time (winter) in the US: EST = UTC-5.
 {
@@ -24,6 +24,16 @@ import { getTimeZoneOffsetMinutes, getZonedWeekday, zonedWallTimeToUtc } from ".
   const weekday = getZonedWeekday(new Date("2026-08-21T02:00:00Z"), "America/Los_Angeles");
   // 2026-08-20 is a Thursday (4); the same UTC instant in UTC itself is Friday (5).
   assert.equal(weekday, 4);
+}
+
+// parseZonedWallTime takes both contracts: zone-less wall time (read in the
+// account's zone) and an exact ISO instant from the browser (used as-is).
+// A regression here silently drops every event create/edit.
+{
+  assert.equal(parseZonedWallTime("2026-01-15T09:00", "America/Chicago")?.toISOString(), "2026-01-15T15:00:00.000Z");
+  assert.equal(parseZonedWallTime("2026-01-15T15:00:00.000Z", "America/Chicago")?.toISOString(), "2026-01-15T15:00:00.000Z");
+  assert.equal(parseZonedWallTime("2026-01-15T09:00:00-06:00", "Asia/Tokyo")?.toISOString(), "2026-01-15T15:00:00.000Z");
+  assert.equal(parseZonedWallTime("garbage", "UTC"), null);
 }
 
 console.log("timezone.test.ts: all checks passed");
