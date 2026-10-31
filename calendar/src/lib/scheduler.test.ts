@@ -1,5 +1,15 @@
 import assert from "node:assert/strict";
-import { dateKey, excludeDaysWindowFn, expandReservedBlocks, findBestSlot, findEarliestSlot, splitIntoChunks } from "./scheduler";
+import {
+  canBump,
+  compareUrgency,
+  dateKey,
+  excludeDaysWindowFn,
+  expandReservedBlocks,
+  findBestSlot,
+  findEarliestSlot,
+  remainingMinutes,
+  splitIntoChunks,
+} from "./scheduler";
 import { getZonedDateParts, zonedWallTimeToUtc } from "./timezone";
 
 // Monday 2026-08-17 09:00 local
@@ -233,6 +243,51 @@ const horizon = new Date(2026, 7, 31, 0, 0);
   const slot = findBestSlot({ durationMin: 30, dueAt: due, energy: "MEDIUM" }, busy, horizon, from);
   assert.ok(slot);
   assert.ok(slot.end <= due, "30-min task finishes before its 10:30 deadline");
+}
+
+
+// remainingMinutes: estimate minus tracked time, never below one slot
+{
+  assert.equal(remainingMinutes({ durationMin: 180, trackedMinutes: 120 }), 60);
+  assert.equal(remainingMinutes({ durationMin: 180, trackedMinutes: 500 }), 15);
+  assert.equal(remainingMinutes({ durationMin: 10, trackedMinutes: 10 }), 10);
+}
+
+// compareUrgency: least slack first, not "all hard deadlines first"
+{
+  const base = { priority: 0, trackedMinutes: 0, durationMin: 60 };
+  const hardNextWeek = { ...base, hardDeadline: true, dueAt: new Date(2026, 7, 24, 17, 0) };
+  const softTomorrow = { ...base, hardDeadline: false, dueAt: new Date(2026, 7, 18, 17, 0) };
+  const undatedUrgent = { ...base, hardDeadline: true, dueAt: null, priority: 3 };
+  const undatedLow = { ...base, hardDeadline: true, dueAt: null, priority: 0 };
+  const sorted = [undatedLow, hardNextWeek, undatedUrgent, softTomorrow].sort(compareUrgency);
+  assert.deepEqual(sorted, [softTomorrow, hardNextWeek, undatedUrgent, undatedLow]);
+
+  // A long task due later can have less slack than a short one due sooner.
+  const longFri = { ...base, hardDeadline: true, durationMin: 600, dueAt: new Date(2026, 7, 21, 12, 0) };
+  const shortFri = { ...base, hardDeadline: true, durationMin: 30, dueAt: new Date(2026, 7, 21, 9, 0) };
+  assert.ok(compareUrgency(longFri, shortFri) < 0);
+
+  // Same latest start: hard deadline wins the tie.
+  const softSame = { ...hardNextWeek, hardDeadline: false };
+  assert.ok(compareUrgency(hardNextWeek, softSame) < 0);
+}
+
+// canBump: only tasks due later (or never); soft never displaces hard
+{
+  const base = { priority: 0, trackedMinutes: 0, durationMin: 60 };
+  const urgentHard = { ...base, hardDeadline: true, dueAt: new Date(2026, 7, 18) };
+  const urgentSoft = { ...urgentHard, hardDeadline: false };
+  const laterHard = { ...base, hardDeadline: true, dueAt: new Date(2026, 7, 25) };
+  const laterSoft = { ...laterHard, hardDeadline: false };
+  const undated = { ...base, hardDeadline: true, dueAt: null };
+  assert.equal(canBump(urgentHard, laterHard), true);
+  assert.equal(canBump(urgentHard, laterSoft), true);
+  assert.equal(canBump(urgentHard, undated), true);
+  assert.equal(canBump(urgentSoft, laterHard), false);
+  assert.equal(canBump(urgentSoft, laterSoft), true);
+  assert.equal(canBump(laterHard, urgentHard), false);
+  assert.equal(canBump(undated, laterSoft), false);
 }
 
 console.log("scheduler.test.ts: all checks passed");
