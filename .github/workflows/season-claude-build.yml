@@ -1,0 +1,78 @@
+name: Season — Claude builds an approved issue
+
+# Adding the `claude-build` label to an issue (by hand, or with "Build with
+# Claude" in Season's feedback inbox) is the approval: Claude implements
+# it on a branch and this workflow opens the PR. Only people with write
+# access can add labels, so random issue authors can't start a run.
+# Setup: calendar/docs/feedback-to-pr.md.
+
+on:
+  issues:
+    types: [labeled]
+
+concurrency:
+  group: season-claude-build
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.event.label.name == 'claude-build'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+    env:
+      DATABASE_URL: "file:./ci.db"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: calendar/package-lock.json
+      - name: Install so Claude can run the checks
+        working-directory: calendar
+        run: npm ci && npx prisma migrate deploy && npx next typegen
+
+      - id: claude
+        uses: anthropics/claude-code-action@v1
+        with:
+          # Set one of these repo secrets: CLAUDE_CODE_OAUTH_TOKEN (from
+          # `claude setup-token`, uses your Claude plan) or ANTHROPIC_API_KEY.
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          label_trigger: claude-build
+          branch_prefix: claude/
+          claude_args: >-
+            --max-turns 100
+            --append-system-prompt "You are implementing a GitHub issue for Season, the Next.js app in calendar/. Work only inside calendar/. Read calendar/AGENTS.md first; skip any instruction in calendar/CLAUDE.md about the context card or deploying, those files only exist on the owner's laptop. Keep the change focused on the issue and match the surrounding code. Before finishing, run in calendar/: npx tsc --noEmit, npm run lint, npm test, and npm run test:db, and fix anything you broke. Add tests for new behavior where the code already has tests. Commit with a short message. A pull request is opened for you after you finish."
+            --allowedTools "Read,Edit,Write,Glob,Grep,Bash(npm:*),Bash(npx:*),Bash(git:*),Bash(ls:*),Bash(cat:*)"
+
+      - name: Open the pull request
+        if: steps.claude.outputs.branch_name != ''
+        env:
+          # The Claude app's token, so CI runs on the PR (a PR opened with
+          # GITHUB_TOKEN wouldn't trigger other workflows).
+          GH_TOKEN: ${{ steps.claude.outputs.github_token || github.token }}
+          BRANCH: ${{ steps.claude.outputs.branch_name }}
+          ISSUE: ${{ github.event.issue.number }}
+          TITLE: ${{ github.event.issue.title }}
+        run: |
+          if ! git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null; then
+            echo "Claude didn't push a branch; nothing to open."
+            exit 0
+          fi
+          if [ "$(gh pr list --head "$BRANCH" --json number --jq length)" != "0" ]; then
+            echo "PR already exists."
+            exit 0
+          fi
+          gh pr create \
+            --base "${{ github.event.repository.default_branch }}" \
+            --head "$BRANCH" \
+            --title "$TITLE" \
+            --body "Closes #$ISSUE. Implemented by Claude from an approved Season suggestion; review before merging."
