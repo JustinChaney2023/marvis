@@ -22,8 +22,8 @@ export default function TermsPage() {
           privacy policy
         </a>
         . Questions:{" "}
-        <a href="mailto:justingchaney@gmail.com" className="underline hover:text-ink">
-          justingchaney@gmail.com
+        <a href="mailto:contact@useseason.app" className="underline hover:text-ink">
+          contact@useseason.app
         </a>
         .
       </p>
