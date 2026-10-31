@@ -26,8 +26,9 @@ export default function PrivacyPage() {
       <p className="mt-2">
         If you connect a Google account, Season asks for your email address and access to Google Calendar. It uses
         them only to show your Google events in Season, keep them in sync in both directions, and plan your tasks
-        around them. OAuth tokens are stored encrypted. You can disconnect at any time in Settings → Calendars, which
-        stops syncing, or remove access at myaccount.google.com.
+        around them. OAuth tokens are stored encrypted. You can disconnect a Google account at any time in
+        Settings → Calendars: that deletes its stored tokens and the Google events Season copied, and stops syncing.
+        You can also remove Season&apos;s access at myaccount.google.com.
       </p>
       <p className="mt-2">
         Season&apos;s use and transfer of information received from Google APIs adheres to the{" "}
@@ -45,8 +46,11 @@ export default function PrivacyPage() {
 
       <h2 className="mt-6 font-semibold text-ink">AI features</h2>
       <p className="mt-2">
-        Optional AI features (chat, syllabus import, generating subtasks, summaries) send the text needed for that
-        request to the AI provider configured for your account, only when you use them.
+        Optional AI features (chat, syllabus import, generating subtasks, summaries) and recording transcription send
+        the text or audio needed for that request to the provider configured for your account, only when you use them.
+        For chat and summaries this can include event and task titles and details, including events synced from
+        Google. Season itself does not train AI models on your data; what a provider does with a request is governed
+        by that provider&apos;s own terms.
       </p>
 
       <h2 className="mt-6 font-semibold text-ink">Sharing</h2>
@@ -58,10 +62,10 @@ export default function PrivacyPage() {
       <h2 className="mt-6 font-semibold text-ink">Deleting your data</h2>
       <p className="mt-2">
         Email{" "}
-        <a href="mailto:justingchaney@gmail.com" className="underline hover:text-ink">
-          justingchaney@gmail.com
+        <a href="mailto:contact@useseason.app" className="underline hover:text-ink">
+          contact@useseason.app
         </a>{" "}
-        to have your account and everything in it deleted.
+        to have your account and everything in it deleted. Your data is kept until you delete it or your account.
       </p>
     </main>
   );
