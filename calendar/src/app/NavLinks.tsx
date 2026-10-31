@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarIcon, ListIcon, TargetIcon, BarsIcon, UsersIcon, ChatIcon, MicIcon, FolderIcon, GearIcon } from "./icons";
+import { CalendarIcon, ListIcon, TargetIcon, BarsIcon, UsersIcon, ChatIcon, MicIcon, FolderIcon, GaugeIcon, GearIcon } from "./icons";
 
 export const NAV_LINKS = [
   { href: "/", label: "Calendar", icon: CalendarIcon },
   { href: "/tasks", label: "Tasks", icon: ListIcon },
   { href: "/focus", label: "Focus", icon: TargetIcon },
+  { href: "/workload", label: "Workload", icon: GaugeIcon },
   { href: "/projects", label: "Projects", icon: FolderIcon },
   { href: "/gantt", label: "Gantt", icon: BarsIcon },
   { href: "/recordings", label: "Record", icon: MicIcon },
@@ -20,7 +21,7 @@ export const NAV_LINKS = [
 // page's own header, so it reads the active link from the URL instead
 // of every page having to pass its own route back in as a `current`
 // prop. One column of icon+label rows rather than the pill row this
-// replaced — nine destinations don't fit a single horizontal bar
+// replaced — ten destinations don't fit a single horizontal bar
 // without wrapping or truncating, but they stack cleanly.
 export default function NavLinks() {
   const pathname = usePathname();

@@ -182,6 +182,14 @@ export function BarsIcon({ className = "h-4 w-4" }: IconProps) {
   );
 }
 
+export function GaugeIcon({ className = "h-4 w-4" }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className={className} aria-hidden="true">
+      <path strokeLinecap="round" d="M4 18a8 8 0 1 1 16 0M12 18l4-6" />
+    </svg>
+  );
+}
+
 export function RepeatIcon({ className = "h-3 w-3" }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className={className} aria-hidden="true">
