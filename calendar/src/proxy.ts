@@ -38,6 +38,9 @@ const PUBLIC_PATH_PREFIXES = [
   "/oauth/token",
   "/icon",
   "/apple-icon",
+  // Linked from Google's OAuth consent screen; must work signed out.
+  "/privacy",
+  "/terms",
 ];
 const SESSION_COOKIE = "marvis_session";
 
