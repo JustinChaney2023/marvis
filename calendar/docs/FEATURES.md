@@ -43,6 +43,13 @@ Status as of 2026-10-30, after the audit-driven fixes in PRs #76–#81.
 | Automations (on status change: notify, generate subtasks, draft email, mark urgent) | `lib/automations.ts` | OK |
 | Project templates, syllabus import, AI project/subtask generation | `tasks/import`, `generate-project` | OK |
 
+## Workload
+
+| Feature | Status |
+| --- | --- |
+| Next 7 days: meetings + task blocks vs. capacity (working hours or the daily cap), over-capacity days flagged | OK — `/workload`, `lib/workload.ts` |
+| Estimates vs. actual: tracked time on tasks finished in the last 30 days, with the biggest misses | OK — needs the task timer to have been used |
+
 ## Focus
 
 | Feature | Status |
@@ -126,6 +133,7 @@ links with notice/limits). The biggest gaps, in priority order:
    calendar when they're a Season user (round-robin later).
 9. **Workload view:** a week bar chart of scheduled hours vs. capacity
    per day (Motion's "capacity" view), using the daily-cap math.
+   *(Implemented: `/workload`, with estimates vs. actual.)*
 10. **Moved Google occurrences:** import modified single instances as
     override events (needs EXDATE-aware export to avoid deleting them).
 
