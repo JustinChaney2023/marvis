@@ -3,7 +3,9 @@
 # (192.168.20.253, the live host behind https://useseason.app).
 #
 # One-way: pushes code only. Never touches season-prod's .env, var/uploads,
-# or prisma/dev.db — those are prod state, not build artifacts.
+# or prisma/dev.db — those are prod state, not build artifacts. Likewise
+# public/ort + public/models (gitignored whisper assets from `npm run
+# setup:whisper`): a clean checkout lacks them and --delete would wipe them.
 set -euo pipefail
 
 HOST=root@192.168.20.253
@@ -15,6 +17,7 @@ rsync -az --delete \
   --exclude node_modules --exclude .next --exclude .git \
   --exclude .env --exclude .env.local \
   --exclude var/uploads --exclude 'prisma/dev.db*' \
+  --exclude public/ort --exclude public/models \
   --exclude .claude \
   "$REPO_DIR"/ "$HOST":"$REMOTE_DIR"/
 
