@@ -84,6 +84,28 @@ async function main() {
     const [a, b] = [syncGoogleCalendar(user.id), syncGoogleCalendar(user.id)];
     ok("concurrent syncs are deduped", a === b);
     await a;
+
+    // 7. reconnect: exports are tagged, and when the local rows lose their
+    // link (disconnect/reconnect) the copies on Google are adopted, not
+    // inserted again (this doubled the whole calendar once).
+    const rc = await prisma.event.create({ data: { userId: user.id, title: "R1", start: t0, end: hr(t0), localDirty: true } });
+    await syncGoogleCalendar(user.id);
+    const gR = (await prisma.event.findUniqueOrThrow({ where: { id: rc.id } })).googleEventId!;
+    ok("exports are tagged with the local id", store.get(gR).extendedProperties?.private?.seasonEventId === rc.id);
+    await prisma.event.updateMany({
+      where: { userId: user.id, source: "LOCAL" },
+      data: { googleCalendarId: null, googleEventId: null, googleUpdatedAt: null, localDirty: true },
+    });
+    const sizeBefore = store.size;
+    await syncGoogleCalendar(user.id);
+    ok("reconnect adds nothing to Google (" + store.size + " vs " + sizeBefore + ")", store.size === sizeBefore);
+    ok("local row re-linked to the same Google event", (await prisma.event.findUniqueOrThrow({ where: { id: rc.id } })).googleEventId === gR);
+    ok("no imported duplicate rows", (await prisma.event.count({ where: { userId: user.id, title: "R1" } })) === 1);
+
+    // 8. a Season export whose local row is gone is never imported back
+    store.set("orph", { id: "orph", status: "confirmed", summary: "Orphan export", start: { dateTime: t0.toISOString() }, end: { dateTime: hr(t0).toISOString() }, extendedProperties: { private: { seasonEventId: "gone" } }, updated: new Date().toISOString() });
+    await syncGoogleCalendar(user.id);
+    ok("orphaned Season export isn't imported", (await prisma.event.count({ where: { userId: user.id, title: "Orphan export" } })) === 0);
   } finally {
     await prisma.event.deleteMany({ where: { userId: user.id } });
     await prisma.googleDeletion.deleteMany({ where: { googleCalendarId: calId } });
