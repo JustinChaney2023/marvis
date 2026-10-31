@@ -1,7 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { runAutomationsForStatusChange } from "@/lib/automations";
 import { nextTaskOccurrence } from "@/lib/taskRecurrence";
-import { scheduleAllPendingTasks } from "@/lib/scheduler";
+import { compareUrgency, scheduleAllPendingTasks, scheduleTask } from "@/lib/scheduler";
+import { getAppSettings } from "@/lib/settings";
 import { userTimeZone } from "@/lib/timezone";
 
 // Shared between the toggleTaskDone server action and the MCP endpoint
@@ -79,6 +80,7 @@ export async function setTaskDone(userId: string, taskId: string, done: boolean)
     // task can slide into the gap instead of waiting for the next poll.
     if (finishedEarly) await scheduleAllPendingTasks(userId);
   }
+  if (done && existing.status !== "DONE") await placeUnblockedBy(userId, taskId);
   runAutomationsForStatusChange(userId, taskId, task.status).catch((err) =>
     console.error("automation error:", err),
   );
@@ -143,4 +145,27 @@ export async function findProjectByName(
     projects.find((p) => p.name.toLowerCase().includes(needle)) ??
     null
   );
+}
+
+/**
+ * Finishing a blocker frees whatever was waiting on it. With Auto-schedule
+ * on, place those tasks right away (most urgent first) instead of leaving
+ * them for the next sweep.
+ */
+async function placeUnblockedBy(userId: string, blockerId: string) {
+  const settings = await getAppSettings(userId);
+  if (!settings.autoSchedule) return;
+  const freed = await prisma.task.findMany({
+    where: {
+      userId,
+      parentId: null,
+      status: { in: ["CREATED", "ONGOING"] },
+      events: { none: {} },
+      blockedBy: { some: { id: blockerId } },
+      NOT: { blockedBy: { some: { status: { not: "DONE" } } } },
+    },
+  });
+  for (const t of freed.sort(compareUrgency)) {
+    await scheduleTask(userId, t.id).catch((err) => console.error("unblock placement failed:", err));
+  }
 }
