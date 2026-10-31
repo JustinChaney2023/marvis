@@ -94,7 +94,7 @@ export async function signupAction(formData: FormData) {
   }
 
   await createSession(user.id);
-  redirect("/");
+  redirect("/home");
 }
 
 // Only same-site paths — "next" round-trips through the URL, so without
@@ -105,17 +105,17 @@ export async function signupAction(formData: FormData) {
 function safeNextPath(raw: string): string {
   try {
     const url = new URL(raw, "http://season.invalid");
-    if (url.origin !== "http://season.invalid") return "/";
+    if (url.origin !== "http://season.invalid") return "/home";
     return url.pathname + url.search + url.hash;
   } catch {
-    return "/";
+    return "/home";
   }
 }
 
 export async function loginAction(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const password = String(formData.get("password") ?? "");
-  const next = safeNextPath(String(formData.get("next") ?? "/"));
+  const next = safeNextPath(String(formData.get("next") ?? "/home"));
 
   if (isLoginRateLimited(await requestIp())) {
     redirect(
@@ -132,7 +132,7 @@ export async function loginAction(formData: FormData) {
   }
 
   await createSession(user.id);
-  redirect(next || "/");
+  redirect(next || "/home");
 }
 
 export async function logoutAction() {
@@ -256,7 +256,7 @@ export async function resetPasswordAction(formData: FormData) {
   await prisma.passwordResetToken.deleteMany({ where: { userId: record.userId } });
 
   await createSession(record.userId);
-  redirect("/");
+  redirect("/home");
 }
 
 export async function revokeOtherSessionsAction() {

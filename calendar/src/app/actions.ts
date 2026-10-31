@@ -425,7 +425,7 @@ export async function updateTask(taskId: string, formData: FormData) {
   // forcing a reschedule inline here since that's a heavier, separate
   // action the user can already trigger themselves.
   revalidatePath("/tasks");
-  revalidatePath("/");
+  revalidatePath("/home");
 }
 
 export type TaskActivityEntry = {
@@ -883,7 +883,7 @@ export async function pushLeftoversToTomorrowAction(taskIds: string[]) {
   }
   revalidatePath("/focus");
   revalidatePath("/tasks");
-  revalidatePath("/");
+  revalidatePath("/home");
 }
 
 export async function askScheduleChatAction(messages: ChatMessage[]): Promise<ChatResult> {
@@ -1059,7 +1059,7 @@ export async function deleteTaskAction(taskId: string) {
   await prisma.event.deleteMany({ where: { taskId } });
   await prisma.task.delete({ where: { id: taskId } });
   revalidatePath("/tasks");
-  revalidatePath("/");
+  revalidatePath("/home");
 }
 
 export type QuickCaptureResult =
@@ -1111,7 +1111,7 @@ export async function quickCaptureTask(
     if (events && events.length > 0) scheduledFor = events[0].start.toISOString();
   }
   revalidatePath("/tasks");
-  revalidatePath("/");
+  revalidatePath("/home");
   return {
     ok: true,
     title: task.title,
@@ -1144,7 +1144,7 @@ export async function quickCaptureEvent(text: string): Promise<QuickCaptureResul
   });
   await rescheduleConflictsWith(user.id, start, end, event.id);
   await rescheduleConflictedHabits(user.id, start, end, event.id);
-  revalidatePath("/");
+  revalidatePath("/home");
   return { ok: true, title: event.title, projectName: null, scheduledFor: start.toISOString(), unmatchedProject: null };
 }
 
@@ -1281,7 +1281,7 @@ export async function createCalendarShareAction(formData: FormData) {
     update: { permission },
   });
   revalidatePath("/settings");
-  revalidatePath("/");
+  revalidatePath("/home");
 }
 
 export async function deleteCalendarShareAction(shareId: string) {
@@ -1290,7 +1290,7 @@ export async function deleteCalendarShareAction(shareId: string) {
   // it, not the recipient.
   await prisma.calendarShare.deleteMany({ where: { id: shareId, ownerId: user.id } });
   revalidatePath("/settings");
-  revalidatePath("/");
+  revalidatePath("/home");
 }
 
 // Recipient-only "show on my calendar" toggle — scoped to sharedWithId,
@@ -1303,7 +1303,7 @@ export async function setCalendarShareHiddenAction(shareId: string, hidden: bool
     data: { hiddenByRecipient: hidden },
   });
   revalidatePath("/settings");
-  revalidatePath("/");
+  revalidatePath("/home");
 }
 
 const GROUP_MEETING_HORIZON_DAYS = 14;
@@ -1383,7 +1383,7 @@ export async function createGroupMeetingAction(
       localDirty: true,
     },
   });
-  revalidatePath("/");
+  revalidatePath("/home");
   return { ok: true };
 }
 
@@ -1410,7 +1410,7 @@ export async function toggleTaskDone(taskId: string, done: boolean) {
   const user = await requireUser();
   if (!(await setTaskDone(user.id, taskId, done))) return;
   revalidatePath("/tasks");
-  revalidatePath("/");
+  revalidatePath("/home");
   revalidatePath("/calendar");
 }
 
@@ -1566,21 +1566,21 @@ export async function delayTaskAction(taskId: string, newDueAtIso: string) {
   );
   await unscheduleTask(user.id, taskId);
   revalidatePath("/tasks");
-  revalidatePath("/");
+  revalidatePath("/home");
 }
 
 export async function scheduleTaskAction(taskId: string) {
   const user = await requireUser();
   await scheduleTask(user.id, taskId);
   revalidatePath("/tasks");
-  revalidatePath("/");
+  revalidatePath("/home");
 }
 
 export async function unscheduleTaskAction(taskId: string) {
   const user = await requireUser();
   await unscheduleTask(user.id, taskId);
   revalidatePath("/tasks");
-  revalidatePath("/");
+  revalidatePath("/home");
 }
 
 export async function scheduleAllAction() {
@@ -1588,14 +1588,14 @@ export async function scheduleAllAction() {
   await scheduleAllPendingTasks(user.id);
   await scheduleHabitsForWeek(user.id);
   revalidatePath("/tasks");
-  revalidatePath("/");
+  revalidatePath("/home");
 }
 
 export async function rescheduleAllAction() {
   const user = await requireUser();
   await rescheduleAll(user.id);
   revalidatePath("/tasks");
-  revalidatePath("/");
+  revalidatePath("/home");
 }
 
 // Polled every minute by NotificationWatcher so time-passing-without-
@@ -1750,7 +1750,7 @@ export async function createEvent(formData: FormData) {
     await rescheduleConflictsWith(user.id, start, end);
     await rescheduleConflictedHabits(user.id, start, end);
   }
-  revalidatePath("/");
+  revalidatePath("/home");
 }
 
 /**
@@ -1836,7 +1836,7 @@ export async function updateEvent(
     await rescheduleConflictsWith(user.id, start, end, eventId);
     await rescheduleConflictedHabits(user.id, start, end, eventId);
   }
-  revalidatePath("/");
+  revalidatePath("/home");
 }
 
 // Normalizes through Date so a malformed/comma-bearing client-supplied
@@ -1918,7 +1918,7 @@ export async function updateEventOccurrence(
     }),
   ]);
 
-  revalidatePath("/");
+  revalidatePath("/home");
 }
 
 /**
@@ -1974,7 +1974,7 @@ export async function resizeEventOccurrence(
     }),
   ]);
 
-  revalidatePath("/");
+  revalidatePath("/home");
 }
 
 /**
@@ -2082,7 +2082,7 @@ export async function updateEventFollowing(
     ]);
   });
 
-  revalidatePath("/");
+  revalidatePath("/home");
 }
 
 /** Delete just one occurrence of a recurring series — a pure EXDATE, no override row. */
@@ -2099,7 +2099,7 @@ export async function deleteEventOccurrence(masterId: string, originalStartIso: 
     where: { id: masterId },
     data: { excludeDates: withExcludedStart(master.excludeDates, normalizedOriginalStart), localDirty: true },
   });
-  revalidatePath("/");
+  revalidatePath("/home");
 }
 
 /**
@@ -2128,7 +2128,7 @@ export async function deleteEventFollowing(masterId: string, originalStartIso: s
     where: { id: masterId },
     data: { recurrenceEndsBefore: splitPoint, localDirty: true },
   });
-  revalidatePath("/");
+  revalidatePath("/home");
 }
 
 const MAX_GUESTS_PER_EVENT = 50;
@@ -2170,7 +2170,7 @@ export async function addEventGuestAction(eventId: string, email: string) {
     );
   }
 
-  revalidatePath("/");
+  revalidatePath("/home");
   return { ok: true as const, emailSent: isEmailConfigured() };
 }
 
@@ -2190,7 +2190,7 @@ export async function removeEventGuestAction(guestId: string) {
   await prisma.eventGuest.deleteMany({
     where: { id: guestId, event: { userId: user.id } },
   });
-  revalidatePath("/");
+  revalidatePath("/home");
 }
 
 /** Public — no auth. The respond token itself is the guest's credential. */
@@ -2246,7 +2246,7 @@ export async function moveEvent(eventId: string, startIso: string, endIso: strin
     await rescheduleConflictsWith(user.id, start, end, eventId);
     await rescheduleConflictedHabits(user.id, start, end, eventId);
   }
-  revalidatePath("/");
+  revalidatePath("/home");
 }
 
 export async function deleteEvent(eventId: string) {
@@ -2267,7 +2267,7 @@ export async function deleteEvent(eventId: string) {
   // (whatever the task's status is) is enough on its own to put it back
   // in scheduleAllPendingTasks' sweep, same reasoning as unscheduleTask.
   await prisma.event.delete({ where: { id: eventId } });
-  revalidatePath("/");
+  revalidatePath("/home");
   revalidatePath("/tasks");
 }
 
@@ -2295,7 +2295,7 @@ export async function createQuickEventAction(
   });
   await rescheduleConflictsWith(user.id, start, end, event.id);
   await rescheduleConflictedHabits(user.id, start, end, event.id);
-  revalidatePath("/");
+  revalidatePath("/home");
   return event.id;
 }
 
@@ -2327,13 +2327,13 @@ export async function createQuickTaskAction(
   await rescheduleConflictsWith(user.id, start, end, event.id);
   await rescheduleConflictedHabits(user.id, start, end, event.id);
   revalidatePath("/tasks");
-  revalidatePath("/");
+  revalidatePath("/home");
 }
 
 export async function syncGoogleCalendarAction() {
   const user = await requireUser();
   const result = await syncGoogleCalendar(user.id);
-  revalidatePath("/");
+  revalidatePath("/home");
   revalidatePath("/settings");
   return result;
 }
@@ -2360,7 +2360,7 @@ export async function syncGoogleCalendarIfDueAction(): Promise<{ synced: boolean
   if (!due) return { synced: false };
 
   const result = await syncGoogleCalendar(user.id);
-  revalidatePath("/");
+  revalidatePath("/home");
   revalidatePath("/tasks");
   revalidatePath("/settings");
   return { synced: true, errors: result.errors };
@@ -2529,7 +2529,7 @@ export async function connectAppleAction(formData: FormData) {
     await prisma.appleAccount.deleteMany({ where: { userId: user.id } });
     redirect(`/settings?apple_error=${encodeURIComponent(result.error)}`);
   }
-  revalidatePath("/");
+  revalidatePath("/home");
   revalidatePath("/settings");
 }
 
@@ -2537,14 +2537,14 @@ export async function disconnectAppleAction() {
   const user = await requireUser();
   await prisma.event.deleteMany({ where: { userId: user.id, source: "APPLE" } });
   await prisma.appleAccount.deleteMany({ where: { userId: user.id } });
-  revalidatePath("/");
+  revalidatePath("/home");
   revalidatePath("/settings");
 }
 
 export async function syncAppleCalendarAction() {
   const user = await requireUser();
   const result = await importFromApple(user.id);
-  revalidatePath("/");
+  revalidatePath("/home");
   revalidatePath("/settings");
   return result;
 }
@@ -2562,14 +2562,14 @@ export async function addCalendarSubscriptionAction(formData: FormData) {
     data: { userId: user.id, name, url, importAsTasks },
   });
   await syncCalendarSubscription(subscription.id, user.id);
-  revalidatePath("/");
+  revalidatePath("/home");
   revalidatePath("/settings");
 }
 
 export async function syncCalendarSubscriptionAction(subscriptionId: string) {
   const user = await requireUser();
   const result = await syncCalendarSubscription(subscriptionId, user.id);
-  revalidatePath("/");
+  revalidatePath("/home");
   revalidatePath("/settings");
   return result;
 }
@@ -2579,7 +2579,7 @@ export async function deleteCalendarSubscriptionAction(subscriptionId: string) {
   await prisma.calendarSubscription.deleteMany({
     where: { id: subscriptionId, userId: user.id },
   });
-  revalidatePath("/");
+  revalidatePath("/home");
   revalidatePath("/settings");
 }
 
@@ -2606,7 +2606,7 @@ export async function syncCalendarSubscriptionsIfDueAction(): Promise<{ synced: 
   for (const sub of due) {
     await syncCalendarSubscription(sub.id, user.id);
   }
-  revalidatePath("/");
+  revalidatePath("/home");
   return { synced: true };
 }
 
@@ -2637,7 +2637,7 @@ export async function updateSchedulingSettingsAction(formData: FormData) {
   // Turning it on plans everything now rather than at the next tick.
   if (autoSchedule) await scheduleAllPendingTasks(user.id).catch(() => null);
   revalidatePath("/settings");
-  revalidatePath("/");
+  revalidatePath("/home");
 }
 
 // Split out from updateSchedulingSettingsAction so "Working hours" can
@@ -2667,7 +2667,7 @@ export async function updateWorkingHoursAction(formData: FormData) {
   await updateAppSettings(user.id, { workDays, workStartMin, workEndMin });
   revalidatePath("/settings");
   revalidatePath("/tasks");
-  revalidatePath("/");
+  revalidatePath("/home");
 }
 
 function isValidTimeZone(tz: string): boolean {
@@ -2982,7 +2982,7 @@ export async function createHabitAction(formData: FormData) {
   });
   await scheduleHabitsForWeek(user.id);
   revalidatePath("/settings");
-  revalidatePath("/");
+  revalidatePath("/home");
 }
 
 export async function updateHabitNotesAction(habitId: string, formData: FormData) {
@@ -3000,7 +3000,7 @@ export async function updateHabitNotesAction(habitId: string, formData: FormData
     data: { notes },
   });
   revalidatePath("/settings");
-  revalidatePath("/");
+  revalidatePath("/home");
 }
 
 export async function toggleHabitAction(habitId: string, enabled: boolean) {
@@ -3008,14 +3008,14 @@ export async function toggleHabitAction(habitId: string, enabled: boolean) {
   await prisma.habit.updateMany({ where: { id: habitId, userId: user.id }, data: { enabled } });
   if (enabled) await scheduleHabitsForWeek(user.id);
   revalidatePath("/settings");
-  revalidatePath("/");
+  revalidatePath("/home");
 }
 
 export async function scheduleHabitNowAction(habitId: string) {
   const user = await requireUser();
   await scheduleNextHabitOccurrence(user.id, habitId);
   revalidatePath("/settings");
-  revalidatePath("/");
+  revalidatePath("/home");
 }
 
 export async function deleteHabitAction(habitId: string) {
@@ -3056,7 +3056,7 @@ export async function deleteTimeSlotAction(timeSlotId: string) {
   // fall back to the default work window rather than erroring.
   await prisma.timeSlot.deleteMany({ where: { id: timeSlotId, userId: user.id } });
   revalidatePath("/settings");
-  revalidatePath("/");
+  revalidatePath("/home");
 }
 
 const DAY_OF_WEEK_MIN = 0;
@@ -3189,7 +3189,7 @@ export async function createBookingAction(
   const notes = String(formData.get("notes") ?? "");
   const result = await createBooking(link.userId, link.id, startIso, name, email, notes);
   if (result.ok) {
-    revalidatePath("/");
+    revalidatePath("/home");
   }
   return result;
 }
@@ -3327,7 +3327,7 @@ export async function importIcsAction(
     })),
   });
 
-  revalidatePath("/");
+  revalidatePath("/home");
   return { ok: true, imported: toImport.length };
 }
 
@@ -3407,7 +3407,7 @@ export async function sendTestPushAction(): Promise<number> {
   return sendPushToUser(user.id, {
     title: "Season notifications are on",
     body: "You'll get event reminders and a heads-up before unscheduled tasks come due.",
-    url: "/",
+    url: "/home",
     tag: "test",
   });
 }

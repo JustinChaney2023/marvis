@@ -23,7 +23,7 @@ export default function TimerClient({
       running={running}
       onToggleRun={toggleRun}
       onReset={reset}
-      onExit={() => router.push("/")}
+      onExit={() => router.push("/home")}
     />
   );
 }

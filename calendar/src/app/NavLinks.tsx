@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { CalendarIcon, ListIcon, TargetIcon, BarsIcon, UsersIcon, ChatIcon, MicIcon, FolderIcon, GaugeIcon, GearIcon } from "./icons";
 
 export const NAV_LINKS = [
-  { href: "/", label: "Calendar", icon: CalendarIcon },
+  { href: "/home", label: "Calendar", icon: CalendarIcon },
   { href: "/tasks", label: "Tasks", icon: ListIcon },
   { href: "/focus", label: "Focus", icon: TargetIcon },
   { href: "/workload", label: "Workload", icon: GaugeIcon },
@@ -51,5 +51,5 @@ export default function NavLinks() {
 }
 
 export function isActiveNav(pathname: string, href: string): boolean {
-  return href === "/" ? pathname === "/" : pathname.startsWith(href);
+  return pathname.startsWith(href);
 }

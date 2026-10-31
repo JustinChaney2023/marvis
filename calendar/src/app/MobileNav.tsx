@@ -14,7 +14,7 @@ import { HIDDEN_CHROME_PREFIXES } from "./SideRail";
 // The three places you live day to day get a tab; everything else sits
 // under "More". The "+" in the middle is the phone's way into quick
 // capture, since there's no "c" key to press.
-const PRIMARY = ["/", "/tasks", "/focus"];
+const PRIMARY = ["/home", "/tasks", "/focus"];
 
 function MoreIcon({ className = "h-5 w-5" }: { className?: string }) {
   return (

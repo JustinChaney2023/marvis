@@ -317,7 +317,7 @@ export async function importSyllabusCourseAction(
   }
 
   revalidatePath("/tasks");
-  revalidatePath("/");
+  revalidatePath("/home");
   return {
     projectId,
     taskCount: taskRows.length,

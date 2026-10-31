@@ -56,7 +56,7 @@ export default function SideRail() {
   return (
     <aside className="hidden h-full w-44 flex-shrink-0 flex-col gap-4 overflow-y-auto border-r border-rule bg-surface px-3 py-4 md:flex print:hidden">
       <Link
-        href={liveEventId ? `/timer?eventId=${liveEventId}` : "/"}
+        href={liveEventId ? `/timer?eventId=${liveEventId}` : "/home"}
         className="flex items-center gap-2 px-1.5 text-ink"
       >
         <MarkIcon className="h-6 w-6 flex-shrink-0" />

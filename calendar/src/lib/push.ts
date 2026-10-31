@@ -146,7 +146,7 @@ async function tickForUser(userId: string, now: Date): Promise<number> {
     sent += await sendOnce(`event:${occ.id}:${occ.start.toISOString()}`, userId, {
       title: occ.title,
       body: minutesAway < 1 ? "Starting now" : `Starts at ${formatClock(occ.start, tz)} (in ${Math.round(minutesAway)} min)`,
-      url: "/",
+      url: "/home",
       tag: `event:${occ.id}`,
     });
   }

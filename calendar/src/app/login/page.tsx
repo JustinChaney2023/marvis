@@ -6,7 +6,7 @@ import Card from "../ui/Card";
 export default async function LoginPage(props: PageProps<"/login">) {
   const sp = await props.searchParams;
   const rawNext = sp?.next;
-  const next = (Array.isArray(rawNext) ? rawNext[0] : rawNext) || "/";
+  const next = (Array.isArray(rawNext) ? rawNext[0] : rawNext) || "/home";
   const rawError = sp?.error;
   const errorParam = Array.isArray(rawError) ? rawError[0] : rawError;
   const errorMessage =

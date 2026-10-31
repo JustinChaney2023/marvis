@@ -1,510 +1,360 @@
+import type { Metadata } from "next";
+import type { ReactNode } from "react";
+import Image, { type StaticImageData } from "next/image";
 import Link from "next/link";
-import { prisma } from "@/lib/prisma";
-import { requireUser, getCurrentUser } from "@/lib/auth";
-import Landing from "./Landing";
-import {
-  userTimeZone,
-  zonedAddDays,
-  zonedFormatYMD,
-  zonedParseYMD,
-  zonedStartOfDay,
-  zonedStartOfMonth,
-  zonedStartOfWeek,
-} from "@/lib/timezone";
-import MiniMonthPicker from "./MiniMonthPicker";
-import CalendarSearch from "./calendar/CalendarSearch";
-import ShortcutHint from "./ShortcutHint";
-import {
-  formatDayLabel,
-  formatMonthLabel,
-  formatWeekRangeLabel,
-  parseViewParam,
-  type CalendarView,
-} from "@/lib/calendar-dates";
-import { expandEvents, recurringOverlapping } from "@/lib/recurrence";
-import { getAppSettings } from "@/lib/settings";
-import { scheduleHabitsForWeek } from "@/lib/habits";
-import CalendarClient, { type CalendarEvent, type SharedEvent } from "./calendar/CalendarClient";
-import { NowProvider } from "./calendar/NowContext";
-import { CalendarVisibilityProvider } from "./calendar/CalendarVisibilityContext";
-import CalendarSidebarLeft from "./calendar/CalendarSidebarLeft";
-import CalendarSidebarRight, {
-  AttentionStrip,
-  type AttentionTask,
-  type UpcomingDay,
-  type UpcomingItem,
-} from "./calendar/CalendarSidebarRight";
+import { redirect } from "next/navigation";
+import { getCurrentUser } from "@/lib/auth";
+import { parseQuickCapture } from "@/lib/quickCapture";
+import { MarkIcon } from "./icons";
+import weekShot from "../../public/marketing/week.jpg";
+import tasksShot from "../../public/marketing/tasks.jpg";
+import workloadShot from "../../public/marketing/workload.jpg";
+import bookShot from "../../public/marketing/phone-book.jpg";
+import dayShot from "../../public/marketing/phone-day.jpg";
 
-// Everything below computes calendar-day boundaries and nav targets in the
-// account's own timezone (`timeZone`), not the server host's — see the
-// zonedStartOfDay/zonedAddDays/etc. comment in timezone.ts. This is a
-// server component, so the JS engine's own "local" zone is the server
-// host's, not the viewer's; using it directly (as calendar-dates.ts's
-// plain helpers do, correctly, for client-side callers) silently
-// misplaces anything within the UTC-offset gap of the account's real day.
-function viewSwitchTargets(
-  view: CalendarView,
-  start: Date,
-  timeZone: string,
-): Record<CalendarView, string> {
-  const dayStart = zonedFormatYMD(start, timeZone);
-  const weekStart = zonedFormatYMD(zonedStartOfWeek(start, timeZone), timeZone);
-  const monthStart = zonedFormatYMD(zonedStartOfMonth(start, timeZone), timeZone);
-  return {
-    day: dayStart,
-    week: weekStart,
-    month: monthStart,
-  };
-}
+export const metadata: Metadata = {
+  title: "Season: a calendar that schedules your tasks",
+  description:
+    "Season puts your tasks on your calendar, around your meetings and before their due dates, and moves them when your day changes.",
+  openGraph: {
+    title: "Season",
+    description: "A calendar that schedules your tasks around your meetings, before they're due.",
+    images: ["/marketing/week.jpg"],
+  },
+};
 
-function navTargets(
-  view: CalendarView,
-  start: Date,
-  timeZone: string,
-): {
-  prev: string;
-  next: string;
-  label: string;
-} {
-  if (view === "day") {
-    return {
-      prev: zonedFormatYMD(zonedAddDays(start, -1, timeZone), timeZone),
-      next: zonedFormatYMD(zonedAddDays(start, 1, timeZone), timeZone),
-      label: formatDayLabel(start, timeZone),
-    };
+const CONTACT = "contact@useseason.app";
+const CAPTURE_EXAMPLE = "essay draft fri 3pm 2h !! #english";
+const PRIORITY_NAMES = ["Low", "Medium", "High", "Urgent"];
+
+// The public front door: signed-in visitors go straight to their calendar
+// (/home); everyone else, including Google's OAuth review, sees what
+// Season is. Screenshots in public/marketing are of the real app.
+export default async function MarketingPage(props: PageProps<"/">) {
+  if (await getCurrentUser()) {
+    const sp = await props.searchParams;
+    const query = new URLSearchParams(
+      Object.entries(sp).flatMap(([k, v]) => (Array.isArray(v) ? v.map((x) => [k, x]) : v ? [[k, v]] : [])),
+    ).toString();
+    redirect(query ? `/home?${query}` : "/home");
   }
-  if (view === "week") {
-    const ws = zonedStartOfWeek(start, timeZone);
-    const we = zonedAddDays(ws, 6, timeZone);
-    return {
-      prev: zonedFormatYMD(zonedAddDays(ws, -7, timeZone), timeZone),
-      next: zonedFormatYMD(zonedAddDays(ws, 7, timeZone), timeZone),
-      label: formatWeekRangeLabel(ws, we, timeZone),
-    };
-  }
-  const monthStart = zonedStartOfMonth(start, timeZone);
-  return {
-    prev: zonedFormatYMD(zonedStartOfMonth(zonedAddDays(monthStart, -1, timeZone), timeZone), timeZone),
-    next: zonedFormatYMD(zonedStartOfMonth(zonedAddDays(monthStart, 32, timeZone), timeZone), timeZone),
-    label: formatMonthLabel(monthStart, timeZone),
-  };
-}
-
-/** Zoned counterpart of calendar-dates.ts's computeRange — see the file-top comment. */
-function zonedComputeRange(
-  view: CalendarView,
-  start: Date,
-  timeZone: string,
-): { from: Date; to: Date; days: Date[] } {
-  if (view === "day") {
-    const from = zonedStartOfDay(start, timeZone);
-    const to = zonedAddDays(from, 1, timeZone);
-    return { from, to, days: [from] };
-  }
-  if (view === "week") {
-    const from = zonedStartOfWeek(start, timeZone);
-    const to = zonedAddDays(from, 7, timeZone);
-    const days = Array.from({ length: 7 }, (_, i) => zonedAddDays(from, i, timeZone));
-    return { from, to, days };
-  }
-  const monthStart = zonedStartOfMonth(start, timeZone);
-  const nextMonthStart = zonedStartOfMonth(zonedAddDays(monthStart, 32, timeZone), timeZone);
-  const monthEnd = zonedAddDays(nextMonthStart, -1, timeZone);
-  const from = zonedStartOfWeek(monthStart, timeZone);
-  const to = zonedAddDays(zonedStartOfWeek(monthEnd, timeZone), 7, timeZone);
-  const days: Date[] = [];
-  for (let d = from; d < to; d = zonedAddDays(d, 1, timeZone)) {
-    days.push(d);
-  }
-  return { from, to, days };
-}
-
-function linkClass(active: boolean): string {
-  return active
-    ? "rounded-full bg-ink px-3 py-1.5 text-sm font-medium text-paper transition-colors"
-    : "rounded-full px-3 py-1.5 text-sm text-ink-2 transition-colors hover:text-ink";
-}
-
-export default async function Page(props: PageProps<"/">) {
-  // Signed-out visitors get the public landing page (also what Google's
-  // OAuth review checks as the app's home page).
-  if (!(await getCurrentUser())) return <Landing />;
-  const user = await requireUser();
-  // Opportunistic top-up on every dashboard load, not just on habit
-  // create/toggle — no-ops (cheap: a handful of counts/queries) once every
-  // habit is at quota for the next few weeks, so it's safe to run on
-  // every render rather than needing a dedicated cron.
-  await scheduleHabitsForWeek(user.id);
-  const timeZone = userTimeZone(user);
-  const sp = await props.searchParams;
-  const view = parseViewParam(sp?.view);
-  const startParam = Array.isArray(sp?.start) ? sp.start[0] : sp?.start;
-  const start = startParam ? zonedParseYMD(startParam, timeZone) : zonedStartOfDay(new Date(), timeZone);
-  const resolvedStart = Number.isNaN(start.getTime()) ? zonedStartOfDay(new Date(), timeZone) : start;
-
-  const { from, to } = zonedComputeRange(view, resolvedStart, timeZone);
-
-  const rows = await prisma.event.findMany({
-    where: {
-      userId: user.id,
-      OR: [
-        // Proper interval overlap, not just "starts in range" — a
-        // multi-day event (e.g. a synced all-day trip) that started
-        // before this range but still overlaps it would otherwise be
-        // missed entirely at the query level, before rendering even
-        // gets a chance to draw it.
-        { start: { lt: to }, end: { gt: from } },
-        recurringOverlapping(from, to),
-      ],
-    },
-    include: { task: { include: { project: true } } },
-    orderBy: { start: "asc" },
-  });
-
-  const ruleByMasterId = new Map(rows.map((r) => [r.id, r.recurrenceRule]));
-  const lockedByMasterId = new Map(rows.map((r) => [r.id, r.locked]));
-  const allDayByMasterId = new Map(rows.map((r) => [r.id, r.allDay]));
-  const colorByMasterId = new Map(
-    rows.map((r) => [r.id, r.color ?? r.task?.color ?? r.task?.project?.color ?? null]),
-  );
-  const priorityByMasterId = new Map(rows.map((r) => [r.id, r.task?.priority ?? null]));
-  const taskIdByEventMasterId = new Map(rows.map((r) => [r.id, r.task?.id ?? null]));
-  const taskStatusByMasterId = new Map(rows.map((r) => [r.id, r.task?.status ?? null]));
-  const meetingUrlByMasterId = new Map(rows.map((r) => [r.id, r.meetingUrl]));
-  const eventTypeByMasterId = new Map(rows.map((r) => [r.id, r.eventType]));
-  const reminderMinutesByMasterId = new Map(rows.map((r) => [r.id, r.reminderMinutes]));
-  const notesByMasterId = new Map(rows.map((r) => [r.id, r.notes]));
-  const locationByMasterId = new Map(rows.map((r) => [r.id, r.location]));
-  const googleCalendarIdByMasterId = new Map(rows.map((r) => [r.id, r.googleCalendarId]));
-  const calendarKeyByMasterId = new Map(
-    rows.map((r) => [
-      r.id,
-      r.subscriptionId
-        ? `sub:${r.subscriptionId}`
-        : r.taskId
-          ? "tasks"
-          : r.habitId
-            ? "habits"
-            : "events",
-    ]),
-  );
-  const events: CalendarEvent[] = expandEvents(rows, from, to, userTimeZone(user))
-    .map((o) => ({
-      id: o.id,
-      masterId: o.masterId,
-      title: o.title,
-      notes: notesByMasterId.get(o.masterId) ?? null,
-      location: locationByMasterId.get(o.masterId) ?? null,
-      start: o.start,
-      end: o.end,
-      isRecurring: o.isRecurring,
-      recurrenceRule: ruleByMasterId.get(o.masterId) ?? null,
-      locked: lockedByMasterId.get(o.masterId) ?? false,
-      allDay: allDayByMasterId.get(o.masterId) ?? false,
-      projectColor: colorByMasterId.get(o.masterId) ?? null,
-      taskPriority: priorityByMasterId.get(o.masterId) ?? null,
-      taskId: taskIdByEventMasterId.get(o.masterId) ?? null,
-      taskStatus: taskStatusByMasterId.get(o.masterId) ?? null,
-      meetingUrl: meetingUrlByMasterId.get(o.masterId) ?? null,
-      eventType: eventTypeByMasterId.get(o.masterId) ?? "DEFAULT",
-      reminderMinutes: reminderMinutesByMasterId.get(o.masterId) ?? null,
-      googleCalendarId: googleCalendarIdByMasterId.get(o.masterId) ?? null,
-      calendarKey: calendarKeyByMasterId.get(o.masterId) ?? "events",
-    }))
-    .sort((a, b) => a.start.getTime() - b.start.getTime());
-
-  // Calendars shared with me (view-only overlay) — same visible range as
-  // my own events above. BUSY_ONLY drops the title/notes entirely rather
-  // than filtering client-side, so a real title never even reaches the
-  // browser for a calendar that's only supposed to show as "Busy".
-  // For EventModal's "Sync to" per-event override — only relevant once
-  // someone's subscribed 2+ calendars (see CalendarClient/EventModal).
-  const googleCalendarRows = await prisma.googleCalendar.findMany({
-    where: { googleAccount: { userId: user.id } },
-    orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
-    select: { id: true, summary: true, googleAccount: { select: { label: true } } },
-  });
-  const googleCalendars = googleCalendarRows.map((c) => ({
-    id: c.id,
-    label: `${c.summary} (${c.googleAccount.label})`,
-  }));
-
-  // Sidebar's "My calendars" / "Other calendars" checklist (CalendarSidebarLeft)
-  // — subscriptions get one row each, habits only show a row when any exist.
-  const subscriptions = await prisma.calendarSubscription.findMany({
-    where: { userId: user.id },
-    orderBy: { createdAt: "asc" },
-    select: { id: true, name: true },
-  });
-  const hasHabits = (await prisma.habit.count({ where: { userId: user.id } })) > 0;
-
-  const shares = await prisma.calendarShare.findMany({
-    where: { sharedWithId: user.id, hiddenByRecipient: false },
-    include: { owner: { select: { id: true, name: true, email: true, timezone: true } } },
-  });
-  const sharedEvents: SharedEvent[] = shares.length
-    ? (
-        await Promise.all(
-          shares.map(async (share) => {
-            const ownerRows = await prisma.event.findMany({
-              where: {
-                userId: share.ownerId,
-                OR: [
-                  { start: { lt: to }, end: { gt: from } },
-                  recurringOverlapping(from, to),
-                ],
-              },
-            });
-            const ownerLabel = share.owner.name ?? share.owner.email;
-            const allDayById = new Map(ownerRows.map((r) => [r.id, r.allDay]));
-            return expandEvents(ownerRows, from, to, userTimeZone(share.owner)).map((o) => ({
-              id: `${share.ownerId}:${o.id}`,
-              start: o.start,
-              end: o.end,
-              allDay: allDayById.get(o.masterId) ?? false,
-              title: share.permission === "FULL_DETAILS" ? o.title : "Busy",
-              ownerLabel,
-            }));
-          }),
-        )
-      ).flat()
-    : [];
-
-  const today = new Date();
-  const todayISO = zonedFormatYMD(today, timeZone);
-  const startYMD = zonedFormatYMD(resolvedStart, timeZone);
-  const nav = navTargets(view, resolvedStart, timeZone);
-  const switchTargets = viewSwitchTargets(view, resolvedStart, timeZone);
-
-  // Right sidebar's "needs attention" list — same overdue/due-soon-and-
-  // unscheduled definition TaskRow uses, computed here instead since this
-  // is a server component with no client-side "now" to react to.
-  const soonThreshold = new Date(today.getTime() + 48 * 60 * 60 * 1000);
-  const attentionRows = await prisma.task.findMany({
-    where: {
-      userId: user.id,
-      parentId: null,
-      status: { in: ["CREATED", "ONGOING"] },
-      events: { none: {} },
-      dueAt: { lt: soonThreshold },
-    },
-    orderBy: { dueAt: "asc" },
-    take: 6,
-    select: { id: true, title: true, dueAt: true },
-  });
-  // Scheduled tasks whose plan finishes after their deadline (next 2 weeks).
-  const scheduledWithDeadline = await prisma.task.findMany({
-    where: {
-      userId: user.id,
-      parentId: null,
-      status: { in: ["CREATED", "ONGOING"] },
-      events: { some: {} },
-      dueAt: { gte: today, lt: new Date(today.getTime() + 14 * 86_400_000) },
-    },
-    select: { id: true, title: true, dueAt: true, events: { select: { end: true } } },
-  });
-  const lateRows = scheduledWithDeadline.filter((t) => t.events.some((e) => e.end > t.dueAt!));
-  const attentionTasks: AttentionTask[] = [
-    ...lateRows.map((t) => ({ id: t.id, title: t.title, dueAt: t.dueAt!, isOverdue: false, isLate: true })),
-    ...attentionRows.map((t) => ({
-      id: t.id,
-      title: t.title,
-      dueAt: t.dueAt!,
-      isOverdue: t.dueAt! < today,
-    })),
-  ].sort((a, b) => a.dueAt.getTime() - b.dueAt.getTime());
-
-  // Overcommitment warning — a visible nudge (Sunsama-style) distinct
-  // from dailyCapMin's existing job of silently gating the auto-
-  // scheduler. Same threshold, different purpose: this fires the moment
-  // *manually* planned time for today crosses it, whatever view you're
-  // actually browsing.
-  // Right sidebar's day-grouped agenda — independent of whatever range
-  // the main grid is currently showing (day/week/month), always "the
-  // next UPCOMING_AGENDA_DAYS days" so it's a stable place to glance at
-  // what's coming up regardless of which view you're browsing.
-  // A full week — CalendarSidebarRight now lets each day collapse
-  // (all but today start collapsed), so a longer window no longer
-  // forces the sidebar taller than the calendar next to it.
-  const UPCOMING_AGENDA_DAYS = 7;
-  const agendaStart = zonedStartOfDay(today, timeZone);
-  const agendaEnd = zonedAddDays(agendaStart, UPCOMING_AGENDA_DAYS, timeZone);
-  const upcomingRows = await prisma.event.findMany({
-    where: {
-      userId: user.id,
-      OR: [
-        { start: { lt: agendaEnd }, end: { gt: agendaStart } },
-        recurringOverlapping(agendaStart, agendaEnd),
-      ],
-    },
-    include: { task: { select: { id: true } } },
-    orderBy: { start: "asc" },
-  });
-  const taskIdByMasterId = new Map(upcomingRows.map((r) => [r.id, r.task?.id ?? null]));
-  const lockedByUpcomingMasterId = new Map(upcomingRows.map((r) => [r.id, r.locked]));
-  const upcomingByDay = new Map<string, UpcomingItem[]>();
-  for (const o of expandEvents(upcomingRows, agendaStart, agendaEnd, timeZone)) {
-    const dayKey = zonedFormatYMD(o.start, timeZone);
-    const list = upcomingByDay.get(dayKey) ?? [];
-    const taskId = taskIdByMasterId.get(o.masterId) ?? null;
-    list.push({
-      id: o.id,
-      // The real DB event row id — o.id is synthetic for a recurring
-      // occurrence (`${masterId}::${iso}`), but editing always acts on
-      // the series/row itself.
-      eventId: o.masterId,
-      title: o.title,
-      startIso: o.start.toISOString(),
-      endIso: o.end.toISOString(),
-      isTask: taskId !== null,
-      taskId,
-      locked: lockedByUpcomingMasterId.get(o.masterId) ?? false,
-    });
-    upcomingByDay.set(dayKey, list);
-  }
-  const upcomingDays: UpcomingDay[] = Array.from({ length: UPCOMING_AGENDA_DAYS }, (_, i) => {
-    const day = zonedAddDays(agendaStart, i, timeZone);
-    const dayKey = zonedFormatYMD(day, timeZone);
-    return {
-      dayKey,
-      dayLabel: dayKey === todayISO ? "Today" : formatDayLabel(day, timeZone),
-      items: (upcomingByDay.get(dayKey) ?? []).sort(
-        (a, b) => new Date(a.startIso).getTime() - new Date(b.startIso).getTime(),
-      ),
-    };
-  }).filter((d) => d.items.length > 0);
-
-  const settings = await getAppSettings(user.id);
-  let todayPlannedMinutes: number | null = null;
-  if (settings.dailyCapMin) {
-    const dayStart = zonedStartOfDay(today, timeZone);
-    const dayEnd = zonedAddDays(dayStart, 1, timeZone);
-    const todayRows = await prisma.event.findMany({
-      where: {
-        userId: user.id,
-        OR: [{ start: { lt: dayEnd }, end: { gt: dayStart } }, recurringOverlapping(dayStart, dayEnd)],
-      },
-    });
-    todayPlannedMinutes = expandEvents(todayRows, dayStart, dayEnd, timeZone).reduce(
-      (sum, o) => sum + (o.end.getTime() - o.start.getTime()) / 60_000,
-      0,
-    );
-  }
+  const inviteOnly = Boolean(process.env.SIGNUP_INVITE_CODE);
 
   return (
-    <main className="mx-auto flex h-full min-h-0 w-full max-w-[96rem] flex-col px-3 pb-4 pt-3 sm:px-6 sm:pb-6 sm:pt-4 print:h-auto">
-      <header className="flex flex-col gap-3">
-        <p className="hidden text-lg font-semibold print:block">{nav.label}</p>
-        <div className="flex flex-wrap-reverse items-center justify-between gap-2 sm:flex-wrap sm:gap-3 print:hidden">
-          <nav className="flex flex-wrap items-center gap-1">
-            <div className="inline-flex items-center gap-1 rounded-full border border-rule bg-paper p-1">
-              <Link
-                href={`/?view=day&start=${switchTargets.day}`}
-                className={linkClass(view === "day")}
-              >
-                Day
-              </Link>
-              <Link
-                href={`/?view=week&start=${switchTargets.week}`}
-                className={linkClass(view === "week")}
-              >
-                Week
-              </Link>
-              <Link
-                href={`/?view=month&start=${switchTargets.month}`}
-                className={linkClass(view === "month")}
-              >
-                Month
-              </Link>
-            </div>
-            <span className="mx-1 h-5 w-px bg-rule" />
-            <Link
-              href={`/?view=${view}&start=${nav.prev}`}
-              aria-label="Previous"
-              className="rounded-full px-3 py-1.5 text-sm text-ink-2 transition-colors hover:bg-rule-soft hover:text-ink"
-            >
-              ←<span className="hidden sm:inline"> Prev</span>
-            </Link>
-            <Link
-              href={`/?view=${view}`}
-              className="rounded-full px-2 py-1.5 text-sm text-ink-2 transition-colors hover:bg-rule-soft hover:text-ink"
-            >
-              Today
-            </Link>
-            <Link
-              href={`/?view=${view}&start=${nav.next}`}
-              aria-label="Next"
-              className="rounded-full px-3 py-1.5 text-sm text-ink-2 transition-colors hover:bg-rule-soft hover:text-ink"
-            >
-              <span className="hidden sm:inline">Next </span>→
-            </Link>
-          </nav>
-          <div className="flex items-center gap-1">
-            <CalendarSearch view={view} />
-            <p className="font-serif text-lg text-ink">{nav.label}</p>
-            <MiniMonthPicker view={view} startYMD={startYMD} />
-          </div>
-        </div>
-        <ShortcutHint />
+    <div className="min-h-full bg-paper text-ink">
+      <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-5 py-5 sm:px-8">
+        <Link href="/" className="flex items-center gap-2">
+          <MarkIcon className="h-6 w-6" />
+          <span className="font-serif text-xl tracking-tight">Season</span>
+        </Link>
+        <nav className="flex items-center gap-1 text-sm sm:gap-2">
+          <a href="#how" className="hidden rounded-lg px-3 py-2 text-ink-2 hover:text-ink md:block">How it works</a>
+          <a href="#booking" className="hidden rounded-lg px-3 py-2 text-ink-2 hover:text-ink md:block">Booking</a>
+          <a href="#google" className="hidden rounded-lg px-3 py-2 text-ink-2 hover:text-ink md:block">Google Calendar</a>
+          <Link href="/login" className="rounded-lg px-3 py-2 text-ink-2 hover:text-ink">Sign in</Link>
+          <Link href="/signup" className="rounded-[9px] bg-ink px-4 py-2 font-medium text-paper hover:opacity-85">
+            Get started
+          </Link>
+        </nav>
       </header>
 
-      <div className="mt-3 xl:hidden print:hidden">
-        <AttentionStrip tasks={attentionTasks} />
-      </div>
-
-      <NowProvider>
-      <CalendarVisibilityProvider>
-        <div className="mt-3 grid min-h-0 flex-1 grid-cols-1 gap-5 print:block xl:grid-cols-[1fr_13rem] 2xl:grid-cols-[11rem_1fr_13rem]">
-          {/* Every column here needs `overflow` set (not just `visible`)
-              or its natural content height becomes an input to the grid
-              row's own auto-sizing — one tall column would stretch the
-              whole row, and with it the page, right back to the
-              full-page scroll this layout exists to avoid. `no-scrollbar`
-              hides the resulting scroll track everywhere except the
-              calendar's own .calendar-scroll (that one's a real,
-              deliberately visible/styled scroll surface — see
-              CalendarClient — not just structural overflow control).
-              Two breakpoints, not one: the persistent left SideRail
-              (layout.tsx) permanently eats 11rem of viewport width now,
-              so the old single `lg` threshold squeezed the hour grid
-              into a horizontal scroll well before the page felt full —
-              the "needs attention" rail earns its keep sooner than the
-              mini-calendar does, so it appears first. */}
-          <aside className="no-scrollbar hidden overflow-y-auto print:hidden 2xl:block">
-            <CalendarSidebarLeft
-              view={view}
-              startYMD={startYMD}
-              hasHabits={hasHabits}
-              subscriptions={subscriptions}
-            />
-          </aside>
-
-          <div className="no-scrollbar flex min-h-0 min-w-0 flex-col overflow-y-auto">
-            <CalendarClient
-              view={view}
-              startYMD={startYMD}
-              todayISO={todayISO}
-              events={events}
-              sharedEvents={sharedEvents}
-              secondaryTimezone={settings.secondaryTimezone}
-              googleCalendars={googleCalendars}
-            />
+      <main>
+        <section className="mx-auto w-full max-w-6xl px-5 pb-12 pt-10 sm:px-8 sm:pt-16">
+          <h1 className="max-w-3xl font-serif text-5xl leading-[0.95] tracking-tight sm:text-7xl">
+            Your to-do list, on your calendar.
+          </h1>
+          <p className="mt-6 max-w-2xl text-lg leading-relaxed text-ink-2">
+            Season takes the things you need to get done and gives each one a time: between your meetings and
+            classes, inside your working hours, before it&apos;s due. When your day changes, it moves them.
+          </p>
+          <div className="mt-8 flex flex-wrap items-center gap-3">
+            <Link
+              href="/signup"
+              className="rounded-[9px] bg-ink px-5 py-3 text-sm font-medium text-paper hover:opacity-85"
+            >
+              Create an account
+            </Link>
+            <Link
+              href="/login"
+              className="rounded-[9px] border border-rule px-5 py-3 text-sm font-medium text-ink-2 hover:text-ink"
+            >
+              Sign in
+            </Link>
           </div>
+          {inviteOnly && (
+            <p className="mt-4 text-sm text-muted">
+              Sign-up needs an invite code for now. Email{" "}
+              <a href={`mailto:${CONTACT}`} className="underline hover:text-ink">{CONTACT}</a> for one.
+            </p>
+          )}
+        </section>
 
-          <aside className="no-scrollbar hidden overflow-y-auto print:hidden xl:block">
-            <CalendarSidebarRight
-              tasks={attentionTasks}
-              upcomingDays={upcomingDays}
-              overcommitment={
-                settings.dailyCapMin && todayPlannedMinutes !== null
-                  ? { plannedMinutes: todayPlannedMinutes, capMinutes: settings.dailyCapMin }
-                  : null
-              }
-            />
-          </aside>
+        <div className="mx-auto w-full max-w-6xl px-5 sm:px-8">
+          <div className="hidden sm:block">
+            <Shot src={weekShot} alt="Season's week view: meetings and classes, with task blocks scheduled in the gaps" priority />
+          </div>
+          {/* The desktop shot is unreadable at phone width; show the phone app instead. */}
+          <div className="flex justify-center sm:hidden">
+            <Phone src={dayShot} alt="Season's day agenda on a phone" />
+          </div>
         </div>
-      </CalendarVisibilityProvider>
-      </NowProvider>
-    </main>
+
+        <section id="how" className="mx-auto w-full max-w-6xl scroll-mt-8 px-5 py-20 sm:px-8 sm:py-28">
+          <Eyebrow as="h2">How it works</Eyebrow>
+          <ol className="mt-6 grid gap-10 md:grid-cols-3 md:gap-8">
+            <Step n="1" title="Write it down">
+              Type a task the way you&apos;d say it. Season reads the day, time, length, priority and project out of
+              the sentence.
+            </Step>
+            <Step n="2" title="Season finds the time">
+              It books a block before the due date, in your working hours, with a gap after meetings. Long tasks get
+              split into sessions.
+            </Step>
+            <Step n="3" title="The plan keeps up">
+              Miss a block or add a meeting on top of one, and Season moves the work somewhere that still makes the
+              deadline.
+            </Step>
+          </ol>
+          <CaptureDemo />
+        </section>
+
+        <Feature
+          eyebrow="Scheduling"
+          title="Deadlines first, and it tells you when something won't fit."
+          shot={<Shot src={tasksShot} alt="Season's task list with each task's estimate, due date and scheduled time" />}
+        >
+          <p>
+            Every task has an estimate and, if you want, a due date. Season places the ones with the least room to
+            spare first. If an urgent task can&apos;t fit, it moves less urgent work out of the way instead of
+            letting the deadline slip.
+          </p>
+          <ul className="mt-4 space-y-2">
+            <Bullet>Hard and soft deadlines, priorities, and tasks that wait on other tasks</Bullet>
+            <Bullet>Deep work in the morning and admin in the afternoon, if you mark tasks that way</Bullet>
+            <Bullet>A warning on any task whose time ends up after its due date</Bullet>
+            <Bullet>Lock a block and Season will never move it</Bullet>
+          </ul>
+        </Feature>
+
+        <Feature
+          eyebrow="Planning"
+          title="See an overbooked week before you're in it."
+          shot={<Shot src={workloadShot} alt="Season's workload view: each day's meetings and task time against capacity" />}
+          flip
+        >
+          <p>
+            The workload view adds up each day&apos;s meetings and task time against the hours you have, and flags
+            the days that don&apos;t add up. Set a daily cap and Season leaves the rest of the day open.
+          </p>
+          <p className="mt-3">
+            Time the work with the focus timer and Season shows how your estimates compare with how long things
+            actually take.
+          </p>
+        </Feature>
+
+        <section id="booking" className="mx-auto w-full max-w-6xl scroll-mt-8 px-5 py-20 sm:px-8 sm:py-28">
+          <div className="grid items-center gap-12 md:grid-cols-[1fr_auto] md:gap-16">
+            <div>
+              <Eyebrow>Booking links</Eyebrow>
+              <h2 className="mt-3 max-w-xl font-serif text-4xl leading-tight tracking-tight sm:text-5xl">
+                Let people book the time you actually have.
+              </h2>
+              <p className="mt-5 max-w-xl text-ink-2">
+                Share a link and people pick from times you&apos;re free, counting your meetings and the task time
+                Season has planned. You choose the length, how much notice you need, how many bookings a day, and
+                which days are off limits. Visitors see times in their own timezone.
+              </p>
+              <p className="mt-3 max-w-xl text-ink-2">
+                And on your phone, Season works as an installable app with the same calendar and reminders.
+              </p>
+            </div>
+            <div className="flex justify-center gap-4">
+              <Phone src={bookShot} alt="A Season booking page on a phone, listing open times by day" />
+              <Phone src={dayShot} alt="Season's day agenda on a phone" className="hidden sm:block" />
+            </div>
+          </div>
+        </section>
+
+        <section id="google" className="border-y border-rule bg-surface">
+          <div className="mx-auto grid w-full max-w-6xl scroll-mt-8 gap-10 px-5 py-20 sm:px-8 md:grid-cols-2 md:gap-16">
+            <div>
+              <Eyebrow>Google Calendar</Eyebrow>
+              <h2 className="mt-3 font-serif text-4xl leading-tight tracking-tight">Works with the calendar you already use.</h2>
+              <p className="mt-5 text-ink-2">
+                Connect one or more Google accounts and Season syncs both ways. Your Google events block time for
+                tasks, and what you plan in Season shows up in Google Calendar on every device. Apple Calendar and
+                calendar feeds can be added read-only.
+              </p>
+            </div>
+            <div className="rounded-xl border border-rule bg-paper p-6 text-sm text-ink-2">
+              <h3 className="font-semibold text-ink">What Season does with your Google data</h3>
+              <ul className="mt-3 space-y-2">
+                <Bullet>Connecting Google is optional.</Bullet>
+                <Bullet>Season reads events from the calendars you pick, to show them and plan around them.</Bullet>
+                <Bullet>It creates and updates events in your Google Calendar only for things you add or change in Season.</Bullet>
+                <Bullet>It doesn&apos;t sell your data, use it for ads, or use it to train AI models.</Bullet>
+                <Bullet>Disconnect any time in Settings, and Season deletes what it imported.</Bullet>
+              </ul>
+              <p className="mt-4">
+                The details are in the <Link href="/privacy" className="underline hover:text-ink">privacy policy</Link>.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section className="mx-auto w-full max-w-6xl px-5 py-20 sm:px-8 sm:py-28">
+          <Eyebrow as="h2">Also in Season</Eyebrow>
+          <dl className="mt-6 grid gap-x-10 gap-y-8 sm:grid-cols-2 lg:grid-cols-3">
+            <Extra title="Focus">Today&apos;s queue one task at a time, with a timer and an end-of-day review.</Extra>
+            <Extra title="Habits">&quot;Gym 3 times a week&quot; gets its own slots, kept topped up.</Extra>
+            <Extra title="Projects">Notes, files and a timeline for each project, with tracked time per week.</Extra>
+            <Extra title="Recordings">Record a lecture or meeting and get a transcript, a summary and tasks from it.</Extra>
+            <Extra title="Claude">Connect Claude through Season&apos;s MCP server to ask about or change your schedule.</Extra>
+            <Extra title="Shared calendars">See a teammate&apos;s busy times, or their details if they share them.</Extra>
+          </dl>
+        </section>
+
+        <section className="mx-auto w-full max-w-6xl px-5 pb-24 sm:px-8">
+          <div className="rounded-2xl bg-ink px-6 py-12 text-paper sm:px-12">
+            <h2 className="max-w-2xl font-serif text-4xl leading-tight tracking-tight sm:text-5xl">
+              Put this week&apos;s to-do list on the calendar.
+            </h2>
+            <div className="mt-8 flex flex-wrap gap-3">
+              <Link href="/signup" className="rounded-[9px] bg-paper px-5 py-3 text-sm font-medium text-ink hover:opacity-90">
+                Create an account
+              </Link>
+              <Link href="/login" className="rounded-[9px] border border-paper/30 px-5 py-3 text-sm font-medium text-paper hover:border-paper/60">
+                Sign in
+              </Link>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <footer className="border-t border-rule">
+        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-4 px-5 py-8 text-sm text-muted sm:px-8">
+          <span className="flex items-center gap-2">
+            <MarkIcon className="h-4 w-4" />
+            Season
+          </span>
+          <nav className="flex flex-wrap gap-5">
+            <Link href="/privacy" className="hover:text-ink">Privacy policy</Link>
+            <Link href="/terms" className="hover:text-ink">Terms of service</Link>
+            <a href={`mailto:${CONTACT}`} className="hover:text-ink">{CONTACT}</a>
+          </nav>
+        </div>
+      </footer>
+    </div>
+  );
+}
+
+function Eyebrow({ children, as: Tag = "p" }: { children: ReactNode; as?: "p" | "h2" }) {
+  return <Tag className="font-mono text-xs font-normal uppercase tracking-wider text-muted">{children}</Tag>;
+}
+
+function Step({ n, title, children }: { n: string; title: string; children: ReactNode }) {
+  return (
+    <li>
+      <span className="font-mono text-sm text-accent">{n}</span>
+      <h3 className="mt-2 font-serif text-2xl tracking-tight">{title}</h3>
+      <p className="mt-2 text-ink-2">{children}</p>
+    </li>
+  );
+}
+
+function Bullet({ children }: { children: ReactNode }) {
+  return (
+    <li className="flex gap-2.5">
+      <span className="mt-[0.6em] h-1 w-1 flex-shrink-0 rounded-full bg-ink-2" aria-hidden="true" />
+      <span>{children}</span>
+    </li>
+  );
+}
+
+function Extra({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div>
+      <dt className="font-medium text-ink">{title}</dt>
+      <dd className="mt-1 text-sm text-ink-2">{children}</dd>
+    </div>
+  );
+}
+
+function Shot({ src, alt, priority }: { src: StaticImageData; alt: string; priority?: boolean }) {
+  return (
+    <div className="overflow-hidden rounded-xl border border-rule bg-surface shadow-[0_1px_2px_rgba(0,0,0,0.04),0_12px_32px_-12px_rgba(0,0,0,0.12)]">
+      <Image src={src} alt={alt} priority={priority} sizes="(min-width: 1152px) 1088px, 100vw" className="h-auto w-full" />
+    </div>
+  );
+}
+
+function Phone({ src, alt, className = "" }: { src: StaticImageData; alt: string; className?: string }) {
+  return (
+    <div className={`w-[220px] overflow-hidden rounded-[28px] border border-rule bg-surface p-1.5 sm:w-[240px] ${className}`}>
+      <div className="overflow-hidden rounded-[22px]">
+        <Image src={src} alt={alt} sizes="240px" className="h-auto w-full" />
+      </div>
+    </div>
+  );
+}
+
+function Feature({
+  eyebrow,
+  title,
+  children,
+  shot,
+  flip = false,
+}: {
+  eyebrow: string;
+  title: string;
+  children: ReactNode;
+  shot: ReactNode;
+  flip?: boolean;
+}) {
+  return (
+    <section className="mx-auto w-full max-w-6xl px-5 py-16 sm:px-8 sm:py-20">
+      <div className={`grid items-center gap-10 lg:grid-cols-[2fr_3fr] lg:gap-16 ${flip ? "lg:grid-cols-[3fr_2fr]" : ""}`}>
+        <div className={flip ? "lg:order-2" : ""}>
+          <Eyebrow>{eyebrow}</Eyebrow>
+          <h2 className="mt-3 font-serif text-4xl leading-tight tracking-tight">{title}</h2>
+          <div className="mt-5 text-ink-2">{children}</div>
+        </div>
+        <div className={flip ? "lg:order-1" : ""}>{shot}</div>
+      </div>
+    </section>
+  );
+}
+
+/** The quick-capture example, parsed by the real parser the app uses. */
+function CaptureDemo() {
+  const parsed = parseQuickCapture(CAPTURE_EXAMPLE);
+  const due = parsed.dueAt
+    ? parsed.dueAt.toLocaleString("en-US", { weekday: "long", hour: "numeric", minute: "2-digit" })
+    : null;
+  const fields: [string, string | null][] = [
+    ["Task", parsed.title],
+    ["Due", due],
+    ["Estimate", parsed.durationMin ? `${parsed.durationMin / 60}h` : null],
+    ["Priority", PRIORITY_NAMES[parsed.priority] ?? null],
+    ["Project", parsed.projectName],
+  ];
+  return (
+    <div className="mt-14 rounded-xl border border-rule bg-surface p-5 sm:p-6">
+      <p className="text-sm text-muted">You type</p>
+      <p className="mt-2 rounded-lg border border-rule bg-paper px-4 py-3 font-mono text-sm text-ink sm:text-base">
+        {CAPTURE_EXAMPLE}
+      </p>
+      <p className="mt-5 text-sm text-muted">Season reads</p>
+      <dl className="mt-2 grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-5">
+        {fields
+          .filter(([, v]) => v)
+          .map(([k, v]) => (
+            <div key={k}>
+              <dt className="font-mono text-xs uppercase tracking-wider text-muted">{k}</dt>
+              <dd className="mt-0.5 text-sm text-ink">{v}</dd>
+            </div>
+          ))}
+      </dl>
+    </div>
   );
 }
