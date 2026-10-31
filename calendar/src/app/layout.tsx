@@ -11,6 +11,7 @@ import MeetingBanner from "./MeetingBanner";
 import SideRail from "./SideRail";
 import MobileNav from "./MobileNav";
 import Toaster from "./Toaster";
+import { getCurrentUser } from "@/lib/auth";
 
 // Runs before paint so there's no flash of the wrong theme. Kept as a
 // plain string (not a .ts file) since it needs to execute inline, before
@@ -63,7 +64,10 @@ export const viewport: Viewport = {
   ],
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  // The app chrome (nav, quick capture, watchers) is only for signed-in
+  // users; public pages (landing, privacy, booking) render bare.
+  const signedIn = Boolean(await getCurrentUser());
   return (
     <html
       lang="en"
@@ -79,21 +83,25 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         </Script>
       </head>
       <body className="flex h-full flex-col overflow-hidden bg-paper text-ink transition-colors duration-200 md:flex-row">
-        <SideRail />
+        {signedIn && <SideRail />}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <MeetingBanner />
+          {signedIn && <MeetingBanner />}
           {/* Bottom padding clears MobileNav's fixed tab bar below md. */}
           <div className="min-h-0 flex-1 overflow-y-auto pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0">
             {children}
           </div>
         </div>
-        <MobileNav />
         <Toaster />
-        <QuickCapture />
-        <ShortcutsHelp />
-        <NotificationWatcher />
-        <SyncWatcher />
-        <TimezoneSync />
+        {signedIn && (
+          <>
+            <MobileNav />
+            <QuickCapture />
+            <ShortcutsHelp />
+            <NotificationWatcher />
+            <SyncWatcher />
+            <TimezoneSync />
+          </>
+        )}
       </body>
     </html>
   );

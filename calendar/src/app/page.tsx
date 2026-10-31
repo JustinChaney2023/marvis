@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/auth";
+import { requireUser, getCurrentUser } from "@/lib/auth";
+import Landing from "./Landing";
 import {
   userTimeZone,
   zonedAddDays,
@@ -125,6 +126,9 @@ function linkClass(active: boolean): string {
 }
 
 export default async function Page(props: PageProps<"/">) {
+  // Signed-out visitors get the public landing page (also what Google's
+  // OAuth review checks as the app's home page).
+  if (!(await getCurrentUser())) return <Landing />;
   const user = await requireUser();
   // Opportunistic top-up on every dashboard load, not just on habit
   // create/toggle — no-ops (cheap: a handful of counts/queries) once every
