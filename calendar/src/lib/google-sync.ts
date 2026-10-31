@@ -274,6 +274,17 @@ export async function importFromGoogle(googleCalendarId: string) {
         where: { googleCalendarId_googleEventId: { googleCalendarId: auth.calendar.id, googleEventId: item.id } },
         select: { localDirty: true, excludeDates: true },
       });
+      // Season's own export (see exportToGoogle), not a Google original:
+      // re-link the local row if it lost its link, otherwise leave it be —
+      // importing it would resurrect a deleted event or double a live one.
+      const seasonId = item.extendedProperties?.private?.seasonEventId;
+      if (seasonId && !existingRow) {
+        await prisma.event.updateMany({
+          where: { id: seasonId, userId: auth.account.userId, googleEventId: null },
+          data: { googleCalendarId: auth.calendar.id, googleEventId: item.id, googleUpdatedAt: item.updated ? new Date(item.updated) : new Date() },
+        });
+        continue;
+      }
       if (existingRow?.localDirty) continue;
       // Keep exclusions Season already knew (cancelled instances above) and add Google's EXDATEs.
       const mergedExcludes = [...new Set([...(existingRow?.excludeDates ?? "").split(","), ...exdates].filter(Boolean))];
@@ -384,9 +395,54 @@ export async function exportToGoogle(googleCalendarId: string) {
   });
   const toPush = all.filter((e) => !e.googleEventId || e.localDirty);
 
+  // Season stamps every event it exports with its own id
+  // (extendedProperties.private.seasonEventId). A reconnect unlinks the local
+  // rows but Google still holds those copies, so before inserting look for
+  // them and adopt instead — inserting again is what doubled the calendar.
+  const adoptable = new Map<string, string>(); // local Event.id -> Google event id
+  const fresh = toPush.filter((e) => !e.googleEventId && e.source === "LOCAL");
+  let lookupFailed = false;
+  if (fresh.length > 0) {
+    try {
+      let pageToken: string | undefined;
+      do {
+        const res = await calendar.events.list({
+          calendarId: auth.calendar.calendarId,
+          timeMin: new Date(Math.min(...fresh.map((e) => e.start.getTime())) - 86_400_000).toISOString(),
+          timeMax: new Date(Math.max(...fresh.map((e) => e.end.getTime())) + 86_400_000).toISOString(),
+          singleEvents: false,
+          maxResults: 250,
+          pageToken,
+        });
+        for (const i of res.data.items ?? []) {
+          const sid = i.extendedProperties?.private?.seasonEventId;
+          if (sid && i.id && !adoptable.has(sid)) adoptable.set(sid, i.id);
+        }
+        pageToken = res.data.nextPageToken ?? undefined;
+      } while (pageToken);
+    } catch (err) {
+      // Can't tell what's already on Google — inserting blind could duplicate.
+      lookupFailed = true;
+      errors.push(`Couldn't check Google for existing copies: ${describeGoogleError(err)}`);
+    }
+  }
+  // A Google id already claimed by another local row can't be adopted
+  // ((googleCalendarId, googleEventId) is unique) — leave that event alone.
+  const claimed = new Set(
+    (
+      await prisma.event.findMany({
+        where: { googleCalendarId: auth.calendar.id, googleEventId: { in: [...adoptable.values()] } },
+        select: { googleEventId: true },
+      })
+    ).map((e) => e.googleEventId),
+  );
+
   let exported = 0;
   for (const event of toPush) {
     try {
+      const adoptedId = event.googleEventId ? undefined : adoptable.get(event.id);
+      if (!event.googleEventId && event.source === "LOCAL" && (lookupFailed || (adoptedId && claimed.has(adoptedId)))) continue;
+      const googleEventId = event.googleEventId ?? adoptedId ?? null;
       const body = {
         summary: event.title,
         description: event.notes ?? undefined,
@@ -399,15 +455,17 @@ export async function exportToGoogle(googleCalendarId: string) {
           : { dateTime: event.end.toISOString(), timeZone },
         recurrence: recurrenceForGoogle(event),
         colorId: event.color ? LOCAL_TO_GOOGLE_COLOR[event.color] : undefined,
+        // Only Season's own events — a GOOGLE row is Google's original.
+        extendedProperties: event.source === "LOCAL" ? { private: { seasonEventId: event.id } } : undefined,
       };
 
-      if (event.googleEventId) {
+      if (googleEventId) {
         // patch, not update: update replaces the whole Google event,
         // wiping attendees, the Meet link, reminders, and colors Season
         // doesn't model.
         const updated = await calendar.events.patch({
           calendarId: auth.calendar.calendarId,
-          eventId: event.googleEventId,
+          eventId: googleEventId,
           requestBody: body,
         });
         // updateMany, not update: the scheduler can delete-and-recreate
@@ -422,6 +480,7 @@ export async function exportToGoogle(googleCalendarId: string) {
           data: {
             localDirty: false,
             googleCalendarId: auth.calendar.id,
+            googleEventId,
             googleUpdatedAt: updated.data.updated
               ? new Date(updated.data.updated)
               : new Date(),
