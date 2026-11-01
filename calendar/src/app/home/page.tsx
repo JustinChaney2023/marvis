@@ -166,6 +166,7 @@ export default async function Page(props: PageProps<"/home">) {
   const priorityByMasterId = new Map(rows.map((r) => [r.id, r.task?.priority ?? null]));
   const taskIdByEventMasterId = new Map(rows.map((r) => [r.id, r.task?.id ?? null]));
   const taskStatusByMasterId = new Map(rows.map((r) => [r.id, r.task?.status ?? null]));
+  const taskDueAtByMasterId = new Map(rows.map((r) => [r.id, r.task?.dueAt ?? null]));
   const meetingUrlByMasterId = new Map(rows.map((r) => [r.id, r.meetingUrl]));
   const eventTypeByMasterId = new Map(rows.map((r) => [r.id, r.eventType]));
   const reminderMinutesByMasterId = new Map(rows.map((r) => [r.id, r.reminderMinutes]));
@@ -201,6 +202,7 @@ export default async function Page(props: PageProps<"/home">) {
       taskPriority: priorityByMasterId.get(o.masterId) ?? null,
       taskId: taskIdByEventMasterId.get(o.masterId) ?? null,
       taskStatus: taskStatusByMasterId.get(o.masterId) ?? null,
+      taskDueAt: taskDueAtByMasterId.get(o.masterId) ?? null,
       meetingUrl: meetingUrlByMasterId.get(o.masterId) ?? null,
       eventType: eventTypeByMasterId.get(o.masterId) ?? "DEFAULT",
       reminderMinutes: reminderMinutesByMasterId.get(o.masterId) ?? null,

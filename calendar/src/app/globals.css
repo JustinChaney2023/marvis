@@ -19,6 +19,8 @@
   --accent: #b65a34;
   --accent-hover: #8e4526;
   --accent-wash: #f5e5db;
+  --danger: #b42318;
+  --danger-wash: #fbe4e1;
   --scrim: rgb(26 23 19 / 28%);
 }
 .dark {
@@ -32,6 +34,8 @@
   --accent: #e09a72;
   --accent-hover: #c6613f;
   --accent-wash: #3e332c;
+  --danger: #f2827a;
+  --danger-wash: #4a2a28;
   --scrim: rgb(20 20 19 / 55%);
 }
 
@@ -50,6 +54,8 @@
   --color-accent: var(--accent);
   --color-accent-hover: var(--accent-hover);
   --color-accent-wash: var(--accent-wash);
+  --color-danger: var(--danger);
+  --color-danger-wash: var(--danger-wash);
   --color-scrim: var(--scrim);
 }
 

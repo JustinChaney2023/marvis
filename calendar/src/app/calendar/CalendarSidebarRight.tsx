@@ -120,7 +120,7 @@ export default function CalendarSidebarRight({
                   className="flex items-start gap-1.5 rounded-lg px-1.5 py-1 text-xs transition-colors hover:bg-rule-soft"
                 >
                   <AlertTriangleIcon
-                    className={`mt-0.5 h-3 w-3 flex-shrink-0 ${t.isOverdue ? "text-accent" : "text-muted"}`}
+                    className={`mt-0.5 h-3 w-3 flex-shrink-0 ${t.isOverdue ? "text-danger" : "text-muted"}`}
                   />
                   <span className="min-w-0">
                     <span className="block truncate font-medium text-ink-2">
@@ -229,7 +229,7 @@ export function AttentionStrip({ tasks, timeZone }: { tasks: AttentionTask[]; ti
               className="flex items-center justify-between gap-2 rounded-lg px-1.5 py-1.5 text-xs hover:bg-rule-soft"
             >
               <span className="min-w-0 truncate font-medium text-ink-2">{t.title}</span>
-              <span className={`flex-shrink-0 font-mono ${t.isOverdue ? "text-accent" : "text-muted"}`}>
+              <span className={`flex-shrink-0 font-mono ${t.isOverdue ? "text-danger" : "text-muted"}`}>
                 {t.isLate ? "Late · due" : t.isOverdue ? "Overdue" : "Due"}{" "}
                 {t.dueAt.toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone })}
               </span>
