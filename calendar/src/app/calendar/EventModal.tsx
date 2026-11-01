@@ -633,7 +633,8 @@ export default function EventModal({
             <span className="text-ink-2">All day</span>
           </label>
 
-          <div className="grid grid-cols-2 gap-3">
+          {/* Stacked on phones: two date+time pairs side by side overflow 390px. */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <label className="flex flex-col gap-1 text-sm">
               <span className="text-muted">Start</span>
               <div className="flex gap-2">
