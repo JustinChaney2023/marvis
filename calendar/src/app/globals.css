@@ -62,6 +62,16 @@
 /* Theming lives on tokens above, read through Tailwind utilities
    (bg-paper, text-ink, border-rule, ...) — components should never
    reach for a raw zinc/gray color or a bare hex value. */
+/* iOS Safari zooms the page when a focused field is under 16px — and then
+   stays zoomed. Unlayered, so it beats the text-sm/text-xs utilities. */
+@media (max-width: 767px) {
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
 body {
   font-family: var(--font-plex-sans), "Helvetica Neue", Helvetica, sans-serif;
 }

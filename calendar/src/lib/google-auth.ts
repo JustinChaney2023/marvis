@@ -1,4 +1,5 @@
 import { google } from "googleapis";
+import { safeErr } from "@/lib/safeErr";
 import { prisma } from "@/lib/prisma";
 import { decryptSecret, encryptSecret } from "@/lib/tokenCrypto";
 
@@ -58,7 +59,11 @@ export async function getAuthorizedClient(googleAccountId: string) {
   });
 
   if (account.expiresAt.getTime() <= Date.now() + 60_000) {
-    const { credentials } = await client.refreshAccessToken();
+    // Rethrown as a plain Error: the raw GaxiosError holds our refresh
+    // token in its request body, and Next/pm2 print thrown errors whole.
+    const { credentials } = await client.refreshAccessToken().catch((err) => {
+      throw new Error(`Google token refresh failed: ${safeErr(err)}`);
+    });
     await prisma.googleAccount.update({
       where: { id: account.id },
       data: {

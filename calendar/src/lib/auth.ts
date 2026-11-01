@@ -113,3 +113,68 @@ export async function revokeOtherSessions(userId: string, keepSessionId: string 
     where: { userId, ...(keepSessionId ? { id: { not: keepSessionId } } : {}) },
   });
 }
+
+// --- Demo-account quick switch --------------------------------------
+// Lets the admin hop into a fake account for testing without touching
+// real data, and hop back. Off unless DEMO_ACCOUNT_EMAIL is set. The way
+// back is the owner's own session token, parked in an httpOnly cookie —
+// so landing in the demo account (even via its own login) can never be
+// turned into access to the owner's account.
+const OWNER_COOKIE = "marvis_owner_session";
+
+export function demoAccountEmail(): string | null {
+  return process.env.DEMO_ACCOUNT_EMAIL?.trim().toLowerCase() || null;
+}
+
+export async function hasOwnerSession(): Promise<boolean> {
+  return Boolean((await cookies()).get(OWNER_COOKIE)?.value);
+}
+
+export async function startDemoSession(): Promise<void> {
+  const user = await requireUser();
+  const email = demoAccountEmail();
+  if (!email || !user.isAdmin || user.email.toLowerCase() === email) return;
+  const demo = await prisma.user.findUnique({ where: { email } });
+  if (!demo || demo.isAdmin) return;
+
+  const cookieStore = await cookies();
+  const ownerToken = cookieStore.get(SESSION_COOKIE)?.value;
+  const ownerSession = ownerToken
+    ? await prisma.session.findUnique({ where: { token: ownerToken } })
+    : null;
+  if (!ownerToken || !ownerSession) return;
+
+  cookieStore.set(OWNER_COOKIE, ownerToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    expires: ownerSession.expiresAt,
+  });
+  await createSession(demo.id); // overwrites marvis_session with the demo's
+}
+
+export async function endDemoSession(): Promise<void> {
+  const user = await getCurrentUser();
+  const email = demoAccountEmail();
+  if (!user || !email || user.email.toLowerCase() !== email) return;
+
+  const cookieStore = await cookies();
+  const ownerToken = cookieStore.get(OWNER_COOKIE)?.value;
+  const ownerSession = ownerToken
+    ? await prisma.session.findUnique({ where: { token: ownerToken }, include: { user: true } })
+    : null;
+  if (!ownerToken || !ownerSession || ownerSession.expiresAt < new Date() || !ownerSession.user.isAdmin) {
+    return;
+  }
+
+  await destroySession(); // drops the demo session row + cookie
+  cookieStore.set(SESSION_COOKIE, ownerToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    expires: ownerSession.expiresAt,
+  });
+  cookieStore.delete(OWNER_COOKIE);
+}

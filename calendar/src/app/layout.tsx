@@ -10,6 +10,7 @@ import TimezoneSync from "./TimezoneSync";
 import MeetingBanner from "./MeetingBanner";
 import SideRail from "./SideRail";
 import MobileNav from "./MobileNav";
+import DemoSwitch from "./DemoSwitch";
 import Toaster from "./Toaster";
 import { getCurrentUser } from "@/lib/auth";
 
@@ -100,6 +101,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
             <NotificationWatcher />
             <SyncWatcher />
             <TimezoneSync />
+            <DemoSwitch />
           </>
         )}
       </body>

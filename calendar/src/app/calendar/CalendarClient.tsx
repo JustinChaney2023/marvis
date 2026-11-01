@@ -822,6 +822,7 @@ function AgendaView({
 }) {
   const isSameDay = (a: Date, b: Date) =>
     a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  const now = useNow();
 
   return (
     <div className="flex flex-col gap-4">
@@ -844,15 +845,16 @@ function AgendaView({
             ) : (
               <ul className="mt-1.5 flex flex-col gap-1.5">
                 {dayEvents.map((e) => {
-                  const custom = isCustomColor(e.projectColor);
-                  const colors = !custom && e.projectColor ? PROJECT_EVENT_COLORS[e.projectColor] : null;
+                  const urgent = dueUrgency(e.taskDueAt, e.taskStatus, now) !== null;
+                  const custom = !urgent && isCustomColor(e.projectColor);
+                  const colors = !custom && !urgent && e.projectColor ? PROJECT_EVENT_COLORS[e.projectColor] : null;
                   const customStyle = custom ? customColorStyle(e.projectColor as string) : null;
                   return (
                     <li key={e.id}>
                       <button
                         type="button"
                         onClick={() => onEventClick(e)}
-                        className={`flex w-full items-center gap-2 rounded-lg border-l-4 px-3 py-2 text-left text-sm ${colors ? `${colors.bar} ${colors.bg} ${colors.text}` : custom ? "" : "border-l-muted bg-rule-soft"}`}
+                        className={`flex w-full items-center gap-2 rounded-lg border-l-4 px-3 py-2 text-left text-sm ${urgent ? "border-l-danger bg-danger-wash text-ink" : colors ? `${colors.bar} ${colors.bg} ${colors.text}` : custom ? "" : "border-l-muted bg-rule-soft"}`}
                         style={
                           customStyle
                             ? { ...customStyle.bar, ...customStyle.bg, ...customStyle.text }
