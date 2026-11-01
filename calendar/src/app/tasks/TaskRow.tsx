@@ -20,7 +20,7 @@ import { ConfirmForm } from "../ui/ConfirmForm";
 import { PersonIcon, RobotIcon, RepeatIcon, AlertTriangleIcon, ChevronRightIcon, CloseIcon, SparkleIcon } from "../icons";
 import { formatDueDateTime } from "@/lib/calendar-dates";
 import TaskModal, { type TaskModalTask } from "./TaskModal";
-import { STATUS_BADGE, STATUS_LABEL, type TaskStatus } from "./taskStatus";
+import { STATUS_BADGE, STATUS_LABEL, dueUrgency, type TaskStatus } from "./taskStatus";
 import { PROJECT_EVENT_COLORS, isCustomColor, customColorStyle } from "@/lib/eventColors";
 import { useNow } from "../useNow";
 import { showToast } from "../toast";
@@ -107,7 +107,7 @@ function toDateInputValue(d: Date): string {
 
 const PRIORITY_LABEL = ["Low", "Medium", "High", "Urgent"];
 // Neutral for Low/Medium/High — the one accent color is reserved for the
-// due/overdue/primary-action states elsewhere in this file, so only
+// primary-action states elsewhere in this file (due/overdue is red now), so only
 // Urgent (effectively "treat like an error") borrows it.
 const PRIORITY_BADGE: Record<number, string> = {
   0: "bg-rule-soft text-ink-2",
@@ -202,15 +202,13 @@ export default function TaskRow({
   };
   const [delayDate, setDelayDate] = useState("");
 
-  // Unscheduled and either overdue or due within 48h — a scheduled task
-  // (task.event set) already has a slot on the calendar, so it's not
-  // "at risk" in the same way even if the due date is close.
-  const dueSoonMs = 48 * 60 * 60 * 1000;
+  // Overdue or due within 48h and not done — shown red whether or not it
+  // has a calendar slot: being scheduled doesn't make a close deadline any
+  // less urgent.
   const now = useNow();
-  const isOverdue = Boolean(task.dueAt && task.dueAt.getTime() < now && !task.event);
-  const isDueSoon =
-    !isOverdue &&
-    Boolean(task.dueAt && task.dueAt.getTime() - now < dueSoonMs && !task.event);
+  const urgency = dueUrgency(task.dueAt, task.status, now);
+  const isOverdue = urgency === "overdue";
+  const isUrgent = urgency !== null;
 
   const liveTrackedMinutes = Math.round(
     task.trackedMinutes +
@@ -361,7 +359,11 @@ export default function TaskRow({
       onClick={onCardClick}
       draggable={Boolean(onDragStart)}
       onDragStart={onDragStart}
-      className={`rounded-xl border border-rule bg-surface p-3 transition-colors hover:bg-rule-soft/40 ${
+      className={`rounded-xl border p-3 transition-colors ${
+        isUrgent
+          ? "border-danger bg-danger-wash hover:bg-danger-wash/70"
+          : "border-rule bg-surface hover:bg-rule-soft/40"
+      } ${
         onDragStart ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"
       } ${pending ? "opacity-50" : ""}`}
     >
@@ -443,7 +445,7 @@ export default function TaskRow({
             </span>
             {task.startAt && <span>· starts {task.startAt.toLocaleDateString()}</span>}
             {task.dueAt && (
-              <span>
+              <span className={isUrgent ? "font-semibold text-danger" : undefined}>
                 · due {formatDueDateTime(task.dueAt)}
                 {!task.hardDeadline && <span className="text-muted"> (soft)</span>}
               </span>
@@ -459,14 +461,10 @@ export default function TaskRow({
                 Finishes late
               </span>
             )}
-            {(isOverdue || isDueSoon) && (
+            {isUrgent && (
               <span
-                className={
-                  isOverdue
-                    ? "inline-flex items-center gap-1 rounded-full bg-accent-wash px-2 py-0.5 text-xs font-medium text-accent"
-                    : "inline-flex items-center gap-1 rounded-full border border-accent px-2 py-0.5 text-xs font-medium text-accent"
-                }
-                title={isOverdue ? "Past due and not scheduled" : "Due soon and not scheduled"}
+                className="inline-flex items-center gap-1 rounded-full bg-danger px-2 py-0.5 text-xs font-semibold text-paper"
+                title={isOverdue ? "Past its due date" : "Due within 48 hours"}
               >
                 <AlertTriangleIcon />
                 {isOverdue ? "Overdue" : "Due soon"}

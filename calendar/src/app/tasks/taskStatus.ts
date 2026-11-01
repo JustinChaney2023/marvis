@@ -13,3 +13,19 @@ export const STATUS_LABEL: Record<TaskStatus, string> = {
   DELAYED: "Delayed",
   DONE: "Completed",
 };
+
+const DUE_SOON_MS = 48 * 60 * 60 * 1000;
+
+/**
+ * "overdue" / "soon" (due within 48h) for an open task, else null — the
+ * single rule the task list and the calendar blocks both turn red on.
+ */
+export function dueUrgency(
+  dueAt: Date | null,
+  status: TaskStatus | null,
+  now: number,
+): "overdue" | "soon" | null {
+  if (!dueAt || status === "DONE") return null;
+  const left = dueAt.getTime() - now;
+  return left < 0 ? "overdue" : left < DUE_SOON_MS ? "soon" : null;
+}

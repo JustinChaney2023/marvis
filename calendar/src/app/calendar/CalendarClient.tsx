@@ -26,6 +26,8 @@ import {
 import EventModal, { type EventModalEvent, type GoogleCalendarOption } from "./EventModal";
 import { isTypingTarget, isAnyModalOpen } from "@/lib/keyboard";
 import { useNowContext } from "./NowContext";
+import { useNow } from "../useNow";
+import { dueUrgency } from "../tasks/taskStatus";
 import { useCalendarVisibility } from "./CalendarVisibilityContext";
 import QuickCreatePopup from "./QuickCreatePopup";
 import { LockIcon, FlagIcon, NoteIcon } from "../icons";
@@ -66,6 +68,9 @@ export type CalendarEvent = {
   // of only being reachable from the tasks list.
   taskId: string | null;
   taskStatus: "CREATED" | "ONGOING" | "DELAYED" | "DONE" | null;
+  // The linked task's due date — a block turns red when it is overdue or
+  // due within 48h (see dueUrgency).
+  taskDueAt: Date | null;
   // Out-of-office/focus-time as distinct event types (#36) — mostly a
   // display distinction (EventBlock renders a small badge for either).
   eventType: "DEFAULT" | "OUT_OF_OFFICE" | "FOCUS_TIME";
@@ -1530,12 +1535,15 @@ function EventBlock({
   const resizeHandleSize = Math.max(3, Math.min(12, displayHeight / 3));
   const displayStart = previewStart ?? event.start;
   const displayEnd = previewEnd ?? event.end;
-  const custom = isCustomColor(event.projectColor);
+  const urgent = dueUrgency(event.taskDueAt, event.taskStatus, useNow()) !== null;
+  const custom = !urgent && isCustomColor(event.projectColor);
   const color = !custom && event.projectColor
     ? (PROJECT_EVENT_COLORS[event.projectColor] ?? DEFAULT_EVENT_COLOR)
     : DEFAULT_EVENT_COLOR;
   const customStyle = custom ? customColorStyle(event.projectColor as string) : null;
-  const boxFill = custom
+  const boxFill = urgent
+    ? "bg-danger-wash text-ink"
+    : custom
     ? ""
     : event.projectColor
       ? `${color.bg} ${color.text}`
@@ -1567,7 +1575,7 @@ function EventBlock({
         // A 15-minute block is ~12px tall: normal padding leaves no room
         // for even one line, so the title got clipped to a sliver.
         compact ? "flex items-center px-1.5 py-0" : "p-1.5"
-      } ${boxFill} ${custom ? "" : color.bar} ${
+      } ${boxFill} ${urgent ? "border-l-danger" : custom ? "" : color.bar} ${
         isDragging ? "opacity-40" : ""
       } ${selected ? "outline outline-2 outline-accent" : ""}`}
       style={{
