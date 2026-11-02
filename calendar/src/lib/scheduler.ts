@@ -563,7 +563,7 @@ export function canBump(urgent: Urgency, other: Urgency): boolean {
 
 const schedulableTaskInclude = {
   timeSlot: true,
-  blockedBy: { select: { status: true } },
+  blockedBy: { select: { status: true, events: { select: { end: true } } } },
   labels: { select: { id: true } },
 } as const;
 
@@ -583,7 +583,13 @@ async function planSlots(
   // startAt is a lower bound on when the scheduler may place this task,
   // not a hard commitment — never search before "now" even if startAt is
   // in the past.
-  const searchFrom = task.startAt && task.startAt > now ? task.startAt : now;
+  let searchFrom = task.startAt && task.startAt > now ? task.startAt : now;
+  // A task behind unfinished-but-scheduled prerequisites starts after the
+  // last of their blocks (a chain of modules plans out in order).
+  for (const b of task.blockedBy) {
+    if (b.status === "DONE") continue;
+    for (const e of b.events) if (e.end > searchFrom) searchFrom = e.end;
+  }
   const horizonEnd = new Date(now.getTime() + HORIZON_DAYS * 86_400_000);
   const [settings, owner] = await Promise.all([
     getAppSettings(userId),
@@ -709,12 +715,13 @@ export async function scheduleTask(
     where: { id: taskId, userId },
     include: schedulableTaskInclude,
   });
-  // A task blocked by an unfinished dependency doesn't get a slot at
-  // all — same "couldn't place it" signal (null) as no slot fitting in
-  // the horizon. Every caller (scheduleAllPendingTasks, the per-task
-  // "Schedule" button, reschedule sweeps) routes through here, so this
-  // is the one place the guard needs to live.
-  if (task.blockedBy.some((b) => b.status !== "DONE")) return null;
+  // A task whose prerequisite is unfinished AND has no slot of its own
+  // doesn't get one — same "couldn't place it" signal (null) as no slot
+  // fitting in the horizon. If every open prerequisite is already on the
+  // calendar, planSlots places this one after the last of them. Every
+  // caller (scheduleAllPendingTasks, the per-task "Schedule" button,
+  // reschedule sweeps) routes through here, so this is the one guard.
+  if (task.blockedBy.some((b) => b.status !== "DONE" && b.events.length === 0)) return null;
   // Only open work gets placed. Without this, the reschedule sweeps moved
   // a DONE task's past block into the future (erasing when it was done),
   // and a DELAYED task got re-placed despite being deliberately parked.
@@ -926,10 +933,22 @@ export async function scheduleAllPendingTasks(userId: string) {
   // good slots, since each placed task is busy time for the next.
   tasks.sort(compareUrgency);
 
+  // Repeat until a pass places nothing: a task behind a not-yet-placed
+  // prerequisite fails the first time and succeeds once that one lands.
   const results: { taskId: string; scheduled: boolean }[] = [];
-  for (const task of tasks) {
-    const events = await scheduleTask(userId, task.id);
-    results.push({ taskId: task.id, scheduled: events !== null });
+  let pending = tasks;
+  while (pending.length > 0) {
+    const next: typeof tasks = [];
+    for (const task of pending) {
+      const events = await scheduleTask(userId, task.id);
+      if (events !== null) results.push({ taskId: task.id, scheduled: true });
+      else next.push(task);
+    }
+    if (next.length === pending.length) {
+      for (const task of next) results.push({ taskId: task.id, scheduled: false });
+      break;
+    }
+    pending = next;
   }
   return { staleCount, results };
 }

@@ -21,6 +21,8 @@
   --accent-wash: #f5e5db;
   --danger: #b42318;
   --danger-wash: #fbe4e1;
+  --warn: #a15c07;
+  --warn-wash: #fcefd0;
   --scrim: rgb(26 23 19 / 28%);
 }
 .dark {
@@ -36,6 +38,8 @@
   --accent-wash: #3e332c;
   --danger: #f2827a;
   --danger-wash: #4a2a28;
+  --warn: #f0b45a;
+  --warn-wash: #3d3220;
   --scrim: rgb(20 20 19 / 55%);
 }
 
@@ -56,6 +60,8 @@
   --color-accent-wash: var(--accent-wash);
   --color-danger: var(--danger);
   --color-danger-wash: var(--danger-wash);
+  --color-warn: var(--warn);
+  --color-warn-wash: var(--warn-wash);
   --color-scrim: var(--scrim);
 }
 

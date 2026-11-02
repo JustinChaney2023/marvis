@@ -169,3 +169,49 @@ async function placeUnblockedBy(userId: string, blockerId: string) {
     await scheduleTask(userId, t.id).catch((err) => console.error("unblock placement failed:", err));
   }
 }
+
+/**
+ * Replaces a task's prerequisites. A task can't depend on itself, and a
+ * blocker that (directly or further down) waits on this task would make a
+ * cycle neither could escape. Returns the ids that were refused
+ * (cycles, or not the user's), so the MCP can say so; the UI ignores it.
+ */
+export async function setTaskBlockedBy(userId: string, taskId: string, blockedByIds: string[]): Promise<string[]> {
+  const ids = [...new Set(blockedByIds.filter((id) => id !== taskId))];
+  if (ids.length === 0) {
+    await prisma.task.update({ where: { id: taskId }, data: { blockedBy: { set: [] } } });
+    return [];
+  }
+  const blockers = await prisma.task.findMany({ where: { id: { in: ids }, userId } });
+  const allowed: string[] = [];
+  for (const blocker of blockers) {
+    if (!(await dependsOn(blocker.id, taskId))) allowed.push(blocker.id);
+  }
+  await prisma.task.update({
+    where: { id: taskId },
+    data: { blockedBy: { set: allowed.map((id) => ({ id })) } },
+  });
+  return ids.filter((id) => !allowed.includes(id));
+}
+
+/** Whether `taskId` is (transitively) blocked by `targetId`. */
+async function dependsOn(taskId: string, targetId: string): Promise<boolean> {
+  const seen = new Set<string>([taskId]);
+  let frontier = [taskId];
+  while (frontier.length > 0) {
+    const rows = await prisma.task.findMany({
+      where: { id: { in: frontier } },
+      select: { blockedBy: { select: { id: true } } },
+    });
+    const next: string[] = [];
+    for (const id of rows.flatMap((r) => r.blockedBy.map((b) => b.id))) {
+      if (id === targetId) return true;
+      if (!seen.has(id)) {
+        seen.add(id);
+        next.push(id);
+      }
+    }
+    frontier = next;
+  }
+  return false;
+}

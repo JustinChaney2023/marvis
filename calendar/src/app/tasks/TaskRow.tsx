@@ -360,8 +360,10 @@ export default function TaskRow({
       draggable={Boolean(onDragStart)}
       onDragStart={onDragStart}
       className={`rounded-xl border p-3 transition-colors ${
-        isUrgent
+        isOverdue
           ? "border-danger bg-danger-wash hover:bg-danger-wash/70"
+          : isUrgent
+          ? "border-warn bg-warn-wash hover:bg-warn-wash/70"
           : "border-rule bg-surface hover:bg-rule-soft/40"
       } ${
         onDragStart ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"
@@ -445,7 +447,7 @@ export default function TaskRow({
             </span>
             {task.startAt && <span>· starts {task.startAt.toLocaleDateString()}</span>}
             {task.dueAt && (
-              <span className={isUrgent ? "font-semibold text-danger" : undefined}>
+              <span className={isOverdue ? "font-semibold text-danger" : isUrgent ? "font-semibold text-warn" : undefined}>
                 · due {formatDueDateTime(task.dueAt)}
                 {!task.hardDeadline && <span className="text-muted"> (soft)</span>}
               </span>
@@ -463,7 +465,7 @@ export default function TaskRow({
             )}
             {isUrgent && (
               <span
-                className="inline-flex items-center gap-1 rounded-full bg-danger px-2 py-0.5 text-xs font-semibold text-paper"
+                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${isOverdue ? "bg-danger text-paper" : "bg-warn text-paper"}`}
                 title={isOverdue ? "Past its due date" : "Due within 48 hours"}
               >
                 <AlertTriangleIcon />
