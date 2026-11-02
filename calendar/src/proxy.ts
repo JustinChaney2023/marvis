@@ -25,6 +25,7 @@ const PUBLIC_PATH_PREFIXES = [
   "/book/",
   "/login",
   "/signup",
+  "/api/auth/google",
   "/api/test/",
   "/api/v1/",
   "/api/mcp",

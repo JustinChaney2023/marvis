@@ -58,6 +58,9 @@ next-env.d.ts
 # sqlite db (local dev data, not source)
 /prisma/*.db
 /prisma/*.db-journal
+/prisma/*.db.bak*
+/dev.db*
+*.db.bak*
 graphify-out/
 .claude/scheduled_tasks.lock
 /tests/e2e/.auth/

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { signupAction } from "../authActions";
 import Button from "../ui/Button";
 import Card from "../ui/Card";
+import GoogleSignInButton from "../GoogleSignInButton";
 
 export default async function SignupPage(props: PageProps<"/signup">) {
   const sp = await props.searchParams;
@@ -16,6 +17,8 @@ export default async function SignupPage(props: PageProps<"/signup">) {
         <p className="mt-1 text-sm text-ink-2">
           Your own calendar, tasks, and Google connection.
         </p>
+        {/* Google can't answer the invite gate, so it's hidden while one is set. */}
+        {!inviteRequired && <GoogleSignInButton />}
         <form action={signupAction} className="mt-4 flex flex-col gap-3">
           {inviteRequired && (
             <input

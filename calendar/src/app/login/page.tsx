@@ -2,6 +2,7 @@ import Link from "next/link";
 import { loginAction } from "../authActions";
 import Button from "../ui/Button";
 import Card from "../ui/Card";
+import GoogleSignInButton from "../GoogleSignInButton";
 
 export default async function LoginPage(props: PageProps<"/login">) {
   const sp = await props.searchParams;
@@ -21,6 +22,7 @@ export default async function LoginPage(props: PageProps<"/login">) {
       <Card padding="lg" className="w-full">
         <h1 className="font-serif text-2xl text-ink">Season</h1>
         <p className="mt-1 text-sm text-ink-2">Sign in to continue.</p>
+        <GoogleSignInButton />
         <form action={loginAction} className="mt-4 flex flex-col gap-3">
           <input type="hidden" name="next" value={next} />
           <input
