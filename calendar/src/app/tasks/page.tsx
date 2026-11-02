@@ -167,7 +167,7 @@ export default async function Home(props: PageProps<"/tasks">) {
     <main className="mx-auto w-full max-w-[100rem] flex-1 px-4 py-6 md:px-6 md:py-12">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <div className="font-mono text-[10px] tracking-wide text-muted uppercase">Everything open</div>
+          <div className="font-mono text-[11px] tracking-wide text-muted uppercase">Everything open</div>
           <h1 className="font-serif text-4xl leading-none tracking-tight text-ink">Tasks</h1>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -210,14 +210,14 @@ export default async function Home(props: PageProps<"/tasks">) {
             </summary>
             <div className="absolute right-0 z-20 mt-1 flex w-48 flex-col gap-1 rounded-xl border border-rule bg-surface p-1.5 text-sm shadow-lg shadow-black/10">
               <form action={rescheduleAllAction}>
-                <button type="submit" className="w-full rounded-lg px-3 py-2 text-left text-ink-2 hover:bg-rule-soft">
+                <button type="submit" className="w-full rounded-lg px-3 py-2.5 text-left text-ink-2 hover:bg-rule-soft">
                   Reschedule all
                 </button>
               </form>
-              <Link href="/tasks/import" className="rounded-lg px-3 py-2 text-ink-2 hover:bg-rule-soft">
+              <Link href="/tasks/import" className="rounded-lg px-3 py-2.5 text-ink-2 hover:bg-rule-soft">
                 Import
               </Link>
-              <Link href="/tasks/generate-project" className="rounded-lg px-3 py-2 text-ink-2 hover:bg-rule-soft">
+              <Link href="/tasks/generate-project" className="rounded-lg px-3 py-2.5 text-ink-2 hover:bg-rule-soft">
                 Generate project
               </Link>
             </div>
@@ -245,8 +245,8 @@ export default async function Home(props: PageProps<"/tasks">) {
           href="/tasks"
           className={
             !projectFilter
-              ? "rounded-full bg-surface px-3 py-1 text-xs font-medium text-ink"
-              : "rounded-full px-3 py-1 text-xs text-muted transition-colors hover:text-ink"
+              ? "inline-flex min-h-10 items-center sm:min-h-0 rounded-full bg-surface px-3 py-1 text-xs font-medium text-ink"
+              : "inline-flex min-h-10 items-center sm:min-h-0 rounded-full px-3 py-1 text-xs text-muted transition-colors hover:text-ink"
           }
         >
           All
@@ -257,8 +257,8 @@ export default async function Home(props: PageProps<"/tasks">) {
             href={`/tasks?project=${project.id}`}
             className={
               projectFilter === project.id
-                ? "inline-flex items-center gap-1.5 rounded-full bg-surface px-3 py-1 text-xs font-medium text-ink"
-                : "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs text-muted transition-colors hover:text-ink"
+                ? "inline-flex min-h-10 items-center gap-1.5 sm:min-h-0 rounded-full bg-surface px-3 py-1 text-xs font-medium text-ink"
+                : "inline-flex min-h-10 items-center gap-1.5 sm:min-h-0 rounded-full px-3 py-1 text-xs text-muted transition-colors hover:text-ink"
             }
           >
             <span
@@ -272,8 +272,8 @@ export default async function Home(props: PageProps<"/tasks">) {
             href={viewParams("list")}
             className={
               view === "list"
-                ? "rounded-full bg-surface px-2.5 py-1 font-medium text-ink"
-                : "rounded-full px-2.5 py-1 text-muted transition-colors hover:text-ink"
+                ? "inline-flex min-h-10 items-center sm:min-h-0 rounded-full bg-surface px-2.5 py-1 font-medium text-ink"
+                : "inline-flex min-h-10 items-center sm:min-h-0 rounded-full px-2.5 py-1 text-muted transition-colors hover:text-ink"
             }
           >
             List
@@ -282,8 +282,8 @@ export default async function Home(props: PageProps<"/tasks">) {
             href={viewParams("board")}
             className={
               view === "board"
-                ? "rounded-full bg-surface px-2.5 py-1 font-medium text-ink"
-                : "rounded-full px-2.5 py-1 text-muted transition-colors hover:text-ink"
+                ? "inline-flex min-h-10 items-center sm:min-h-0 rounded-full bg-surface px-2.5 py-1 font-medium text-ink"
+                : "inline-flex min-h-10 items-center sm:min-h-0 rounded-full px-2.5 py-1 text-muted transition-colors hover:text-ink"
             }
           >
             Board
@@ -292,8 +292,8 @@ export default async function Home(props: PageProps<"/tasks">) {
             href={viewParams("table")}
             className={
               view === "table"
-                ? "rounded-full bg-surface px-2.5 py-1 font-medium text-ink"
-                : "rounded-full px-2.5 py-1 text-muted transition-colors hover:text-ink"
+                ? "inline-flex min-h-10 items-center sm:min-h-0 rounded-full bg-surface px-2.5 py-1 font-medium text-ink"
+                : "inline-flex min-h-10 items-center sm:min-h-0 rounded-full px-2.5 py-1 text-muted transition-colors hover:text-ink"
             }
           >
             Table
@@ -308,11 +308,11 @@ export default async function Home(props: PageProps<"/tasks">) {
             name="q"
             defaultValue={searchQuery}
             placeholder="Search tasks…"
-            className="w-36 rounded-full border border-rule bg-surface px-3 py-1 text-xs text-ink-2 focus:w-48 focus:border-accent focus:outline-none"
+            className="min-h-10 w-36 rounded-full sm:min-h-0 border border-rule bg-surface px-3 py-1 text-xs text-ink-2 focus:w-48 focus:border-accent focus:outline-none"
           />
         </form>
         <details>
-          <summary className="cursor-pointer list-none rounded-full px-3 py-1 text-xs text-muted transition-colors hover:text-ink">
+          <summary className="flex min-h-10 cursor-pointer list-none items-center rounded-full border border-dashed border-rule px-3 py-1 text-xs text-muted sm:border-transparent sm:min-h-0 transition-colors hover:text-ink">
             + Project
           </summary>
           <form
@@ -399,7 +399,7 @@ export default async function Home(props: PageProps<"/tasks">) {
 
       {projects.length > 0 && (
         <details className="mt-4 text-xs text-muted">
-          <summary className="cursor-pointer transition-colors hover:text-ink">
+          <summary className="cursor-pointer py-3 transition-colors hover:text-ink sm:py-0">
             Manage projects
           </summary>
           <ul className="mt-2 space-y-1">
@@ -408,13 +408,13 @@ export default async function Home(props: PageProps<"/tasks">) {
                 <span
                   className={`h-1.5 w-1.5 rounded-full ${PROJECT_COLOR_DOT[project.color] ?? PROJECT_COLOR_DOT.zinc}`}
                 />
-                <Link href={`/projects/${project.id}`} className="flex-1 hover:underline">
+                <Link href={`/projects/${project.id}`} className="flex-1 py-3 hover:underline sm:py-0">
                   {project.name}
                 </Link>
                 <form action={saveProjectAsTemplateAction.bind(null, project.id, `${project.name} template`)}>
                   <button
                     type="submit"
-                    className="text-muted transition-colors hover:text-ink"
+                    className="min-h-10 text-muted transition-colors hover:text-ink sm:min-h-0"
                   >
                     Save as template
                   </button>
@@ -422,7 +422,7 @@ export default async function Home(props: PageProps<"/tasks">) {
                 <ConfirmForm message="Delete this project?" action={deleteProject.bind(null, project.id)}>
                   <button
                     type="submit"
-                    className="text-muted transition-colors hover:text-accent"
+                    className="min-h-10 text-muted transition-colors hover:text-accent sm:min-h-0"
                   >
                     Delete
                   </button>
@@ -435,7 +435,7 @@ export default async function Home(props: PageProps<"/tasks">) {
 
       {projectTemplates.length > 0 && (
         <details className="mt-4 text-xs text-muted">
-          <summary className="cursor-pointer transition-colors hover:text-ink">
+          <summary className="cursor-pointer py-3 transition-colors hover:text-ink sm:py-0">
             Project templates
           </summary>
           <ul className="mt-2 space-y-2">
@@ -450,7 +450,7 @@ export default async function Home(props: PageProps<"/tasks">) {
                 <form action={createProjectFromTemplateAction.bind(null, template.id, template.name.replace(/ template$/, ""))}>
                   <button
                     type="submit"
-                    className="text-muted transition-colors hover:text-ink"
+                    className="min-h-10 text-muted transition-colors hover:text-ink sm:min-h-0"
                   >
                     New project from this
                   </button>
@@ -458,7 +458,7 @@ export default async function Home(props: PageProps<"/tasks">) {
                 <ConfirmForm message="Delete this project template?" action={deleteProjectTemplateAction.bind(null, template.id)}>
                   <button
                     type="submit"
-                    className="text-muted transition-colors hover:text-accent"
+                    className="min-h-10 text-muted transition-colors hover:text-accent sm:min-h-0"
                   >
                     Delete
                   </button>
@@ -470,7 +470,7 @@ export default async function Home(props: PageProps<"/tasks">) {
       )}
 
       <details className="mt-4 text-xs text-muted">
-        <summary className="cursor-pointer transition-colors hover:text-ink">
+        <summary className="cursor-pointer py-3 transition-colors hover:text-ink sm:py-0">
           Manage labels
         </summary>
         <ul className="mt-2 space-y-1">
@@ -483,7 +483,7 @@ export default async function Home(props: PageProps<"/tasks">) {
               <ConfirmForm message="Delete this label?" action={deleteLabel.bind(null, label.id)}>
                 <button
                   type="submit"
-                  className="text-muted transition-colors hover:text-accent"
+                  className="min-h-10 text-muted transition-colors hover:text-accent sm:min-h-0"
                 >
                   Delete
                 </button>
@@ -520,7 +520,7 @@ export default async function Home(props: PageProps<"/tasks">) {
 
       {done.length > 0 && (
         <details className="mt-4 text-sm text-muted">
-          <summary className="cursor-pointer transition-colors hover:text-ink">
+          <summary className="cursor-pointer py-3 transition-colors hover:text-ink sm:py-0">
             Recently done ({done.length})
           </summary>
           <ul className="mt-2 space-y-1">

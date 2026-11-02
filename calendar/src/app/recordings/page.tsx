@@ -75,7 +75,7 @@ export default async function RecordingsPage({
         />
       </div>
 
-      <h2 className="mt-8 font-mono text-[10px] uppercase tracking-wide text-muted">All recordings</h2>
+      <h2 className="mt-8 font-mono text-[11px] uppercase tracking-wide text-muted">All recordings</h2>
       <RecordingsList recordings={recordings} />
     </main>
   );

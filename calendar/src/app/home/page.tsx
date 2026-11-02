@@ -120,8 +120,8 @@ function zonedComputeRange(
 
 function linkClass(active: boolean): string {
   return active
-    ? "rounded-full bg-ink px-3 py-1.5 text-sm font-medium text-paper transition-colors"
-    : "rounded-full px-3 py-1.5 text-sm text-ink-2 transition-colors hover:text-ink";
+    ? "inline-flex min-h-10 items-center rounded-full bg-ink px-3 py-1.5 text-sm font-medium text-paper transition-colors sm:min-h-0"
+    : "inline-flex min-h-10 items-center rounded-full px-3 py-1.5 text-sm text-ink-2 transition-colors hover:text-ink sm:min-h-0";
 }
 
 export default async function Page(props: PageProps<"/home">) {
@@ -419,20 +419,20 @@ export default async function Page(props: PageProps<"/home">) {
             <Link
               href={`/home?view=${view}&start=${nav.prev}`}
               aria-label="Previous"
-              className="rounded-full px-3 py-1.5 text-sm text-ink-2 transition-colors hover:bg-rule-soft hover:text-ink"
+              className="inline-flex min-h-10 items-center rounded-full px-3 py-1.5 text-sm text-ink-2 transition-colors sm:min-h-0 hover:bg-rule-soft hover:text-ink"
             >
               ←<span className="hidden sm:inline"> Prev</span>
             </Link>
             <Link
               href={`/home?view=${view}`}
-              className="rounded-full px-2 py-1.5 text-sm text-ink-2 transition-colors hover:bg-rule-soft hover:text-ink"
+              className="inline-flex min-h-10 items-center rounded-full px-2 py-1.5 text-sm text-ink-2 transition-colors sm:min-h-0 hover:bg-rule-soft hover:text-ink"
             >
               Today
             </Link>
             <Link
               href={`/home?view=${view}&start=${nav.next}`}
               aria-label="Next"
-              className="rounded-full px-3 py-1.5 text-sm text-ink-2 transition-colors hover:bg-rule-soft hover:text-ink"
+              className="inline-flex min-h-10 items-center rounded-full px-3 py-1.5 text-sm text-ink-2 transition-colors sm:min-h-0 hover:bg-rule-soft hover:text-ink"
             >
               <span className="hidden sm:inline">Next </span>→
             </Link>

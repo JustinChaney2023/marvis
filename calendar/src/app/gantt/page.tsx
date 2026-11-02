@@ -166,15 +166,18 @@ export default async function GanttPage() {
         </p>
       ) : (
         <div className="mt-6 overflow-x-auto rounded-xl border border-rule bg-surface">
-          <div className="relative" style={{ width: `${8 * 16 + totalDays * DAY_WIDTH_PX}px` }}>
+          <div
+            className="relative [--gl:6rem] sm:[--gl:8rem]"
+            style={{ minWidth: `${8 * 16 + totalDays * DAY_WIDTH_PX}px` }}
+          >
             <div className="flex border-b border-rule">
-              <div className="w-32 flex-shrink-0" />
-              <div className="relative flex-1" style={{ height: "1.75rem" }}>
+              <div className="w-(--gl) flex-shrink-0" />
+              <div className="relative min-w-0 flex-1" style={{ height: "1.75rem" }}>
                 {months.map((m) => (
                   <div
                     key={m.label}
                     className="absolute top-0 border-l border-rule-soft pl-1 font-mono text-xs text-muted"
-                    style={{ left: `${m.startDay * DAY_WIDTH_PX}px`, width: `${m.days * DAY_WIDTH_PX}px` }}
+                    style={{ left: `${(m.startDay / totalDays) * 100}%`, width: `${(m.days / totalDays) * 100}%` }}
                   >
                     {m.label}
                   </div>
@@ -185,10 +188,10 @@ export default async function GanttPage() {
             {projectBars.map((project) => (
               <div key={project.id}>
                 <div className="flex border-b border-rule-soft bg-rule-soft">
-                  <div className="w-32 flex-shrink-0 truncate px-2 py-1 text-xs font-semibold text-ink-2">
+                  <div className="w-(--gl) flex-shrink-0 truncate px-2 py-1 text-xs font-semibold text-ink-2">
                     {project.name}
                   </div>
-                  <div className="relative flex-1" style={{ width: `${totalDays * DAY_WIDTH_PX}px` }} />
+                  <div className="relative min-w-0 flex-1" />
                 </div>
                 {project.bars.map((bar) => {
                   const offset = Math.max(0, dayDiff(bar.start, rangeStart));
@@ -198,22 +201,22 @@ export default async function GanttPage() {
                     <Link
                       key={bar.taskId}
                       href={`/tasks?edit=${bar.taskId}`}
-                      className="flex border-b border-rule-soft transition-colors hover:bg-rule-soft/40"
+                      className="flex min-h-10 border-b border-rule-soft transition-colors hover:bg-rule-soft/40 sm:min-h-0"
                     >
-                      <div className="w-32 flex-shrink-0 truncate px-2 py-1.5 text-xs text-ink-2">
+                      <div className="line-clamp-2 my-1.5 w-(--gl) flex-shrink-0 px-2 text-xs text-ink-2 sm:my-0 sm:truncate sm:py-1.5">
                         {bar.title}
                       </div>
                       <div
-                        className="relative"
-                        style={{ height: `${ROW_HEIGHT_PX}px`, width: `${totalDays * DAY_WIDTH_PX}px` }}
+                        className="relative min-w-0 flex-1"
+                        style={{ minHeight: `${ROW_HEIGHT_PX}px` }}
                       >
                         <div
                           title={
                             `${bar.start.toLocaleDateString()} – ${bar.end.toLocaleDateString()}` +
                             (isBlocked ? ` · Blocked by: ${bar.blockedByTitles.join(", ")}` : "")
                           }
-                          className={`absolute top-1 flex h-5 items-center justify-end rounded pr-0.5 ${PROJECT_BAR_COLOR[project.color] ?? PROJECT_BAR_COLOR.zinc} ${isBlocked ? "opacity-50" : "opacity-80"}`}
-                          style={{ left: `${offset * DAY_WIDTH_PX}px`, width: `${span * DAY_WIDTH_PX - 2}px` }}
+                          className={`absolute top-1/2 -translate-y-1/2 sm:top-1 sm:translate-y-0 flex h-5 items-center justify-end rounded pr-0.5 ${PROJECT_BAR_COLOR[project.color] ?? PROJECT_BAR_COLOR.zinc} ${isBlocked ? "opacity-50" : "opacity-80"}`}
+                          style={{ left: `${(offset / totalDays) * 100}%`, width: `calc(${(span / totalDays) * 100}% - 2px)` }}
                         >
                           {isBlocked && <LockIcon className="h-2.5 w-2.5 text-ink" />}
                         </div>
@@ -227,7 +230,7 @@ export default async function GanttPage() {
             {todayOffset >= 0 && todayOffset <= totalDays && (
               <div
                 className="pointer-events-none absolute top-7 bottom-0 w-px bg-accent"
-                style={{ left: `${8 * 16 + todayOffset * DAY_WIDTH_PX}px` }}
+                style={{ left: `calc(var(--gl) + (100% - var(--gl)) * ${todayOffset / totalDays})` }}
               />
             )}
           </div>

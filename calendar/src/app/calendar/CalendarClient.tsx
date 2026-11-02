@@ -358,8 +358,11 @@ export default function CalendarClient({
     // doesn't exist during SSR, so reading it during render would make the
     // client's first render disagree with the server-rendered HTML.
     try {
+      // No saved choice yet: default to the 5-day week below ~900px, where
+      // 7 columns leave each block too narrow to read its title.
+      const saved = localStorage.getItem("marvis.workdaysOnly");
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      if (localStorage.getItem("marvis.workdaysOnly") === "true") setWorkdaysOnly(true);
+      if (saved === "true" || (saved === null && window.innerWidth < 900)) setWorkdaysOnly(true);
     } catch {
       // ignore malformed/blocked storage
     }
@@ -762,7 +765,7 @@ function MeetingBanner({ events }: { events: CalendarEvent[] }) {
 
   return (
     <div className="mb-2 flex flex-shrink-0 flex-wrap items-center gap-3 rounded-lg bg-ink px-4 py-2.5 text-paper print:hidden">
-      <span className="font-mono text-[10px] uppercase tracking-wide text-accent">
+      <span className="font-mono text-[11px] uppercase tracking-wide text-accent">
         {isLive ? "In progress" : `Live in ${minutesToStart} min`}
       </span>
       <span className="truncate text-sm">{candidate.title}</span>
@@ -835,7 +838,7 @@ function AgendaView({
             <p className="text-xs font-semibold text-ink-2">
               {day.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
               {isSameDay(day, today) && (
-                <span className="ml-1.5 rounded-full bg-ink px-1.5 py-0.5 text-[10px] font-medium text-paper">
+                <span className="ml-1.5 rounded-full bg-ink px-1.5 py-0.5 text-[11px] font-medium text-paper">
                   Today
                 </span>
               )}
@@ -854,7 +857,7 @@ function AgendaView({
                       <button
                         type="button"
                         onClick={() => onEventClick(e)}
-                        className={`flex w-full items-center gap-2 rounded-lg border-l-4 px-3 py-2 text-left text-sm ${urgent ? "border-l-danger bg-danger-wash text-ink" : colors ? `${colors.bar} ${colors.bg} ${colors.text}` : custom ? "" : "border-l-muted bg-rule-soft"}`}
+                        className={`flex min-h-10 w-full items-center gap-2 rounded-lg border-l-4 px-3 py-2 text-left text-sm ${urgent ? "border-l-danger bg-danger-wash text-ink" : colors ? `${colors.bar} ${colors.bg} ${colors.text}` : custom ? "" : "border-l-muted bg-rule-soft"}`}
                         style={
                           customStyle
                             ? { ...customStyle.bar, ...customStyle.bg, ...customStyle.text }
@@ -1620,9 +1623,9 @@ function EventBlock({
         </span>
       )}
       <div
-        className={`truncate pr-3 font-medium ${compact ? "text-[10px] leading-none" : "text-xs"} ${
-          event.taskPriority !== null && event.taskPriority >= 2 ? "pl-3" : ""
-        }`}
+        className={`truncate font-medium ${compact ? "text-[10px] leading-none" : "text-xs"} ${
+          event.locked ? "pr-3" : ""
+        } ${event.taskPriority !== null && event.taskPriority >= 2 ? "pl-3" : ""}`}
       >
         {event.title}
         {event.eventType !== "DEFAULT" && (
