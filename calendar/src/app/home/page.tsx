@@ -484,7 +484,8 @@ export default async function Page(props: PageProps<"/home">) {
               todayISO={todayISO}
               events={events}
               sharedEvents={sharedEvents}
-              secondaryTimezone={settings.secondaryTimezone}
+              // A second hour column in the zone you're already in is just a duplicate.
+              secondaryTimezone={settings.secondaryTimezone === timeZone ? null : settings.secondaryTimezone}
               googleCalendars={googleCalendars}
             />
           </div>
