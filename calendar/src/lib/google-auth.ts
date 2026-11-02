@@ -112,3 +112,28 @@ export async function listGoogleCalendars(googleAccountId: string) {
     primary: c.primary ?? false,
   }));
 }
+
+// --- Sign in with Google --------------------------------------------
+// Identity only (no calendar access) — a separate flow and redirect URI
+// from the Calendar connect above, which must also be registered in the
+// Google Cloud OAuth client.
+export const GOOGLE_SIGNIN_STATE_COOKIE = "google_signin_state";
+
+// Opt-in (GOOGLE_SIGNIN_ENABLED=1): the Calendar credentials already exist
+// on a running instance, so without a switch the button would show up before
+// the new redirect URI is registered in Google Cloud and just error.
+export function googleSignInConfigured(): boolean {
+  return Boolean(
+    process.env.GOOGLE_SIGNIN_ENABLED === "1" &&
+      process.env.GOOGLE_CLIENT_ID &&
+      process.env.GOOGLE_CLIENT_SECRET,
+  );
+}
+
+export function createSignInClient(origin: string) {
+  return new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET,
+    `${origin}/api/auth/google/callback`,
+  );
+}

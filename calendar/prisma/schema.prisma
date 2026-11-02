@@ -21,6 +21,9 @@ model User {
   email        String   @unique
   passwordHash String
   name         String?
+  // Google's stable account id (the id_token `sub`) once this user has signed
+  // in with Google — the sign-in key, not the email, which can change.
+  googleSub    String?  @unique
   // The first account created (during the single-user -> multi-user
   // migration, or on a fresh install) — gates the feedback inbox and any
   // future admin-only surface. Not a general role system.
