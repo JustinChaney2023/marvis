@@ -48,8 +48,8 @@ function LinkFields({ defaults }: { defaults?: BookingLinkData }) {
                 onClick={() => toggleDay(code)}
                 className={
                   selected
-                    ? "flex h-8 w-8 items-center justify-center rounded-lg bg-ink text-xs font-semibold text-paper transition-colors hover:opacity-85"
-                    : "flex h-8 w-8 items-center justify-center rounded-lg border border-rule text-xs font-semibold text-ink-2 transition-colors hover:bg-rule-soft"
+                    ? "flex h-10 w-10 sm:h-8 sm:w-8 items-center justify-center rounded-lg bg-ink text-xs font-semibold text-paper transition-colors hover:opacity-85"
+                    : "flex h-10 w-10 sm:h-8 sm:w-8 items-center justify-center rounded-lg border border-rule text-xs font-semibold text-ink-2 transition-colors hover:bg-rule-soft"
                 }
               >
                 {WEEKDAY_LABELS[idx]}
@@ -181,7 +181,7 @@ function BookingLinkRow({ link }: { link: BookingLinkData }) {
             href={`/book/${link.slug}`}
             target="_blank"
             rel="noreferrer"
-            className="rounded-full border border-accent bg-accent-wash px-2.5 py-1 text-xs font-medium text-accent transition-colors hover:bg-accent-hover hover:text-paper"
+            className="inline-flex min-h-10 items-center sm:min-h-0 rounded-full border border-accent bg-accent-wash px-2.5 py-1 text-xs font-medium text-accent transition-colors hover:bg-accent-hover hover:text-paper"
           >
             Open
           </a>
@@ -189,7 +189,7 @@ function BookingLinkRow({ link }: { link: BookingLinkData }) {
         <form action={toggleBookingLinkAction.bind(null, link.id, !link.enabled)}>
           <button
             type="submit"
-            className="rounded-full px-2.5 py-1 text-xs text-ink-2 transition-colors hover:bg-rule-soft hover:text-ink"
+            className="min-h-10 sm:min-h-0 rounded-full px-2.5 py-1 text-xs text-ink-2 transition-colors hover:bg-rule-soft hover:text-ink"
           >
             {link.enabled ? "Disable" : "Enable"}
           </button>
@@ -197,14 +197,14 @@ function BookingLinkRow({ link }: { link: BookingLinkData }) {
         <button
           type="button"
           onClick={() => setEditing(true)}
-          className="rounded-full px-2.5 py-1 text-xs text-ink-2 transition-colors hover:bg-rule-soft hover:text-ink"
+          className="min-h-10 sm:min-h-0 rounded-full px-2.5 py-1 text-xs text-ink-2 transition-colors hover:bg-rule-soft hover:text-ink"
         >
           Edit
         </button>
         <ConfirmForm message="Delete this booking link?" action={deleteBookingLinkAction.bind(null, link.id)}>
           <button
             type="submit"
-            className="rounded-full px-2.5 py-1 text-xs text-ink-2 transition-colors hover:bg-accent-wash hover:text-accent"
+            className="min-h-10 sm:min-h-0 rounded-full px-2.5 py-1 text-xs text-ink-2 transition-colors hover:bg-accent-wash hover:text-accent"
           >
             Delete
           </button>
@@ -225,7 +225,7 @@ export default function BookingLinksManager({ links }: { links: BookingLinkData[
       )}
 
       <details className="mt-1">
-        <summary className="cursor-pointer list-none text-sm text-accent hover:underline">
+        <summary className="flex min-h-10 cursor-pointer list-none items-center text-sm text-accent hover:underline sm:min-h-0">
           + Add booking link
         </summary>
         <form action={createBookingLinkAction} className="mt-3 flex flex-col gap-3">

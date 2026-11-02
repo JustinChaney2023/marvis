@@ -28,7 +28,7 @@ export default function IcsImportForm() {
         name="file"
         accept=".ics,text/calendar"
         required
-        className="text-sm text-ink-2"
+        className="text-sm text-ink-2 max-sm:file:min-h-10"
       />
       <Button type="submit" variant="secondary" pending={isSubmitting}>
         Import

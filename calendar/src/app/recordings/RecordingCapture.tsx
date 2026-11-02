@@ -366,7 +366,7 @@ export default function RecordingCapture({ eventId, projectId, defaultTitle, pol
                   void submit(file, file.name, file.type);
                 }
               }}
-              className="max-w-full text-sm text-muted file:mr-3 file:rounded-lg file:border-0 file:bg-rule-soft file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-ink-2 hover:file:bg-rule"
+              className="max-w-full text-sm text-muted file:mr-3 file:rounded-lg file:border-0 file:bg-rule-soft file:px-3 file:py-1.5 max-sm:file:min-h-10 file:text-sm file:font-medium file:text-ink-2 hover:file:bg-rule"
             />
           </>
         )}

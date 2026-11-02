@@ -209,7 +209,7 @@ function CopyBlock({ value }: { value: string }) {
             setTimeout(() => setCopied(false), 1500);
           });
         }}
-        className="flex-shrink-0 rounded border border-rule px-2 py-1 text-[11px] text-ink-2 hover:bg-rule-soft"
+        className="min-h-10 flex-shrink-0 rounded border border-rule px-2 py-1 text-[11px] text-ink-2 hover:bg-rule-soft sm:min-h-0"
       >
         {copied ? "Copied" : "Copy"}
       </button>

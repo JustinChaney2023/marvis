@@ -323,12 +323,12 @@ export default async function Home(props: PageProps<"/tasks">) {
               name="name"
               placeholder="Project name"
               required
-              className="min-w-0 flex-1 rounded border border-rule bg-paper px-2 py-1 text-xs text-ink"
+              className="min-h-10 min-w-0 flex-1 rounded border border-rule bg-paper px-2 py-1 text-xs text-ink sm:min-h-0"
             />
             <select
               name="color"
               defaultValue="indigo"
-              className="rounded border border-rule bg-paper px-1 py-1 text-xs text-ink"
+              className="min-h-10 rounded border border-rule bg-paper px-1 py-1 text-xs text-ink sm:min-h-0"
             >
               {PROJECT_COLOR_OPTIONS.map((color) => (
                 <option key={color} value={color}>
@@ -336,7 +336,7 @@ export default async function Home(props: PageProps<"/tasks">) {
                 </option>
               ))}
             </select>
-            <Button type="submit" className="px-2 py-1 text-xs">
+            <Button type="submit" className="min-h-10 px-2 py-1 text-xs sm:min-h-0">
               Add
             </Button>
           </form>
@@ -422,7 +422,7 @@ export default async function Home(props: PageProps<"/tasks">) {
                 <ConfirmForm message="Delete this project?" action={deleteProject.bind(null, project.id)}>
                   <button
                     type="submit"
-                    className="min-h-10 text-muted transition-colors hover:text-accent sm:min-h-0"
+                    className="min-h-10 min-w-10 text-muted transition-colors hover:text-accent sm:min-h-0 sm:min-w-0"
                   >
                     Delete
                   </button>
@@ -458,7 +458,7 @@ export default async function Home(props: PageProps<"/tasks">) {
                 <ConfirmForm message="Delete this project template?" action={deleteProjectTemplateAction.bind(null, template.id)}>
                   <button
                     type="submit"
-                    className="min-h-10 text-muted transition-colors hover:text-accent sm:min-h-0"
+                    className="min-h-10 min-w-10 text-muted transition-colors hover:text-accent sm:min-h-0 sm:min-w-0"
                   >
                     Delete
                   </button>
@@ -483,7 +483,7 @@ export default async function Home(props: PageProps<"/tasks">) {
               <ConfirmForm message="Delete this label?" action={deleteLabel.bind(null, label.id)}>
                 <button
                   type="submit"
-                  className="min-h-10 text-muted transition-colors hover:text-accent sm:min-h-0"
+                  className="min-h-10 min-w-10 text-muted transition-colors hover:text-accent sm:min-h-0 sm:min-w-0"
                 >
                   Delete
                 </button>
@@ -499,12 +499,12 @@ export default async function Home(props: PageProps<"/tasks">) {
             name="name"
             placeholder="Label name"
             required
-            className="min-w-0 flex-1 rounded border border-rule bg-paper px-2 py-1 text-xs text-ink"
+            className="min-h-10 min-w-0 flex-1 rounded border border-rule bg-paper px-2 py-1 text-xs text-ink sm:min-h-0"
           />
           <select
             name="color"
             defaultValue="indigo"
-            className="rounded border border-rule bg-paper px-1 py-1 text-xs text-ink"
+            className="min-h-10 rounded border border-rule bg-paper px-1 py-1 text-xs text-ink sm:min-h-0"
           >
             {PROJECT_COLOR_OPTIONS.map((color) => (
               <option key={color} value={color}>
@@ -512,7 +512,7 @@ export default async function Home(props: PageProps<"/tasks">) {
               </option>
             ))}
           </select>
-          <Button type="submit" className="px-2 py-1 text-xs">
+          <Button type="submit" className="min-h-10 px-2 py-1 text-xs sm:min-h-0">
             Add
           </Button>
         </form>
@@ -530,7 +530,7 @@ export default async function Home(props: PageProps<"/tasks">) {
                 <form action={toggleTaskDone.bind(null, task.id, false)}>
                   <button
                     type="submit"
-                    className="rounded-md px-1.5 py-0.5 text-xs text-muted no-underline transition-colors hover:bg-rule-soft hover:text-ink"
+                    className="min-h-10 rounded-md px-1.5 py-0.5 text-xs text-muted no-underline sm:min-h-0 transition-colors hover:bg-rule-soft hover:text-ink"
                   >
                     Reopen
                   </button>

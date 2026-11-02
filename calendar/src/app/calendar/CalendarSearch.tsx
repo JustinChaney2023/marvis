@@ -46,7 +46,7 @@ export default function CalendarSearch({ view }: { view: string }) {
 
   return (
     <div ref={containerRef} className="relative">
-      <div className="flex items-center gap-1.5 rounded-full border border-rule bg-surface px-3 py-1.5 focus-within:outline focus-within:outline-2 focus-within:outline-accent focus-within:outline-offset-1">
+      <div className="flex items-center gap-1.5 rounded-full border border-rule bg-surface px-3 py-1.5 max-sm:py-0 focus-within:outline focus-within:outline-2 focus-within:outline-accent focus-within:outline-offset-1">
         <SearchIcon className="h-3.5 w-3.5 text-muted" />
         <input
           type="text"
@@ -61,7 +61,7 @@ export default function CalendarSearch({ view }: { view: string }) {
           }}
           onFocus={() => results && setOpen(true)}
           placeholder="Search events"
-          className="w-32 bg-transparent text-sm outline-none placeholder:text-muted sm:w-40"
+          className="w-32 bg-transparent text-sm max-sm:py-2.5 outline-none placeholder:text-muted sm:w-40"
         />
       </div>
       {open && results && (
