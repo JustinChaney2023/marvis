@@ -18,7 +18,7 @@ const DUE_SOON_MS = 48 * 60 * 60 * 1000;
 
 /**
  * "overdue" / "soon" (due within 48h) for an open task, else null — the
- * single rule the task list and the calendar blocks both turn red on.
+ * single rule the task list and calendar blocks color by: overdue is red, soon is amber.
  */
 export function dueUrgency(
   dueAt: Date | null,

@@ -42,7 +42,7 @@ import { createFeedbackIssue, isGithubFeedbackConfigured, sendIssueToClaude } fr
 import { maybeApplyTimezoneChange } from "@/lib/serverTimezone";
 import { autoPlaceIfEnabled } from "@/lib/autoPlan";
 import { getVapidKeys, sendPushToUser } from "@/lib/push";
-import { setTaskDone, stoppedTimerFields, logTrackedTime, findProjectByName } from "@/lib/taskOps";
+import { setTaskDone, stoppedTimerFields, logTrackedTime, findProjectByName, setTaskBlockedBy } from "@/lib/taskOps";
 import { generateSubtasks, type GenerateSubtasksResult } from "@/lib/subtaskGenerate";
 import { generateEmailDraft, type DraftEmailResult } from "@/lib/emailDraft";
 import { generateTaskDoc, type DraftDocResult } from "@/lib/docDraft";
@@ -284,49 +284,6 @@ function blockedByIdsFromFormData(formData: FormData): string[] {
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
-}
-
-// A task can't depend on itself — filtered out here rather than in the UI,
-// since the UI's own task list already includes the task being edited.
-async function setTaskBlockedBy(userId: string, taskId: string, blockedByIds: string[]) {
-  const ids = blockedByIds.filter((id) => id !== taskId);
-  if (ids.length === 0) {
-    await prisma.task.update({ where: { id: taskId }, data: { blockedBy: { set: [] } } });
-    return;
-  }
-  const blockers = await prisma.task.findMany({ where: { id: { in: ids }, userId } });
-  // A blocker that (directly or further down) waits on this task would
-  // make a cycle neither task could ever escape — drop it.
-  const allowed: string[] = [];
-  for (const blocker of blockers) {
-    if (!(await dependsOn(blocker.id, taskId))) allowed.push(blocker.id);
-  }
-  await prisma.task.update({
-    where: { id: taskId },
-    data: { blockedBy: { set: allowed.map((id) => ({ id })) } },
-  });
-}
-
-/** Whether `taskId` is (transitively) blocked by `targetId`. */
-async function dependsOn(taskId: string, targetId: string): Promise<boolean> {
-  const seen = new Set<string>([taskId]);
-  let frontier = [taskId];
-  while (frontier.length > 0) {
-    const rows = await prisma.task.findMany({
-      where: { id: { in: frontier } },
-      select: { blockedBy: { select: { id: true } } },
-    });
-    const next: string[] = [];
-    for (const id of rows.flatMap((r) => r.blockedBy.map((b) => b.id))) {
-      if (id === targetId) return true;
-      if (!seen.has(id)) {
-        seen.add(id);
-        next.push(id);
-      }
-    }
-    frontier = next;
-  }
-  return false;
 }
 
 export async function createTask(formData: FormData) {

@@ -5,7 +5,7 @@ import { expandEvents, recurringOverlapping } from "@/lib/recurrence";
 import { parseQuickCapture } from "@/lib/quickCapture";
 import { runAutomationsForStatusChange } from "@/lib/automations";
 import { autoPlaceIfEnabled } from "@/lib/autoPlan";
-import { setTaskDone, findProjectByName as findProjectByNameLoose } from "@/lib/taskOps";
+import { setTaskDone, setTaskBlockedBy, findProjectByName as findProjectByNameLoose } from "@/lib/taskOps";
 import { rescheduleConflictsWith, scheduleAllPendingTasks, scheduleTask, unscheduleTask } from "@/lib/scheduler";
 import { rescheduleConflictedHabits } from "@/lib/habits";
 import { deleteFromGoogle } from "@/lib/google-sync";
@@ -240,6 +240,7 @@ type TaskForOutput = {
   project?: { id: string; name: string } | null;
   events?: { start: Date; end: Date }[];
   subtasks?: { id: string; title: string; status: string }[];
+  blockedBy?: { id: string; title: string; status: string }[];
 };
 
 function serializeTask(t: TaskForOutput, timeZone: string) {
@@ -263,6 +264,9 @@ function serializeTask(t: TaskForOutput, timeZone: string) {
     ...(t.subtasks?.length
       ? { subtasks: t.subtasks.map((s) => ({ id: s.id, title: s.title, done: s.status === "DONE" })) }
       : {}),
+    ...(t.blockedBy?.length
+      ? { blockedBy: t.blockedBy.map((b) => ({ id: b.id, title: b.title, done: b.status === "DONE" })) }
+      : {}),
   };
 }
 
@@ -270,6 +274,7 @@ const TASK_INCLUDE = {
   project: { select: { id: true, name: true } },
   events: { select: { start: true, end: true } },
   subtasks: { select: { id: true, title: true, status: true }, orderBy: { createdAt: "asc" as const } },
+  blockedBy: { select: { id: true, title: true, status: true } },
 };
 
 async function listOccurrences(userId: string, from: Date, to: Date, timeZone: string) {
@@ -311,6 +316,13 @@ async function resolveProjectId(
   }
   if (args.project) return findProjectByName(userId, args.project);
   return undefined;
+}
+
+async function applyBlockers(userId: string, taskId: string, ids: string[]) {
+  const refused = await setTaskBlockedBy(userId, taskId, ids);
+  if (refused.length > 0) {
+    throw new ToolError(`Task saved, but these blockers were refused (not your task, or they'd form a cycle): ${refused.join(", ")}`);
+  }
 }
 
 async function findProjectByName(userId: string, name: string): Promise<string> {
@@ -453,6 +465,7 @@ const TOOLS: Tool<z.ZodType>[] = [
       hardDeadline: z.boolean().optional().describe("false = soft 'aim for' date; default true"),
       ...projectRef,
       subtasks: z.array(z.string()).optional().describe("Checklist items to create under it"),
+      blockedByIds: z.array(z.string()).optional().describe("Ids of tasks that must be done first; this one is scheduled after them"),
       schedule: z.boolean().default(false),
     }),
     run: async (args, { userId, timeZone }) => {
@@ -480,6 +493,7 @@ const TOOLS: Tool<z.ZodType>[] = [
             : {}),
         },
       });
+      if (args.blockedByIds) await applyBlockers(userId, task.id, args.blockedByIds);
       runAutomationsForStatusChange(userId, task.id, "CREATED").catch((err) => console.error("automation error:", err));
       if (args.schedule) await scheduleTask(userId, task.id);
       else await autoPlaceIfEnabled(userId, task.id);
@@ -500,6 +514,7 @@ const TOOLS: Tool<z.ZodType>[] = [
       durationMin: z.number().int().min(5).max(24 * 60).optional(),
       hardDeadline: z.boolean().optional(),
       status: z.enum(["CREATED", "ONGOING", "DELAYED"]).optional().describe("Use complete_task for DONE"),
+      blockedByIds: z.array(z.string()).optional().describe("Replaces the task's prerequisites (ids of tasks that must be done first); [] clears them"),
       ...projectRef,
     }),
     run: async (args, { userId, timeZone }) => {
@@ -520,8 +535,9 @@ const TOOLS: Tool<z.ZodType>[] = [
       // Same side effect as Delay in the app: a parked task gives up its slot.
       if (args.status === "DELAYED") await unscheduleTask(userId, args.taskId);
       if (projectId !== undefined) data.projectId = projectId;
-      if (Object.keys(data).length === 0) throw new ToolError("Nothing to update.");
-      await prisma.task.update({ where: { id: args.taskId }, data });
+      if (Object.keys(data).length === 0 && args.blockedByIds === undefined) throw new ToolError("Nothing to update.");
+      if (Object.keys(data).length > 0) await prisma.task.update({ where: { id: args.taskId }, data });
+      if (args.blockedByIds) await applyBlockers(userId, args.taskId, args.blockedByIds);
       if (data.title) {
         await prisma.event.updateMany({ where: { taskId: args.taskId }, data: { title: data.title as string, localDirty: true } });
       }

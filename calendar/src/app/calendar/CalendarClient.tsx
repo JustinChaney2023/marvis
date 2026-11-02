@@ -848,7 +848,8 @@ function AgendaView({
             ) : (
               <ul className="mt-1.5 flex flex-col gap-1.5">
                 {dayEvents.map((e) => {
-                  const urgent = dueUrgency(e.taskDueAt, e.taskStatus, now) !== null;
+                  const urgency = dueUrgency(e.taskDueAt, e.taskStatus, now);
+                  const urgent = urgency !== null;
                   const custom = !urgent && isCustomColor(e.projectColor);
                   const colors = !custom && !urgent && e.projectColor ? PROJECT_EVENT_COLORS[e.projectColor] : null;
                   const customStyle = custom ? customColorStyle(e.projectColor as string) : null;
@@ -857,7 +858,7 @@ function AgendaView({
                       <button
                         type="button"
                         onClick={() => onEventClick(e)}
-                        className={`flex min-h-10 w-full items-center gap-2 rounded-lg border-l-4 px-3 py-2 text-left text-sm ${urgent ? "border-l-danger bg-danger-wash text-ink" : colors ? `${colors.bar} ${colors.bg} ${colors.text}` : custom ? "" : "border-l-muted bg-rule-soft"}`}
+                        className={`flex min-h-10 w-full items-center gap-2 rounded-lg border-l-4 px-3 py-2 text-left text-sm ${urgency === "overdue" ? "border-l-danger bg-danger-wash text-ink" : urgent ? "border-l-warn bg-warn-wash text-ink" : colors ? `${colors.bar} ${colors.bg} ${colors.text}` : custom ? "" : "border-l-muted bg-rule-soft"}`}
                         style={
                           customStyle
                             ? { ...customStyle.bar, ...customStyle.bg, ...customStyle.text }
@@ -1540,14 +1541,17 @@ function EventBlock({
   const resizeHandleSize = Math.max(3, Math.min(12, displayHeight / 3));
   const displayStart = previewStart ?? event.start;
   const displayEnd = previewEnd ?? event.end;
-  const urgent = dueUrgency(event.taskDueAt, event.taskStatus, useNow()) !== null;
+  const urgency = dueUrgency(event.taskDueAt, event.taskStatus, useNow());
+  const urgent = urgency !== null;
   const custom = !urgent && isCustomColor(event.projectColor);
   const color = !custom && event.projectColor
     ? (PROJECT_EVENT_COLORS[event.projectColor] ?? DEFAULT_EVENT_COLOR)
     : DEFAULT_EVENT_COLOR;
   const customStyle = custom ? customColorStyle(event.projectColor as string) : null;
-  const boxFill = urgent
+  const boxFill = urgency === "overdue"
     ? "bg-danger-wash text-ink"
+    : urgent
+    ? "bg-warn-wash text-ink"
     : custom
     ? ""
     : event.projectColor
@@ -1580,7 +1584,7 @@ function EventBlock({
         // A 15-minute block is ~12px tall: normal padding leaves no room
         // for even one line, so the title got clipped to a sliver.
         compact ? "flex items-center px-1.5 py-0" : "p-1.5"
-      } ${boxFill} ${urgent ? "border-l-danger" : custom ? "" : color.bar} ${
+      } ${boxFill} ${urgency === "overdue" ? "border-l-danger" : urgent ? "border-l-warn" : custom ? "" : color.bar} ${
         isDragging ? "opacity-40" : ""
       } ${selected ? "outline outline-2 outline-accent" : ""}`}
       style={{

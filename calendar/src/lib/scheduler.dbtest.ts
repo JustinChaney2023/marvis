@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { prisma } from "@/lib/prisma";
 import { getAppSettings } from "@/lib/settings";
-import { setTaskDone } from "@/lib/taskOps";
+import { setTaskDone, setTaskBlockedBy } from "@/lib/taskOps";
 import {
   findEarliestSlot,
   scheduleAllPendingTasks,
@@ -88,6 +88,24 @@ async function main() {
     assert.equal(await scheduleTask(user.id, waiting.id), null, "blocked task isn't placed");
     await setTaskDone(user.id, blocker.id, true);
     assert.equal((await blocksOf(waiting.id)).length, 1, "unblocked task placed right away");
+
+    // 6. A chain whose head is on the calendar plans out in order, even
+    // though the links are still unfinished (the AWS-modules case).
+    const m1 = await mk("m1", {});
+    const m2 = await mk("m2", {});
+    const m3 = await mk("m3", {});
+    await prisma.task.update({ where: { id: m2.id }, data: { blockedBy: { set: [{ id: m1.id }] } } });
+    await prisma.task.update({ where: { id: m3.id }, data: { blockedBy: { set: [{ id: m2.id }] } } });
+    await scheduleTask(user.id, m1.id);
+    await prisma.task.update({ where: { id: m3.id }, data: { dueAt: new Date(Date.now() + 3 * 86_400_000) } });
+    await scheduleAllPendingTasks(user.id);
+    const [b1] = await blocksOf(m1.id), [b2] = await blocksOf(m2.id), [b3] = await blocksOf(m3.id);
+    assert.ok(b1 && b2 && b3, "every link in the chain got a block");
+    assert.ok(b2.start >= b1.end && b3.start >= b2.end, "each link starts after its prerequisite ends");
+
+    // 7. setTaskBlockedBy (UI + MCP) refuses a cycle and reports it.
+    assert.deepEqual(await setTaskBlockedBy(user.id, m1.id, [m3.id]), [m3.id], "m3 -> m2 -> m1 would loop back");
+    assert.deepEqual(await setTaskBlockedBy(user.id, m3.id, [m1.id, "nope"]), ["nope"], "unknown ids are reported");
   } finally {
     await prisma.event.deleteMany({ where: { userId: user.id } });
     await prisma.user.delete({ where: { id: user.id } });
