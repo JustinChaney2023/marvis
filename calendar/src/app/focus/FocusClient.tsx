@@ -375,7 +375,7 @@ export default function FocusClient({
               Mark done
             </Button>
             {!solo && (
-              <Button type="button" variant="ghost" onClick={handleSkip}>
+              <Button type="button" variant="ghost" onClick={handleSkip} className="min-h-10 sm:min-h-0">
                 Skip
               </Button>
             )}

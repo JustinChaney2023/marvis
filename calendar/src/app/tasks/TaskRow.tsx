@@ -601,18 +601,18 @@ export default function TaskRow({
             type="date"
             value={delayDate}
             onChange={(e) => setDelayDate(e.target.value)}
-            className="rounded-lg border border-rule bg-surface px-2 py-1 text-xs"
+            className="min-h-10 rounded-lg border border-rule bg-surface px-2 py-1 text-xs sm:min-h-0"
           />
           <button
             type="submit"
-            className="rounded-lg bg-ink px-2.5 py-1 text-xs font-medium text-paper hover:opacity-85"
+            className="min-h-10 rounded-lg bg-ink px-2.5 py-1 text-xs font-medium text-paper hover:opacity-85 sm:min-h-0"
           >
             Delay
           </button>
           <button
             type="button"
             onClick={() => setDelaying(false)}
-            className="text-xs text-muted hover:text-ink"
+            className="min-h-10 text-xs text-muted hover:text-ink sm:min-h-0"
           >
             Cancel
           </button>
@@ -644,8 +644,8 @@ export default function TaskRow({
                     aria-label="toggle subtask done"
                     className={
                       sub.status === "DONE"
-                        ? "flex h-4 w-4 items-center justify-center rounded-full bg-ink"
-                        : "h-4 w-4 rounded-full border border-rule bg-surface transition-colors hover:border-accent"
+                        ? "relative before:absolute before:-inset-3 before:content-[''] flex h-4 w-4 items-center justify-center rounded-full bg-ink"
+                        : "relative before:absolute before:-inset-3 before:content-[''] h-4 w-4 rounded-full border border-rule bg-surface transition-colors hover:border-accent"
                     }
                   />
                 </form>
@@ -662,7 +662,7 @@ export default function TaskRow({
                   <button
                     type="submit"
                     aria-label="delete subtask"
-                    className="flex h-4 w-4 items-center justify-center rounded text-muted transition-colors hover:text-accent"
+                    className="relative before:absolute before:-inset-3 before:content-[''] flex h-4 w-4 items-center justify-center rounded text-muted transition-colors hover:text-accent"
                   >
                     <CloseIcon className="h-3 w-3" />
                   </button>
@@ -674,12 +674,12 @@ export default function TaskRow({
                 value={newSubtask}
                 onChange={(e) => setNewSubtask(e.target.value)}
                 placeholder="New subtask…"
-                className="w-full max-w-xs rounded-lg border border-rule bg-surface px-2 py-1 text-xs transition-colors focus:border-accent focus:outline-none"
+                className="min-h-10 w-full max-w-xs rounded-lg border border-rule bg-surface px-2 py-1 text-xs sm:min-h-0 transition-colors focus:border-accent focus:outline-none"
               />
               <button
                 type="submit"
                 disabled={isAddingSubtask || !newSubtask.trim()}
-                className="rounded-lg border border-rule px-2 py-1 text-xs font-medium text-ink-2 transition-colors hover:bg-rule-soft disabled:opacity-50"
+                className="min-h-10 rounded-lg border border-rule px-2 py-1 text-xs font-medium text-ink-2 transition-colors hover:bg-rule-soft disabled:opacity-50 sm:min-h-0"
               >
                 Add
               </button>
@@ -691,7 +691,7 @@ export default function TaskRow({
                 onClick={handleGenerateSubtasks}
                 disabled={isGenerating}
                 title="Also reads any files attached to this task — attach the assignment sheet for more accurate suggestions"
-                className="mt-1 inline-flex w-fit items-center gap-1 text-xs text-ink-2 transition-colors hover:underline disabled:opacity-50"
+                className="mt-1 inline-flex min-h-10 w-fit items-center gap-1 text-xs sm:min-h-0 text-ink-2 transition-colors hover:underline disabled:opacity-50"
               >
                 <SparkleIcon className="h-3 w-3" />
                 {isGenerating ? "Thinking…" : "Generate subtasks with AI"}
@@ -716,7 +716,7 @@ export default function TaskRow({
                           type="button"
                           onClick={() => setSuggested((prev) => prev?.filter((_, idx) => idx !== i) ?? null)}
                           aria-label="remove suggestion"
-                          className="flex-shrink-0 text-muted hover:text-accent"
+                          className="relative before:absolute before:-inset-3.5 before:content-[''] flex-shrink-0 text-muted hover:text-accent"
                         >
                           <CloseIcon className="h-3 w-3" />
                         </button>
@@ -728,7 +728,7 @@ export default function TaskRow({
                   <button
                     type="button"
                     onClick={() => setSuggested(null)}
-                    className="text-xs text-muted hover:text-ink"
+                    className="min-h-10 text-xs text-muted hover:text-ink sm:min-h-0"
                   >
                     Discard
                   </button>
@@ -737,7 +737,7 @@ export default function TaskRow({
                       type="button"
                       onClick={handleAcceptSuggested}
                       disabled={isAddingSubtask}
-                      className="rounded-lg bg-ink px-2 py-1 text-xs font-medium text-paper hover:opacity-85 disabled:opacity-50"
+                      className="min-h-10 rounded-lg bg-ink px-2 py-1 text-xs font-medium text-paper hover:opacity-85 disabled:opacity-50 sm:min-h-0"
                     >
                       {isAddingSubtask ? "Adding…" : `Add ${suggested.length}`}
                     </button>
@@ -752,7 +752,7 @@ export default function TaskRow({
                   type="button"
                   onClick={handleDraftEmail}
                   disabled={isDrafting}
-                  className="inline-flex items-center gap-1 text-xs text-ink-2 transition-colors hover:underline disabled:opacity-50"
+                  className="inline-flex min-h-10 items-center gap-1 text-xs text-ink-2 transition-colors hover:underline disabled:opacity-50 sm:min-h-0"
                 >
                   <SparkleIcon className="h-3 w-3" />
                   {isDrafting ? "Drafting…" : "Draft email with AI"}
@@ -776,14 +776,14 @@ export default function TaskRow({
                     <button
                       type="button"
                       onClick={() => setDraft(null)}
-                      className="text-xs text-muted hover:text-ink"
+                      className="min-h-10 text-xs text-muted hover:text-ink sm:min-h-0"
                     >
                       Discard
                     </button>
                     <button
                       type="button"
                       onClick={handleCopyDraft}
-                      className="rounded-lg bg-ink px-2 py-1 text-xs font-medium text-paper hover:opacity-85"
+                      className="min-h-10 rounded-lg bg-ink px-2 py-1 text-xs font-medium text-paper hover:opacity-85 sm:min-h-0"
                     >
                       {copyStatus === "copied" ? "Copied!" : "Copy"}
                     </button>
@@ -798,7 +798,7 @@ export default function TaskRow({
                   type="button"
                   onClick={handleDraftDoc}
                   disabled={isDraftingDoc}
-                  className="inline-flex items-center gap-1 text-xs text-ink-2 transition-colors hover:underline disabled:opacity-50"
+                  className="inline-flex min-h-10 items-center gap-1 text-xs text-ink-2 transition-colors hover:underline disabled:opacity-50 sm:min-h-0"
                 >
                   <SparkleIcon className="h-3 w-3" />
                   {isDraftingDoc ? "Drafting…" : "Draft doc with AI"}
@@ -819,14 +819,14 @@ export default function TaskRow({
                     <button
                       type="button"
                       onClick={() => setDocDraft(null)}
-                      className="text-xs text-muted hover:text-ink"
+                      className="min-h-10 text-xs text-muted hover:text-ink sm:min-h-0"
                     >
                       Discard
                     </button>
                     <button
                       type="button"
                       onClick={handleCopyDoc}
-                      className="rounded-lg bg-ink px-2 py-1 text-xs font-medium text-paper hover:opacity-85"
+                      className="min-h-10 rounded-lg bg-ink px-2 py-1 text-xs font-medium text-paper hover:opacity-85 sm:min-h-0"
                     >
                       {copyDocStatus === "copied" ? "Copied!" : "Copy"}
                     </button>

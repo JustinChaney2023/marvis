@@ -83,11 +83,11 @@ export default function TaskTable({
                     key={task.id}
                     className="border-t border-rule-soft hover:bg-rule-soft/60"
                   >
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2 max-sm:py-0">
                       <button
                         type="button"
                         onClick={() => setEditingId(task.id)}
-                        className="flex items-center gap-2 text-left hover:underline"
+                        className="flex min-h-10 items-center gap-2 text-left hover:underline sm:min-h-0"
                       >
                         <input
                           type="checkbox"

@@ -129,7 +129,7 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
         <h1 className="font-serif text-3xl text-ink">Settings</h1>
         <Link
           href="/tasks"
-          className="text-sm text-ink-2 transition-colors hover:text-ink"
+          className="inline-flex min-h-10 items-center text-sm text-ink-2 transition-colors hover:text-ink sm:min-h-0"
         >
           ← Tasks
         </Link>
@@ -457,7 +457,7 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
           still drag a task in yourself any time.
         </p>
         <details className="mt-1 text-xs text-muted">
-          <summary className="cursor-pointer hover:text-ink-2">More about exempt labels</summary>
+          <summary className="cursor-pointer py-3 hover:text-ink-2 sm:py-0">More about exempt labels</summary>
           <p className="mt-1">
             Tag a task with one of a profile&apos;s exempt labels and it
             can still be auto-scheduled into that profile&apos;s hours (a
@@ -507,7 +507,7 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
         <div className="mt-3 flex flex-wrap items-center gap-4">
           <a
             href="/api/ics/export"
-            className="inline-flex rounded-lg border border-rule px-4 py-2 text-sm font-medium text-ink-2 transition-colors hover:bg-rule-soft"
+            className="inline-flex min-h-10 items-center rounded-lg border border-rule px-4 py-2 text-sm font-medium text-ink-2 transition-colors hover:bg-rule-soft sm:min-h-0"
           >
             Export calendar (.ics)
           </a>
@@ -545,7 +545,7 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
             </p>
             <a
               href="/api/google/connect"
-              className="inline-flex rounded-lg bg-ink px-4 py-2 text-sm font-medium text-paper transition-all hover:opacity-85 active:scale-[0.98]"
+              className="inline-flex min-h-10 items-center rounded-lg bg-ink px-4 py-2 text-sm font-medium text-paper transition-all hover:opacity-85 active:scale-[0.98] sm:min-h-0"
             >
               Connect Google Calendar
             </a>

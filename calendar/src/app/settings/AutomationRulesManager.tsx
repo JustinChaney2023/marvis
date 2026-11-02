@@ -60,7 +60,7 @@ export default function AutomationRulesManager({
               <form action={toggleAutomationRuleAction.bind(null, rule.id, !rule.enabled)}>
                 <button
                   type="submit"
-                  className="rounded-full px-2.5 py-1 text-xs text-muted transition-colors hover:bg-rule-soft hover:text-ink"
+                  className="min-h-10 sm:min-h-0 rounded-full px-2.5 py-1 text-xs text-muted transition-colors hover:bg-rule-soft hover:text-ink"
                 >
                   {rule.enabled ? "Disable" : "Enable"}
                 </button>
@@ -68,7 +68,7 @@ export default function AutomationRulesManager({
               <ConfirmForm message="Delete this automation rule?" action={deleteAutomationRuleAction.bind(null, rule.id)}>
                 <button
                   type="submit"
-                  className="rounded-full px-2.5 py-1 text-xs text-muted transition-colors hover:bg-accent-wash hover:text-accent"
+                  className="min-h-10 sm:min-h-0 rounded-full px-2.5 py-1 text-xs text-muted transition-colors hover:bg-accent-wash hover:text-accent"
                 >
                   Delete
                 </button>
@@ -85,7 +85,7 @@ export default function AutomationRulesManager({
         <button
           type="button"
           onClick={() => setAdding(true)}
-          className="self-start text-sm text-accent hover:underline"
+          className="min-h-10 self-start text-sm text-accent hover:underline sm:min-h-0"
         >
           + Add rule
         </button>

@@ -52,7 +52,7 @@ export default function TimeSlotsManager({ timeSlots }: { timeSlots: TimeSlotDat
           <ConfirmForm message="Delete this time slot?" action={deleteTimeSlotAction.bind(null, slot.id)}>
             <button
               type="submit"
-              className="rounded-full px-2.5 py-1 text-xs text-ink-2 transition-colors hover:bg-accent-wash hover:text-accent"
+              className="min-h-10 sm:min-h-0 rounded-full px-2.5 py-1 text-xs text-ink-2 transition-colors hover:bg-accent-wash hover:text-accent"
             >
               Delete
             </button>
@@ -65,7 +65,7 @@ export default function TimeSlotsManager({ timeSlots }: { timeSlots: TimeSlotDat
         <button
           type="button"
           onClick={() => setAdding(true)}
-          className="self-start text-sm text-accent hover:underline"
+          className="min-h-10 self-start text-sm text-accent hover:underline sm:min-h-0"
         >
           + Add time slot
         </button>
