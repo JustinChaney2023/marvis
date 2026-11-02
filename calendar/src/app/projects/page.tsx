@@ -119,7 +119,7 @@ export default async function ProjectsPage() {
                   <button
                     type="submit"
                     title="Delete project"
-                    className="flex-shrink-0 rounded-full px-2 py-1 text-xs text-muted transition-colors hover:text-accent"
+                    className="min-h-10 flex-shrink-0 rounded-full px-2 py-1 text-xs text-muted transition-colors hover:text-accent sm:min-h-0"
                   >
                     Delete
                   </button>

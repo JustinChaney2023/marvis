@@ -29,7 +29,7 @@ export default function ColorPicker({ name, defaultValue, noneLabel }: Props) {
         type="button"
         onClick={() => setValue("")}
         title={noneLabel}
-        className={`flex h-6 w-6 items-center justify-center rounded-full border-2 bg-rule-soft text-[10px] text-ink-2 ${
+        className={`flex h-10 w-10 sm:h-6 sm:w-6 items-center justify-center rounded-full border-2 bg-rule-soft text-[11px] text-ink-2 ${
           value === "" ? "border-accent" : "border-transparent"
         }`}
       >
@@ -41,14 +41,14 @@ export default function ColorPicker({ name, defaultValue, noneLabel }: Props) {
           type="button"
           onClick={() => setValue(c)}
           title={c}
-          className={`h-6 w-6 rounded-full border-2 ${PROJECT_EVENT_COLORS[c].dot} ${
+          className={`h-10 w-10 sm:h-6 sm:w-6 shrink-0 rounded-full border-2 ${PROJECT_EVENT_COLORS[c].dot} ${
             value === c ? "border-accent" : "border-transparent"
           }`}
         />
       ))}
       <label
         title="Custom color"
-        className={`relative flex h-6 w-6 cursor-pointer items-center justify-center overflow-hidden rounded-full border-2 ${
+        className={`relative flex h-10 w-10 sm:h-6 sm:w-6 cursor-pointer items-center justify-center overflow-hidden rounded-full border-2 ${
           custom ? "border-accent" : "border-transparent"
         }`}
         style={{

@@ -381,8 +381,8 @@ export default function TaskRow({
             title={task.status === "DONE" ? "Reopen" : "Mark done"}
             className={
               task.status === "DONE"
-                ? "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-ink bg-ink text-[10px] text-paper transition-all hover:scale-110 focus:outline focus:outline-2 focus:outline-accent focus:outline-offset-2"
-                : "block h-5 w-5 shrink-0 rounded-full border border-rule bg-surface transition-all hover:scale-110 hover:border-accent focus:outline focus:outline-2 focus:outline-accent focus:outline-offset-2"
+                ? "relative before:absolute before:-inset-2.5 before:content-[''] flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-ink bg-ink text-[10px] text-paper transition-all hover:scale-110 focus:outline focus:outline-2 focus:outline-accent focus:outline-offset-2"
+                : "relative before:absolute before:-inset-2.5 before:content-[''] block h-5 w-5 shrink-0 rounded-full border border-rule bg-surface transition-all hover:scale-110 hover:border-accent focus:outline focus:outline-2 focus:outline-accent focus:outline-offset-2"
             }
           >
             {task.status === "DONE" ? "✓" : ""}
@@ -510,7 +510,7 @@ export default function TaskRow({
             <button
               type="submit"
               title="Mark as ongoing — you're working on this now"
-              className="rounded-lg border border-rule bg-surface px-2.5 py-1 text-xs font-medium text-ink-2 transition-colors hover:bg-rule-soft"
+              className="inline-flex min-h-10 items-center rounded-lg border border-rule bg-surface px-2.5 py-1 text-xs font-medium text-ink-2 transition-colors hover:bg-rule-soft sm:min-h-0"
             >
               Start
             </button>
@@ -520,7 +520,7 @@ export default function TaskRow({
           <Link
             href={`/focus?taskId=${task.id}`}
             title="Start a focus session for this task"
-            className="rounded-lg border border-rule bg-surface px-2.5 py-1 text-xs font-medium text-ink-2 transition-colors hover:bg-rule-soft"
+            className="inline-flex min-h-10 items-center rounded-lg border border-rule bg-surface px-2.5 py-1 text-xs font-medium text-ink-2 transition-colors hover:bg-rule-soft sm:min-h-0"
           >
             Focus
           </Link>
@@ -530,7 +530,7 @@ export default function TaskRow({
             <button
               type="submit"
               title="Pause — stops the timer and folds elapsed time into tracked minutes"
-              className="rounded-lg border border-rule bg-surface px-2.5 py-1 text-xs font-medium text-ink-2 transition-colors hover:bg-rule-soft"
+              className="inline-flex min-h-10 items-center rounded-lg border border-rule bg-surface px-2.5 py-1 text-xs font-medium text-ink-2 transition-colors hover:bg-rule-soft sm:min-h-0"
             >
               Pause
             </button>
@@ -541,7 +541,7 @@ export default function TaskRow({
             <button
               type="submit"
               title="Clear the delayed status"
-              className="rounded-lg border border-rule bg-surface px-2.5 py-1 text-xs font-medium text-ink-2 transition-colors hover:bg-rule-soft"
+              className="inline-flex min-h-10 items-center rounded-lg border border-rule bg-surface px-2.5 py-1 text-xs font-medium text-ink-2 transition-colors hover:bg-rule-soft sm:min-h-0"
             >
               Un-delay
             </button>
@@ -552,7 +552,7 @@ export default function TaskRow({
             type="button"
             onClick={openDelay}
             title="Push the due date off and clear its calendar slot"
-            className="rounded-lg border border-rule bg-surface px-2.5 py-1 text-xs font-medium text-ink-2 transition-colors hover:bg-rule-soft"
+            className="inline-flex min-h-10 items-center rounded-lg border border-rule bg-surface px-2.5 py-1 text-xs font-medium text-ink-2 transition-colors hover:bg-rule-soft sm:min-h-0"
           >
             Delay
           </button>
@@ -566,7 +566,7 @@ export default function TaskRow({
         >
           <button
             type="submit"
-            className="rounded-lg border border-rule bg-surface px-2.5 py-1 text-xs font-medium text-ink-2 transition-colors hover:bg-rule-soft"
+            className="inline-flex min-h-10 items-center rounded-lg border border-rule bg-surface px-2.5 py-1 text-xs font-medium text-ink-2 transition-colors hover:bg-rule-soft sm:min-h-0"
           >
             {task.event ? "Unschedule" : "Schedule"}
           </button>
@@ -583,7 +583,7 @@ export default function TaskRow({
             type="submit"
             aria-label="delete task"
             title="Delete task"
-            className="flex h-6 w-6 items-center justify-center rounded-md text-muted transition-colors hover:bg-accent-wash hover:text-accent"
+            className="flex h-10 w-10 items-center justify-center rounded-md text-muted transition-colors hover:bg-accent-wash hover:text-accent sm:h-6 sm:w-6"
           >
             <CloseIcon className="h-3.5 w-3.5" />
           </button>
@@ -623,7 +623,7 @@ export default function TaskRow({
         <button
           type="button"
           onClick={() => setExpanded((v) => !v)}
-          className="inline-flex items-center gap-1 text-xs text-muted transition-colors hover:text-ink"
+          className="inline-flex min-h-10 items-center gap-1 text-xs text-muted transition-colors hover:text-ink sm:min-h-0"
         >
           <ChevronRightIcon className={`h-3 w-3 transition-transform ${expanded ? "rotate-90" : ""}`} />
           {task.subtasks.length > 0

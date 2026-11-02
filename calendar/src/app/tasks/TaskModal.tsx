@@ -140,6 +140,13 @@ export default function TaskModal({
     if (!task) return;
     setActivity(await getTaskActivityAction(task.id));
   };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
   const taskId = task?.id;
   useEffect(() => {
     if (mode !== "edit" || !taskId) return;
@@ -339,7 +346,7 @@ export default function TaskModal({
             type="button"
             onClick={onClose}
             aria-label="close"
-            className="flex h-7 w-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-rule-soft"
+            className="flex h-10 w-10 items-center justify-center rounded-md text-muted transition-colors hover:bg-rule-soft sm:h-7 sm:w-7"
           >
             <CloseIcon />
           </button>

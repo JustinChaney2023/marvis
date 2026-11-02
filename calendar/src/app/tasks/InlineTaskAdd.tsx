@@ -60,7 +60,7 @@ export default function InlineTaskAdd({
           enterKeyHint="done"
           autoComplete="off"
           aria-label="Add a task"
-          className="min-w-0 flex-1 bg-transparent py-1.5 text-base text-ink placeholder:text-muted focus:outline-none md:text-sm"
+          className="min-w-0 flex-1 text-ellipsis bg-transparent py-1.5 text-base text-ink placeholder:text-muted focus:outline-none md:text-sm"
         />
         {value.trim() && (
           <Button type="submit" pending={pending} className="px-3 py-1.5 text-xs">

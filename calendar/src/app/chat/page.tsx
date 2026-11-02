@@ -6,7 +6,8 @@ export default async function ChatPage() {
 
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col px-4 py-8 sm:px-6 sm:py-12">
-      <p className="text-sm text-ink-2">
+      <h1 className="font-serif text-4xl leading-none text-ink">Chat</h1>
+      <p className="mt-2 text-sm text-ink-2">
         Ask about your own schedule and tasks — &quot;what&apos;s on my plate this
         week?&quot;, &quot;am I free Thursday afternoon?&quot; — or ask it to create,
         reschedule, or delete something. It never changes anything on its

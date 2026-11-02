@@ -40,7 +40,8 @@ export default async function TeamPage() {
 
   return (
     <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-8 sm:px-6 sm:py-12">
-      <p className="text-sm text-ink-2">
+      <h1 className="font-serif text-4xl leading-none text-ink">Team</h1>
+      <p className="mt-2 text-sm text-ink-2">
         People and AI employees you can assign tasks to. An AI employee is
         just a label for now — assigning it a task shows it as theirs, but
         nothing runs automatically yet.
@@ -119,7 +120,7 @@ export default async function TeamPage() {
             <form action={deleteAssignee.bind(null, a.id)}>
               <button
                 type="submit"
-                className="text-xs text-muted transition-colors hover:text-accent"
+                className="min-h-10 px-1 text-xs text-muted transition-colors hover:text-accent sm:min-h-0 sm:px-0"
               >
                 Remove
               </button>

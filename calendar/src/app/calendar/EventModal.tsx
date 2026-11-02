@@ -394,7 +394,7 @@ export default function EventModal({
             type="button"
             onClick={onClose}
             aria-label="close"
-            className="flex h-7 w-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-rule-soft"
+            className="flex h-10 w-10 items-center justify-center rounded-md text-muted transition-colors hover:bg-rule-soft sm:h-7 sm:w-7"
           >
             <CloseIcon />
           </button>
@@ -449,7 +449,7 @@ export default function EventModal({
         )}
 
         <form onSubmit={handleSubmit} className="mt-4 flex flex-col gap-4">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <label className="flex flex-col gap-1 text-sm">
               <span className="text-muted">Title</span>
               <input

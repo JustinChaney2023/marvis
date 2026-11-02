@@ -243,7 +243,8 @@ async function main() {
   await prisma.bookingLink.create({
     data: {
       userId,
-      slug: "demo-intro-call",
+      // Per-account, so a second seeded account (DEMO_SEED_EMAIL) doesn't collide.
+      slug: `${DEMO_EMAIL.split("@")[0]}-intro-call`, // demo@ -> demo-intro-call
       title: "15-min intro call",
       durationMin: 15,
       minNoticeMin: 120,
@@ -255,7 +256,8 @@ async function main() {
   // of hand-picked event times.
   await scheduleAllPendingTasks(userId);
 
-  console.log(`Demo account ready: ${DEMO_EMAIL} / ${DEMO_PASSWORD}`);
+  // Only the public demo's password is meant to be shown.
+  console.log(`Demo account ready: ${DEMO_EMAIL}${process.env.DEMO_SEED_PASSWORD ? "" : ` / ${DEMO_PASSWORD}`}`);
 }
 
 main()

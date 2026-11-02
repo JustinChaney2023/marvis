@@ -122,7 +122,7 @@ export default async function WorkloadPage() {
         </p>
         {accuracy.ratio === null ? (
           <p className="mt-3 text-sm text-muted">
-            Nothing to compare yet. Start the timer on a task (on <Link href="/focus" className="underline">Focus</Link> or
+            Nothing to compare yet. Start the timer on a task (on <Link href="/focus" className="relative underline before:absolute before:-inset-x-1 before:-inset-y-3 before:content-['']">Focus</Link> or
             the task itself) and finish it to see how your estimates hold up.
           </p>
         ) : (

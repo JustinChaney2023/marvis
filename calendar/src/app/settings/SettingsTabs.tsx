@@ -16,16 +16,19 @@ export default function SettingsTabs({
 
   return (
     <div>
-      <div className="no-scrollbar mt-6 inline-flex max-w-full items-center gap-1 overflow-x-auto rounded-full border border-rule bg-surface p-1 text-sm">
+      <div className="no-scrollbar mt-6 inline-flex snap-x snap-mandatory scroll-px-2 max-sm:[mask-image:linear-gradient(to_right,black_calc(100%-2rem),transparent)] max-w-full items-center gap-1 overflow-x-auto rounded-full border border-rule bg-surface p-1 text-sm">
         {tabs.map((tab) => (
           <button
             key={tab.key}
             type="button"
-            onClick={() => setActive(tab.key)}
+            onClick={(e) => {
+              setActive(tab.key);
+              e.currentTarget.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
+            }}
             className={
               active === tab.key
-                ? "flex-shrink-0 rounded-full bg-ink px-3 py-1.5 font-medium text-paper"
-                : "flex-shrink-0 rounded-full px-3 py-1.5 text-ink-2 transition-colors hover:text-ink"
+                ? "flex-shrink-0 snap-start rounded-full bg-ink px-3 py-2.5 sm:py-1.5 font-medium text-paper"
+                : "flex-shrink-0 snap-start rounded-full px-3 py-2.5 sm:py-1.5 text-ink-2 transition-colors hover:text-ink"
             }
           >
             {tab.label}

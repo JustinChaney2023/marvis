@@ -53,7 +53,7 @@ export default function MiniMonthPicker({
         }}
         aria-label="Jump to date"
         title="Jump to date"
-        className="flex h-8 w-8 items-center justify-center rounded-full text-ink-2 transition-colors hover:bg-rule-soft hover:text-ink"
+        className="flex h-10 w-10 sm:h-8 sm:w-8 items-center justify-center rounded-full text-ink-2 transition-colors hover:bg-rule-soft hover:text-ink"
       >
         <CalendarIcon className="h-4 w-4" />
       </button>
