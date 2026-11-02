@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { safeErr } from "@/lib/safeErr";
 import { google } from "googleapis";
 import { prisma } from "@/lib/prisma";
 import { createOAuthClient, GOOGLE_STATE_COOKIE } from "@/lib/google-auth";
@@ -76,7 +77,7 @@ export async function GET(request: NextRequest) {
     settingsUrl.searchParams.set("google_connected", "1");
     return done(NextResponse.redirect(settingsUrl));
   } catch (err) {
-    console.error("Google OAuth callback failed:", err);
+    console.error("Google OAuth callback failed:", safeErr(err));
     settingsUrl.searchParams.set(
       "google_error",
       err instanceof Error ? err.message : "unknown_error",

@@ -1,22 +1,17 @@
 import { Suspense } from "react";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth";
-import { aiConfigFromSettings, getAppSettings } from "@/lib/settings";
 import { userTimeZone } from "@/lib/timezone";
-import { buildTodayFacts, generateDailyAgendaText } from "@/lib/dailyAgenda";
+import { agendaTemplate, buildTodayFacts } from "@/lib/dailyAgenda";
+import AgendaText from "./AgendaText";
 import FocusClient, { type FocusTask } from "./FocusClient";
 import ShutdownRitual from "./ShutdownRitual";
 
-// Its own async component, streamed in behind Suspense below — this is
-// the one part of the page that can take a while (an AI call to phrase
-// the summary, up to a 120s timeout if a local model is slow/unreachable).
-// Everything else on the page is a handful of fast DB reads; blocking the
-// whole page load on this one sentence was why clicking "Focus" felt slow.
+// The plain template renders with the page; AgendaText swaps in the
+// AI-phrased version after load, so a slow model never blocks Focus.
 async function DailyAgenda({ userId, timeZone }: { userId: string; timeZone: string }) {
-  const { localAi, anthropicApiKey } = aiConfigFromSettings(await getAppSettings(userId));
   const facts = await buildTodayFacts(userId, timeZone);
-  const agendaText = await generateDailyAgendaText(facts, localAi, anthropicApiKey);
-  return <p className="font-serif text-lg italic text-ink-2">{agendaText}</p>;
+  return <AgendaText initial={agendaTemplate(facts, timeZone)} />;
 }
 
 export default async function FocusPage(props: PageProps<"/focus">) {

@@ -6,7 +6,7 @@ import { useState } from "react";
 import { NAV_LINKS, isActiveNav } from "./NavLinks";
 import ThemeToggle from "./ThemeToggle";
 import FeedbackButton from "./FeedbackButton";
-import { GearIcon, PlusIcon } from "./icons";
+import { PlusIcon } from "./icons";
 import { openQuickCapture } from "./quickCaptureEvents";
 import { HELP_EVENT } from "./ShortcutsHelp";
 import { HIDDEN_CHROME_PREFIXES } from "./SideRail";
@@ -54,7 +54,7 @@ export default function MobileNav() {
           >
             <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-rule" />
             <nav className="grid grid-cols-3 gap-2">
-              {[...secondary, { href: "/settings", label: "Settings", icon: GearIcon }].map(({ href, label, icon: Icon }) => (
+              {secondary.map(({ href, label, icon: Icon }) => (
                 <Link
                   key={href}
                   href={href}

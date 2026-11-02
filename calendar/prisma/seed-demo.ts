@@ -6,8 +6,10 @@ import { prisma } from "@/lib/prisma";
 import { hashPassword } from "@/lib/auth";
 import { scheduleAllPendingTasks } from "@/lib/scheduler";
 
-const DEMO_EMAIL = "demo@useseason.app";
-const DEMO_PASSWORD = "SeasonDemo2026!";
+// Overridable so a private, just-for-testing account can be seeded the same
+// way (DEMO_SEED_EMAIL / DEMO_SEED_PASSWORD); the defaults are the public demo.
+const DEMO_EMAIL = process.env.DEMO_SEED_EMAIL ?? "demo@useseason.app";
+const DEMO_PASSWORD = process.env.DEMO_SEED_PASSWORD ?? "SeasonDemo2026!";
 
 function daysFromNow(days: number, hour: number, minute = 0): Date {
   const d = new Date();

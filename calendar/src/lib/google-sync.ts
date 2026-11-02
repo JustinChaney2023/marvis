@@ -1,4 +1,5 @@
 import { google, type calendar_v3 } from "googleapis";
+import { safeErr } from "@/lib/safeErr";
 import { prisma } from "@/lib/prisma";
 import { getAuthorizedClientForCalendar, listGoogleCalendarSubscriptions } from "@/lib/google-auth";
 import { parseYMD, formatYMD } from "@/lib/calendar-dates";
@@ -323,7 +324,7 @@ export async function importFromGoogle(googleCalendarId: string) {
       imported++;
     } catch (err) {
       // One bad item shouldn't sink the rest of the batch.
-      console.error(`importFromGoogle: skipping item ${item.id}:`, err);
+      console.error(`importFromGoogle: skipping item ${item.id}:`, safeErr(err));
       errors.push(`"${item.summary ?? item.id}": ${describeGoogleError(err)}`);
     }
   }
@@ -515,7 +516,7 @@ export async function exportToGoogle(googleCalendarId: string) {
         if (result.count === 0 && created.data.id) {
           await calendar.events
             .delete({ calendarId: auth.calendar.calendarId, eventId: created.data.id })
-            .catch((err) => console.error(`exportToGoogle: cleanup of orphaned ${created.data.id} failed:`, err));
+            .catch((err) => console.error(`exportToGoogle: cleanup of orphaned ${created.data.id} failed:`, safeErr(err)));
           continue;
         }
       }
@@ -541,7 +542,7 @@ export async function exportToGoogle(googleCalendarId: string) {
         await prisma.event.update({ where: { id: event.id }, data: { localDirty: false } });
         errors.push(`"${event.title}" can't be changed on Google (you're not the organizer).`);
       } else {
-        console.error(`exportToGoogle: skipping ${event.id}:`, err);
+        console.error(`exportToGoogle: skipping ${event.id}:`, safeErr(err));
         errors.push(`"${event.title}": ${describeGoogleError(err)}`);
       }
     }
@@ -568,7 +569,7 @@ export async function deleteFromGoogle(googleCalendarId: string, googleEventId: 
     // only the calendar.events.delete call was wrapped, so an expired
     // token threw straight out of deleteEvent and silently blocked the
     // local delete too.
-    console.error("deleteFromGoogle failed:", err);
+    console.error("deleteFromGoogle failed:", safeErr(err));
   }
 }
 

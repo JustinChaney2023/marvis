@@ -77,7 +77,13 @@ export async function buildTodayFacts(userId: string, timeZone: string): Promise
   };
 }
 
-function templateText(facts: DailyAgendaFacts): string {
+// The always-correct, no-AI readout — what Focus renders instantly while
+// the AI phrasing (generateDailyAgendaText) loads in behind it. Times use
+// the user's timezone, not the server's.
+export function agendaTemplate(facts: DailyAgendaFacts, timeZone?: string): string {
+  if (facts.meetingCount === 0 && facts.deepWorkCount === 0 && facts.overdueCount === 0) {
+    return "Nothing on the calendar today — a clean slate.";
+  }
   const parts: string[] = [];
   parts.push(`${facts.meetingCount} meeting${facts.meetingCount === 1 ? "" : "s"}`);
   parts.push(`${facts.deepWorkCount} deep-work block${facts.deepWorkCount === 1 ? "" : "s"}`);
@@ -86,7 +92,7 @@ function templateText(facts: DailyAgendaFacts): string {
   }
   let text = `Today: ${parts.join(", ")}.`;
   if (facts.nextTitle) {
-    text += ` Next up: ${facts.nextTitle} at ${facts.nextStart!.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}.`;
+    text += ` Next up: ${facts.nextTitle} at ${facts.nextStart!.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone })}.`;
   }
   return text;
 }
@@ -97,15 +103,23 @@ const AgendaTextSchema = z.object({ summary: z.string() });
 // below — any failure (no API key, local AI unreachable, bad JSON) just
 // falls back to the template rather than surfacing an error on a page
 // load nobody explicitly triggered.
+// ponytail: per-process memo, so reopening Focus doesn't re-call the model;
+// swap for a DB/Redis cache if this ever runs on more than one process.
+const agendaCache = new Map<string, { text: string; at: number }>();
+const AGENDA_CACHE_MS = 30 * 60_000;
+
 export async function generateDailyAgendaText(
   facts: DailyAgendaFacts,
   localAi: LocalAiConfig | null,
   anthropicApiKey: string | null = null,
+  timeZone?: string,
 ): Promise<string> {
-  const template = templateText(facts);
-  if (facts.meetingCount === 0 && facts.deepWorkCount === 0 && facts.overdueCount === 0) {
-    return "Nothing on the calendar today — a clean slate.";
-  }
+  const template = agendaTemplate(facts, timeZone);
+  if (template.startsWith("Nothing on the calendar")) return template;
+
+  const key = JSON.stringify([template, Boolean(localAi), Boolean(anthropicApiKey)]);
+  const hit = agendaCache.get(key);
+  if (hit && Date.now() - hit.at < AGENDA_CACHE_MS) return hit.text;
 
   const result = await callAiForJson({
     system:
@@ -119,5 +133,7 @@ export async function generateDailyAgendaText(
     shapeHint: '{"summary": string}',
   });
 
-  return result.ok ? result.data.summary : template;
+  const text = result.ok ? result.data.summary : template;
+  agendaCache.set(key, { text, at: Date.now() });
+  return text;
 }
