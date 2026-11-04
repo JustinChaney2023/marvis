@@ -126,6 +126,10 @@ type DraggingEvent = {
   masterId: string;
   durationMs: number;
   locked: boolean;
+  // Minutes between the event's top edge and the pointer when the drag
+  // began, so the block lands where its top edge is shown, not where the
+  // cursor happens to be.
+  grabOffsetMinutes: number;
 };
 
 export function layoutOverlappingEvents(events: CalendarEvent[]): PlacedEvent[] {
@@ -257,8 +261,16 @@ function yToMinutesFromColumnTop(y: number): number {
   return (y / HOUR_HEIGHT) * 60;
 }
 
+// Moves snap to 15 minutes (30 was too coarse to land a block precisely);
+// creating by drag still snaps to 30 via snapTo30.
+const MOVE_SNAP_MINUTES = 15;
+
+function minutesToPx(d: Date): number {
+  return ((d.getHours() * 60 + d.getMinutes() - HOUR_START * 60) / 60) * HOUR_HEIGHT;
+}
+
 function snapMinutesToStart(day: Date, minutesFromTop: number): Date | null {
-  const snapped = Math.round(minutesFromTop / 30) * 30;
+  const snapped = Math.round(Math.max(minutesFromTop, 0) / MOVE_SNAP_MINUTES) * MOVE_SNAP_MINUTES;
   const startHour = HOUR_START + Math.floor(snapped / 60);
   const startMin = snapped % 60;
   if (startHour >= HOUR_END) return null;
@@ -541,8 +553,9 @@ export default function CalendarClient({
     masterId: string,
     durationMs: number,
     locked: boolean,
+    grabOffsetMinutes: number,
   ) => {
-    setDraggingEvent({ id, masterId, durationMs, locked });
+    setDraggingEvent({ id, masterId, durationMs, locked, grabOffsetMinutes });
   };
   const handleEventDragEnd = () => {
     setDraggingEvent(null);
@@ -907,7 +920,7 @@ function HourGrid({
   onEmptyClick: (start: Date, end: Date) => void;
   onEventClick: (event: CalendarEvent) => void;
   draggingEvent: DraggingEvent | null;
-  onEventDragStart: (id: string, masterId: string, durationMs: number, locked: boolean) => void;
+  onEventDragStart: (id: string, masterId: string, durationMs: number, locked: boolean, grabOffsetMinutes: number) => void;
   onEventDragEnd: () => void;
   scrollToNowRef: React.MutableRefObject<(() => void) | null>;
   selectedEventIds: Set<string>;
@@ -1130,7 +1143,7 @@ function DayColumn({
   onEmptyClick: (start: Date, end: Date) => void;
   onEventClick: (event: CalendarEvent) => void;
   draggingEvent: DraggingEvent | null;
-  onEventDragStart: (id: string, masterId: string, durationMs: number, locked: boolean) => void;
+  onEventDragStart: (id: string, masterId: string, durationMs: number, locked: boolean, grabOffsetMinutes: number) => void;
   onEventDragEnd: () => void;
   selectedEventIds: Set<string>;
   onToggleSelect: (id: string) => void;
@@ -1224,21 +1237,46 @@ function DayColumn({
     window.addEventListener("mouseup", onUp);
   };
 
-  const handleDragOver = (e: React.DragEvent<HTMLElement>) => {
-    if (draggingEvent) {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = "move";
-    }
+  // Where the dragged block's top edge would land (snapped), or null if
+  // off-grid. Shared by the hover skeleton and the drop so they can't disagree.
+  const dropStartFor = (clientY: number, active: DraggingEvent): Date | null => {
+    const rect = columnRef.current?.getBoundingClientRect();
+    if (!rect) return null;
+    return snapMinutesToStart(
+      day,
+      yToMinutesFromColumnTop(clientY - rect.top) - active.grabOffsetMinutes,
+    );
   };
+
+  const [dropPreview, setDropPreview] = useState<{ start: Date; end: Date } | null>(null);
+
+  const handleDragOver = (e: React.DragEvent<HTMLElement>) => {
+    if (!draggingEvent) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    const start = dropStartFor(e.clientY, draggingEvent);
+    if (!start) return setDropPreview(null);
+    setDropPreview((prev) =>
+      prev && prev.start.getTime() === start.getTime()
+        ? prev
+        : { start, end: new Date(start.getTime() + draggingEvent.durationMs) },
+    );
+  };
+
+  // Only clear when the pointer actually leaves the column, not when it
+  // crosses from the column onto a child block (dragleave bubbles).
+  const handleDragLeave = (e: React.DragEvent<HTMLElement>) => {
+    if (!columnRef.current?.contains(e.relatedTarget as Node | null)) setDropPreview(null);
+  };
+
 
   const handleDrop = async (e: React.DragEvent<HTMLElement>) => {
     e.preventDefault();
     const active = draggingEvent;
     onEventDragEnd();
     if (!active) return;
-    const rect = (columnRef.current ?? e.currentTarget).getBoundingClientRect();
-    const minutesFromTop = yToMinutesFromColumnTop(e.clientY - rect.top);
-    const start = snapMinutesToStart(day, minutesFromTop);
+    setDropPreview(null);
+    const start = dropStartFor(e.clientY, active);
     if (!start) return;
     if (active.locked && !confirm("This event is locked. Move it anyway?")) return;
     const end = new Date(start.getTime() + active.durationMs);
@@ -1256,6 +1294,7 @@ function DayColumn({
   return (
     <div
       ref={columnRef}
+      onDragLeave={handleDragLeave}
       className={
         isToday
           ? "relative border-l border-rule bg-rule-soft"
@@ -1294,6 +1333,21 @@ function DayColumn({
         onDragOver={handleDragOver}
         onDrop={handleDrop}
       />
+      {draggingEvent && dropPreview && (
+        // Gated on draggingEvent so a drag that ends anywhere (Esc, dropped
+        // outside) hides it without a reset effect.
+        // Skeleton of where the dragged event will land.
+        <div
+          data-drop-skeleton
+          className="pointer-events-none absolute left-0.5 right-0.5 z-20 rounded-lg border-2 border-dashed border-accent bg-accent/10 px-1 text-[0.65rem] font-medium text-accent"
+          style={{
+            top: `${minutesToPx(dropPreview.start)}px`,
+            height: `${Math.max(((dropPreview.end.getTime() - dropPreview.start.getTime()) / 3_600_000) * HOUR_HEIGHT, 12)}px`,
+          }}
+        >
+          {formatTime(dropPreview.start)}
+        </div>
+      )}
       {createPreview && (
         <div
           className="pointer-events-none absolute left-0 right-0 rounded-lg border-2 border-dashed border-muted bg-ink/5"
@@ -1377,7 +1431,7 @@ function EventBlock({
   left: string;
   width: string;
   isDragging: boolean;
-  onMoveStart: (id: string, masterId: string, durationMs: number, locked: boolean) => void;
+  onMoveStart: (id: string, masterId: string, durationMs: number, locked: boolean, grabOffsetMinutes: number) => void;
   onMoveEnd: () => void;
   onClick: (event: CalendarEvent) => void;
   selected: boolean;
@@ -1404,6 +1458,10 @@ function EventBlock({
       event.masterId,
       event.end.getTime() - event.start.getTime(),
       event.locked,
+      Math.max(
+        yToMinutesFromColumnTop(e.clientY - e.currentTarget.getBoundingClientRect().top),
+        0,
+      ),
     );
   };
 
