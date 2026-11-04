@@ -1,7 +1,9 @@
+import { unlink } from "node:fs/promises";
 import { prisma } from "@/lib/prisma";
+import { resolveUploadPath } from "@/lib/uploads";
 import { runAutomationsForStatusChange } from "@/lib/automations";
 import { nextTaskOccurrence } from "@/lib/taskRecurrence";
-import { compareUrgency, scheduleAllPendingTasks, scheduleTask } from "@/lib/scheduler";
+import { compareUrgency, isDeferred, scheduleAllPendingTasks, scheduleTask } from "@/lib/scheduler";
 import { getAppSettings } from "@/lib/settings";
 import { userTimeZone } from "@/lib/timezone";
 
@@ -165,7 +167,7 @@ async function placeUnblockedBy(userId: string, blockerId: string) {
       NOT: { blockedBy: { some: { status: { not: "DONE" } } } },
     },
   });
-  for (const t of freed.sort(compareUrgency)) {
+  for (const t of freed.filter((t) => !isDeferred(t)).sort(compareUrgency)) {
     await scheduleTask(userId, t.id).catch((err) => console.error("unblock placement failed:", err));
   }
 }
@@ -214,4 +216,29 @@ async function dependsOn(taskId: string, targetId: string): Promise<boolean> {
     frontier = next;
   }
   return false;
+}
+
+/**
+ * Deletes a task with its calendar blocks and uploaded files. Shared by the
+ * task-list delete, the MCP tools, and deleting a task's block from the
+ * calendar. Safe to call twice for the same task (bulk-deleting several
+ * chunks of one task does exactly that): the second call finds nothing.
+ */
+export async function deleteTask(userId: string, taskId: string): Promise<string | null> {
+  const task = await prisma.task.findFirst({ where: { id: taskId, userId }, select: { title: true } });
+  if (!task) return null;
+  // Attachment rows cascade with the Task, but the files on disk don't —
+  // best-effort, a missing file shouldn't block the delete.
+  const attachments = await prisma.taskAttachment.findMany({ where: { taskId }, select: { storedPath: true } });
+  await Promise.all(
+    attachments.map(async (a) => {
+      const absolute = resolveUploadPath(a.storedPath);
+      if (absolute) await unlink(absolute).catch(() => {});
+    }),
+  );
+  // Event.taskId has no cascade, so the blocks go first or the Task delete
+  // hits a foreign-key violation. Subtasks cascade via Task.parentId.
+  await prisma.event.deleteMany({ where: { taskId } });
+  await prisma.task.deleteMany({ where: { id: taskId } });
+  return task.title;
 }
