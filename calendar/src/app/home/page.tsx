@@ -390,8 +390,8 @@ export default async function Page(props: PageProps<"/home">) {
   }
 
   return (
-    <main className="mx-auto flex h-full min-h-0 w-full max-w-[96rem] flex-col px-3 pb-4 pt-3 sm:px-6 sm:pb-6 sm:pt-4 print:h-auto">
-      <header className="flex flex-col gap-3">
+    <main className="mx-auto flex h-full min-h-0 w-full max-w-[160rem] flex-col px-3 pb-2 pt-2 sm:px-5 sm:pb-3 sm:pt-3 print:h-auto">
+      <header className="flex flex-col gap-1.5">
         <p className="hidden text-lg font-semibold print:block">{nav.label}</p>
         <div className="flex flex-wrap-reverse items-center justify-between gap-2 sm:flex-wrap sm:gap-3 print:hidden">
           <nav className="flex flex-wrap items-center gap-1">
@@ -446,13 +446,13 @@ export default async function Page(props: PageProps<"/home">) {
         <ShortcutHint />
       </header>
 
-      <div className="mt-3 xl:hidden print:hidden">
+      <div className="mt-2 xl:hidden print:hidden">
         <AttentionStrip tasks={attentionTasks} timeZone={timeZone} />
       </div>
 
       <NowProvider>
       <CalendarVisibilityProvider>
-        <div className="mt-3 grid min-h-0 flex-1 grid-cols-1 gap-5 print:block xl:grid-cols-[1fr_13rem] 2xl:grid-cols-[11rem_1fr_13rem]">
+        <div className="mt-2 grid min-h-0 flex-1 grid-cols-1 gap-4 print:block xl:grid-cols-[1fr_13rem] 2xl:grid-cols-[11rem_1fr_13rem]">
           {/* Every column here needs `overflow` set (not just `visible`)
               or its natural content height becomes an input to the grid
               row's own auto-sizing — one tall column would stretch the
