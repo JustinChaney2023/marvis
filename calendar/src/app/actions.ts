@@ -42,7 +42,7 @@ import { createFeedbackIssue, isGithubFeedbackConfigured, sendIssueToClaude } fr
 import { maybeApplyTimezoneChange } from "@/lib/serverTimezone";
 import { autoPlaceIfEnabled } from "@/lib/autoPlan";
 import { getVapidKeys, sendPushToUser } from "@/lib/push";
-import { setTaskDone, stoppedTimerFields, logTrackedTime, findProjectByName, setTaskBlockedBy } from "@/lib/taskOps";
+import { setTaskDone, stoppedTimerFields, logTrackedTime, findProjectByName, setTaskBlockedBy, deleteTask } from "@/lib/taskOps";
 import { generateSubtasks, type GenerateSubtasksResult } from "@/lib/subtaskGenerate";
 import { generateEmailDraft, type DraftEmailResult } from "@/lib/emailDraft";
 import { generateTaskDoc, type DraftDocResult } from "@/lib/docDraft";
@@ -990,31 +990,7 @@ export async function executeChatActionAction(action: ChatAction): Promise<{ ok:
 
 export async function deleteTaskAction(taskId: string) {
   const user = await requireUser();
-  const task = await prisma.task.findFirst({ where: { id: taskId, userId: user.id } });
-  if (!task) return;
-
-  // TaskAttachment rows cascade with the Task row (schema.prisma), but
-  // that only drops the DB rows — the files on disk need their own
-  // cleanup, best-effort same as deleteTaskAttachmentAction.
-  const attachments = await prisma.taskAttachment.findMany({
-    where: { taskId },
-    select: { storedPath: true },
-  });
-  await Promise.all(
-    attachments.map((a) =>
-      (async () => {
-        const absolute = resolveUploadPath(a.storedPath);
-        if (absolute) await unlink(absolute).catch(() => {});
-      })(),
-    ),
-  );
-
-  // Event.taskId has no onDelete clause (no cascade/set-null), so the
-  // linked scheduled Event has to go before the Task row itself, or the
-  // delete below hits a foreign-key violation. Task.parentId does
-  // cascade (schema.prisma), so subtasks clean themselves up.
-  await prisma.event.deleteMany({ where: { taskId } });
-  await prisma.task.delete({ where: { id: taskId } });
+  await deleteTask(user.id, taskId);
   revalidatePath("/tasks");
   revalidatePath("/home");
 }
@@ -2210,6 +2186,10 @@ export async function deleteEvent(eventId: string) {
   const user = await requireUser();
   const event = await prisma.event.findFirst({ where: { id: eventId, userId: user.id, source: EDITABLE_SOURCES } });
   if (!event) return;
+  // A task's block is the task: deleting it from the calendar deletes the
+  // task too (and all its chunks), instead of leaving it in the task list
+  // for the next sweep to put straight back on the calendar.
+  if (event.taskId) return deleteTaskAction(event.taskId);
   if (event.googleEventId) {
     // Untagged (pre-multi-calendar) rows fall back to whichever calendar
     // is default — see exportToGoogle's own matching logic.
@@ -2226,6 +2206,34 @@ export async function deleteEvent(eventId: string) {
   await prisma.event.delete({ where: { id: eventId } });
   revalidatePath("/home");
   revalidatePath("/tasks");
+}
+
+/**
+ * Event -> task: the event's own block becomes the new task's scheduled
+ * slot (title, notes, colour and length carry over). Locked, so the
+ * scheduler keeps it where it is (a Google meeting must not be re-placed or
+ * deleted by a rebalance); unlock it to let Season move it. Recurring and
+ * all-day events are left alone.
+ */
+export async function convertEventToTask(eventId: string): Promise<string | null> {
+  const user = await requireUser();
+  const event = await prisma.event.findFirst({
+    where: { id: eventId, userId: user.id, source: EDITABLE_SOURCES, taskId: null, recurrenceRule: null, allDay: false },
+  });
+  if (!event) return null;
+  const task = await prisma.task.create({
+    data: {
+      userId: user.id,
+      title: event.title,
+      notes: event.notes,
+      color: event.color,
+      durationMin: Math.max(15, Math.round((event.end.getTime() - event.start.getTime()) / 60_000)),
+    },
+  });
+  await prisma.event.update({ where: { id: eventId }, data: { taskId: task.id, locked: true, localDirty: true } });
+  revalidatePath("/home");
+  revalidatePath("/tasks");
+  return task.id;
 }
 
 /**

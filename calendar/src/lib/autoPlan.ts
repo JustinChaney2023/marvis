@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { scheduleAllPendingTasks, scheduleTask } from "@/lib/scheduler";
+import { isDeferred, scheduleAllPendingTasks, scheduleTask } from "@/lib/scheduler";
 import { scheduleHabitsForWeek } from "@/lib/habits";
 import { getAppSettings } from "@/lib/settings";
 
@@ -35,6 +35,8 @@ export async function runAutoPlanTick(): Promise<number> {
 export async function autoPlaceIfEnabled(userId: string, taskId: string): Promise<void> {
   const settings = await getAppSettings(userId);
   if (!settings.autoSchedule) return;
+  const task = await prisma.task.findUnique({ where: { id: taskId }, select: { priority: true, dueAt: true } });
+  if (!task || isDeferred(task)) return;
   await scheduleTask(userId, taskId).catch((err) => console.error("auto-place failed:", err));
 }
 

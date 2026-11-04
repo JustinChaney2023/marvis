@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { prisma } from "@/lib/prisma";
 import { getAppSettings } from "@/lib/settings";
-import { setTaskDone, setTaskBlockedBy } from "@/lib/taskOps";
+import { setTaskDone, setTaskBlockedBy, deleteTask } from "@/lib/taskOps";
 import {
   findEarliestSlot,
   scheduleAllPendingTasks,
@@ -106,6 +106,49 @@ async function main() {
     // 7. setTaskBlockedBy (UI + MCP) refuses a cycle and reports it.
     assert.deepEqual(await setTaskBlockedBy(user.id, m1.id, [m3.id]), [m3.id], "m3 -> m2 -> m1 would loop back");
     assert.deepEqual(await setTaskBlockedBy(user.id, m3.id, [m1.id, "nope"]), ["nope"], "unknown ids are reported");
+
+    // 8. Rebalance: a block placed behind a since-removed obstacle moves
+    //    earlier on the next sweep; a block already under way stays put.
+    const wallR = await prisma.event.create({
+      data: { userId: user.id, title: "wall-r", start: new Date(now.getTime() - 3_600_000), end: new Date(now.getTime() + 5 * DAY) },
+    });
+    const r = await mk("R", { durationMin: 60 });
+    await scheduleTask(user.id, r.id);
+    const [rBefore] = await blocksOf(r.id);
+    assert.ok(rBefore.start >= wallR.end, "R lands after the wall");
+    await prisma.event.delete({ where: { id: wallR.id } });
+    await scheduleAllPendingTasks(user.id);
+    const [rAfter] = await blocksOf(r.id);
+    assert.ok(rAfter.start < rBefore.start, "R slid earlier once the wall was gone");
+    // (clear the other blocks first so a neighbour isn't read as a conflict)
+    await prisma.event.deleteMany({ where: { userId: user.id, id: { not: rAfter.id } } });
+    await prisma.event.update({
+      where: { id: rAfter.id },
+      data: { start: new Date(now.getTime() - 30 * 60_000), end: new Date(now.getTime() + 30 * 60_000) },
+    });
+    await scheduleAllPendingTasks(user.id);
+    const [rRunning] = await blocksOf(r.id);
+    assert.equal(rRunning.id, rAfter.id, "a block under way is not rebalanced");
+
+    // 9. Low priority + due more than a month out isn't auto-scheduled; a
+    //    priority set by hand is, and so is an explicit Schedule.
+    const far = new Date(now.getTime() + 45 * DAY);
+    const f0 = await mk("far, unset priority", { dueAt: far, durationMin: 60 });
+    const f1 = await mk("far, priority set", { dueAt: far, durationMin: 60 });
+    await prisma.task.update({ where: { id: f1.id }, data: { priority: 1 } });
+    await scheduleAllPendingTasks(user.id);
+    assert.equal((await blocksOf(f0.id)).length, 0, "far-off unset-priority task stays off the calendar");
+    assert.equal((await blocksOf(f1.id)).length, 1, "a priority set by hand is scheduled");
+    assert.ok(await scheduleTask(user.id, f0.id), "explicit Schedule ignores the deferral");
+
+    // 10. deleteTask removes the task and every block, and is safe to repeat.
+    const d = await mk("D", { durationMin: 60 });
+    await prisma.event.createMany({
+      data: [0, 1].map((i) => ({ userId: user.id, title: "D", start: new Date(now.getTime() + (i + 1) * DAY), end: new Date(now.getTime() + (i + 1) * DAY + 3_600_000), taskId: d.id })),
+    });
+    assert.equal(await deleteTask(user.id, d.id), "D");
+    assert.equal(await deleteTask(user.id, d.id), null, "second delete finds nothing");
+    assert.equal(await prisma.task.count({ where: { id: d.id } }) + (await blocksOf(d.id)).length, 0);
   } finally {
     await prisma.event.deleteMany({ where: { userId: user.id } });
     await prisma.user.delete({ where: { id: user.id } });

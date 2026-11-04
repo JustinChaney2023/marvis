@@ -1,15 +1,13 @@
 import { z } from "zod";
-import { unlink } from "node:fs/promises";
 import { prisma } from "@/lib/prisma";
 import { expandEvents, recurringOverlapping } from "@/lib/recurrence";
 import { parseQuickCapture } from "@/lib/quickCapture";
 import { runAutomationsForStatusChange } from "@/lib/automations";
 import { autoPlaceIfEnabled } from "@/lib/autoPlan";
-import { setTaskDone, setTaskBlockedBy, findProjectByName as findProjectByNameLoose } from "@/lib/taskOps";
+import { setTaskDone, setTaskBlockedBy, deleteTask, findProjectByName as findProjectByNameLoose } from "@/lib/taskOps";
 import { rescheduleConflictsWith, scheduleAllPendingTasks, scheduleTask, unscheduleTask } from "@/lib/scheduler";
 import { rescheduleConflictedHabits } from "@/lib/habits";
 import { deleteFromGoogle } from "@/lib/google-sync";
-import { resolveUploadPath } from "@/lib/uploads";
 import { getZonedDateParts, zonedWallTimeToUtc } from "@/lib/timezone";
 import { PROJECT_EVENT_COLORS } from "@/lib/eventColors";
 
@@ -561,17 +559,9 @@ const TOOLS: Tool<z.ZodType>[] = [
     input: z.object({ taskId: z.string() }),
     destructive: true,
     run: async ({ taskId }, { userId }) => {
-      const task = await getOwnedTask(userId, taskId);
-      const attachments = await prisma.taskAttachment.findMany({ where: { taskId }, select: { storedPath: true } });
-      await Promise.all(
-        attachments.map(async (a) => {
-          const absolute = resolveUploadPath(a.storedPath);
-          if (absolute) await unlink(absolute).catch(() => {});
-        }),
-      );
-      await prisma.event.deleteMany({ where: { taskId } });
-      await prisma.task.delete({ where: { id: taskId } });
-      return { ok: true, deleted: task.title };
+      await getOwnedTask(userId, taskId);
+      const title = await deleteTask(userId, taskId);
+      return { ok: true, deleted: title };
     },
   }),
 
@@ -756,6 +746,8 @@ const TOOLS: Tool<z.ZodType>[] = [
       if (event.source === "APPLE" || event.source === "SUBSCRIBED") {
         throw new ToolError("That event comes from a read-only calendar feed and can't be deleted here.");
       }
+      // A task's block is the task: delete it, as the calendar view does.
+      if (event.taskId) return { ok: true, deleted: (await deleteTask(userId, event.taskId)) ?? event.title };
       if (event.googleEventId) {
         if (event.googleCalendarId) await deleteFromGoogle(event.googleCalendarId, event.googleEventId);
       }

@@ -561,6 +561,17 @@ export function canBump(urgent: Urgency, other: Urgency): boolean {
   return other.dueAt > urgent.dueAt;
 }
 
+/**
+ * A task with no priority set (0) whose due date is more than a month out
+ * stays off the calendar on automatic passes: far-off work is low priority
+ * until it gets close. A priority the user set by hand (> 0) always counts,
+ * and undated tasks are unaffected. The explicit "Schedule" button ignores this.
+ */
+const DEFER_DAYS = 30;
+export function isDeferred(task: { priority: number; dueAt: Date | null }, now = new Date()): boolean {
+  return task.priority === 0 && !!task.dueAt && task.dueAt.getTime() - now.getTime() > DEFER_DAYS * 86_400_000;
+}
+
 const schedulableTaskInclude = {
   timeSlot: true,
   blockedBy: { select: { status: true, events: { select: { end: true } } } },
@@ -919,7 +930,25 @@ async function unscheduleStaleTasks(userId: string) {
 export async function scheduleAllPendingTasks(userId: string) {
   const staleCount = await unscheduleStaleTasks(userId);
 
-  const tasks = await prisma.task.findMany({
+  // Rebalance: every open task whose blocks haven't started and aren't
+  // locked goes back into the pool and is re-placed below, most urgent
+  // first. Without this a block never moved once placed, so finishing
+  // something early or adding something urgent changed nothing. Blocks
+  // under way (start <= now) and locked ones stay put.
+  const now = new Date();
+  const movable = await prisma.task.findMany({
+    where: {
+      userId,
+      status: { in: ["CREATED", "ONGOING"] },
+      parentId: null,
+      events: { some: {} },
+      NOT: { events: { some: { OR: [{ locked: true }, { start: { lte: now } }] } } },
+    },
+    include: { events: true },
+  });
+  for (const task of movable) await unscheduleTask(userId, task.id);
+
+  const tasks = (await prisma.task.findMany({
     // Subtasks are checklist items under a parent task, not independently
     // schedulable calendar blocks — exclude them from the sweep.
     where: {
@@ -928,7 +957,7 @@ export async function scheduleAllPendingTasks(userId: string) {
       events: { none: {} },
       parentId: null,
     },
-  });
+  })).filter((t) => !isDeferred(t, now));
   // Least slack first (compareUrgency) — the order decides who gets the
   // good slots, since each placed task is busy time for the next.
   tasks.sort(compareUrgency);
@@ -949,6 +978,32 @@ export async function scheduleAllPendingTasks(userId: string) {
       break;
     }
     pending = next;
+  }
+
+  // A block that landed exactly where it was keeps its Google link, so the
+  // periodic rebalance doesn't delete and re-create every event on Google
+  // each time. Only blocks that actually moved are re-pushed.
+  for (const task of movable) {
+    const fresh = await prisma.event.findMany({ where: { taskId: task.id }, orderBy: { start: "asc" } });
+    const old = task.events.slice().sort((a, b) => a.start.getTime() - b.start.getTime());
+    if (fresh.length !== old.length) continue;
+    for (let i = 0; i < old.length; i++) {
+      const o = old[i];
+      if (fresh[i].start.getTime() !== o.start.getTime() || fresh[i].end.getTime() !== o.end.getTime()) continue;
+      if (!o.googleEventId || !o.googleCalendarId) continue;
+      await prisma.googleDeletion.deleteMany({
+        where: { googleCalendarId: o.googleCalendarId, googleEventId: o.googleEventId },
+      });
+      await prisma.event.update({
+        where: { id: fresh[i].id },
+        data: {
+          googleEventId: o.googleEventId,
+          googleCalendarId: o.googleCalendarId,
+          googleUpdatedAt: o.googleUpdatedAt,
+          localDirty: o.localDirty,
+        },
+      });
+    }
   }
   return { staleCount, results };
 }

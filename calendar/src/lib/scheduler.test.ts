@@ -7,6 +7,7 @@ import {
   expandReservedBlocks,
   findBestSlot,
   findEarliestSlot,
+  isDeferred,
   remainingMinutes,
   splitIntoChunks,
 } from "./scheduler";
@@ -290,4 +291,12 @@ const horizon = new Date(2026, 7, 31, 0, 0);
   assert.equal(canBump(undated, laterSoft), false);
 }
 
+{
+  const now = new Date(2026, 10, 3);
+  const inDays = (n: number) => new Date(now.getTime() + n * 86_400_000);
+  assert.ok(isDeferred({ priority: 0, dueAt: inDays(45) }, now), "unset priority, 45d out: deferred");
+  assert.ok(!isDeferred({ priority: 0, dueAt: inDays(20) }, now), "inside a month: not deferred");
+  assert.ok(!isDeferred({ priority: 2, dueAt: inDays(45) }, now), "priority set by hand: not deferred");
+  assert.ok(!isDeferred({ priority: 0, dueAt: null }, now), "undated: not deferred");
+}
 console.log("scheduler.test.ts: all checks passed");

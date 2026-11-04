@@ -14,6 +14,7 @@ import {
   getEventGuestsAction,
   setTaskStatusAction,
   toggleTaskDone,
+  convertEventToTask,
 } from "../actions";
 import { toLocalInputValue, formatYMD, parseYMD, localWallTimeToIso } from "@/lib/calendar-dates";
 import { CloseIcon } from "../icons";
@@ -334,7 +335,9 @@ export default function EventModal({
         ? "Delete this occurrence?"
         : isEditingRecurring && editScope === "following"
           ? "Delete this and all following occurrences?"
-          : "Delete this event?";
+          : event.taskId
+            ? "Delete this task? It will also be removed from your task list."
+            : "Delete this event?";
     if (!confirm(message)) return;
     setIsSubmitting(true);
     try {
@@ -445,6 +448,26 @@ export default function EventModal({
                 Reopen
               </button>
             )}
+          </div>
+        )}
+
+        {mode === "edit" && event && !event.taskId && !event.recurrenceRule && !event.allDay && (
+          <div className="mt-3">
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  if (await convertEventToTask(event.id)) onClose();
+                  else setFormError("This event can't be converted.");
+                } catch (err) {
+                  console.error(err);
+                  setFormError("Couldn't convert — try again.");
+                }
+              }}
+              className="rounded-lg border border-rule bg-surface px-2.5 py-1 text-xs font-medium text-ink-2 transition-colors hover:bg-rule-soft"
+            >
+              Convert to task
+            </button>
           </div>
         )}
 
